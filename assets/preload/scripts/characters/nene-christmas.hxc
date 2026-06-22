@@ -1,0 +1,9 @@
+import funkin.play.character.NeneBaseCharacter;
+
+class NeneChristmasCharacter extends NeneBaseCharacter
+{
+  public function new()
+  {
+    super('nene-christmas');
+  }
+}
