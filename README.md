@@ -4,6 +4,7 @@ I added Lua Support to V-slice. I don't know what to add mor-
 You can download the LuaSlice Versions Here:
 - [Versions](https://github.com/Fla-man-Max/LuaSlice/releases)
 - [Source Code](https://github.com/Fla-man-Max/LuaSlice)
+- [Gamebanana](https://gamebanana.com/tools/23050)
 
 # Lua API (More Will be added)
 
