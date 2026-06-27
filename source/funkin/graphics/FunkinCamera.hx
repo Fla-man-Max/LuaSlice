@@ -108,6 +108,11 @@ class FunkinCamera extends FlxCamera
     super(x, y, width, height, zoom);
 
     this.id = id;
+    crossCameraBlending = false;
+
+    #if mobile
+    return;
+    #end
 
     _backgroundFrame = new FlxFrame(new FlxGraphic('', null));
     _backgroundFrame.frame = new FlxRect();
@@ -120,12 +125,16 @@ class FunkinCamera extends FlxCamera
     _cameraMatrix = new FlxMatrix();
     _cameraTexture = FixedBitmapData.create(this.width, this.height);
 
-    crossCameraBlending = false;
   }
 
   override function drawPixels(?frame:FlxFrame, ?pixels:BitmapData, matrix:FlxMatrix, ?transform:ColorTransform, ?blend:BlendMode, ?smoothing:Bool = false,
       ?shader:FlxShader):Void
   {
+    #if mobile
+    super.drawPixels(frame, pixels, matrix, transform, blend, smoothing, shader);
+    return;
+    #end
+
     var shouldUseShader:Bool = (!hasKhronosExtension && KHR_BLEND_MODES.contains(blend)) || SHADER_REQUIRED_BLEND_MODES.contains(blend);
 
     // Fallback to the shader implementation if the device doesn't support `KHR_blend_equation_advanced`, or if
@@ -216,6 +225,10 @@ class FunkinCamera extends FlxCamera
   override function startQuadBatch(graphic:FlxGraphic, colored:Bool, hasColorOffsets:Bool = false, ?blend:BlendMode, smooth:Bool = false,
       ?shader:FlxShader):FlxDrawQuadsItem
   {
+    #if mobile
+    return super.startQuadBatch(graphic, colored, hasColorOffsets, blend, smooth, shader);
+    #end
+
     // Can't batch complex non-coherent blends, so always force a new batch
     if (hasKhronosExtension && !(OpenGLRenderer.__coherentBlendsSupported ?? false) && KHR_BLEND_MODES.contains(blend))
     {
@@ -268,6 +281,10 @@ class FunkinCamera extends FlxCamera
   override function startTrianglesBatch(graphic:FlxGraphic, smoothing:Bool = false, isColored:Bool = false, ?blend:BlendMode, ?hasColorOffsets:Bool,
       ?shader:FlxShader):FlxDrawTrianglesItem
   {
+    #if mobile
+    return super.startTrianglesBatch(graphic, smoothing, isColored, blend, hasColorOffsets, shader);
+    #end
+
     // Can't batch complex non-coherent blends, so always force a new batch
     if (hasKhronosExtension
       && !(OpenGLRenderer.__coherentBlendsSupported ?? false)
@@ -280,9 +297,11 @@ class FunkinCamera extends FlxCamera
   {
     super.destroy();
 
+    #if !mobile
     _blendRenderTexture.destroy();
     _backgroundRenderTexture.destroy();
 
     _cameraTexture.dispose();
+    #end
   }
 }

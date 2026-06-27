@@ -814,6 +814,20 @@ class FunkinSprite extends FlxAnimate
     super.draw();
   }
 
+  #if android
+  override function updateFramePixels():BitmapData
+  {
+    if (isAnimate)
+    {
+      if (framePixels == null) framePixels = FixedBitmapData.create(1, 1, false);
+      dirty = false;
+      return framePixels;
+    }
+
+    return super.updateFramePixels();
+  }
+  #end
+
   override function drawFrameComplex(frame:FlxFrame, camera:FlxCamera):Void
   {
     final willUseRenderTexture = checkRenderTexture();

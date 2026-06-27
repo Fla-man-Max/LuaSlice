@@ -24,6 +24,7 @@ class LuaWindowErrorManager
 
     var reportPath = writeReport(kind, scriptPath, hookName, buildReport(kind, scriptPath, hookName, message, fromFiles));
     reportPaths.set(key, reportPath);
+    LuaLogger.error(kind, scriptPath, hookName, message, reportPath);
     showPopup(kind, scriptPath, hookName, message, reportPath, fromFiles);
     return reportPath;
   }
@@ -64,6 +65,8 @@ class LuaWindowErrorManager
     body += 'From File/s: ${formatFiles(fromFiles, scriptPath)}\n';
     body += 'Report: ${reportPath}\n\n';
     body += message;
+    final suggestion = suggestionFor(kind, hookName, message);
+    if (suggestion != 'None') body += '\n\nSuggestion: ' + suggestion;
     final performanceWarning = performanceWarningFor(kind, hookName, message, fromFiles, scriptPath);
     if (performanceWarning != null) body += '\n\nWarning: ' + performanceWarning;
 
@@ -147,9 +150,9 @@ class LuaWindowErrorManager
     if (kind == 'api-error' && apiName == 'setProperty') return 'Check the field name and object path. Use setEventField() only for fields that exist on the current event.';
     if (kind == 'api-error' && apiName == 'callMethod') return 'Check the function name and object path. Make sure the method exists before calling it.';
 
-    if (mentionsAny(lowerMessage, apiKey, ['configureluapausemenu', 'setluapausemenuitem', 'setluapauseoptionsbehavior', 'resume', 'restartsong', 'changedifficulty', 'practicemode', 'exittomenu', 'options', 'callback']))
+    if (mentionsAny(lowerMessage, apiKey, ['configureluapausemenu', 'setluapausemenuitem', 'setluapauseoptions', 'setluapauseoptionsbehavior', 'resume', 'restartsong', 'changedifficulty', 'practicemode', 'exittomenu', 'options', 'callback']))
     {
-      return 'Pause menu APIs load from scripts/pause during PlayState. Use configureLuaPauseMenu({items={...}}) and set item target to resume, restartSong, changeDifficulty, practiceMode, exitToMenu, options, callback, or a custom .hx/.hxc state class.';
+      return 'Pause menu APIs load from scripts/pause during PlayState. Use configureLuaPauseMenu({items={...}}), set item target to resume/restartSong/changeDifficulty/practiceMode/exitToMenu/options/callback, and use setLuaPauseOptions(howExit) for pause-opened Options.';
     }
 
     if (mentionsAny(lowerMessage, apiKey, ['createluaoptionpage', 'addluacheckbox', 'addluanumber', 'addluaenum', 'defineluaoption', 'getluaoption', 'setluaoption']))
@@ -162,9 +165,19 @@ class LuaWindowErrorManager
       return 'Menu APIs are for scripts/menu or PlayState UI scripts. For simple main menu entries use addLuaMainMenu(id, position, target).';
     }
 
-    if (mentionsAny(lowerMessage, apiKey, ['createshader', 'destroyshader', 'setshaderfloat', 'setshaderfloatarray', 'setshaderint', 'setshaderbool', 'applyshader', 'clearshader', 'applycamerashader', 'clearcamerashader', 'makeluashader', 'setluashader', 'removeluashader', 'setluacamerashader', 'removeluacamerashader', 'setluashaderfloatsimple']))
+    if (mentionsAny(lowerMessage, apiKey, ['createshader', 'destroyshader', 'setshaderfloat', 'setshaderfloatarray', 'setshaderint', 'setshaderbool', 'applyshader', 'clearshader', 'applycamerashader', 'clearcamerashader', 'initluashader', 'initluashaderraw', 'makeluashader', 'setluashader', 'setshaderonsprite', 'removeluashader', 'setluacamerashader', 'removeluacamerashader', 'setluashaderfloatsimple']))
     {
-      return 'Shader APIs need a valid shader tag and shader file/source. For simple scripts use makeLuaShader(tag, path), setLuaShader(tag, target), or setLuaCameraShader(tag, camera).';
+      return 'Shader APIs need a valid shader tag and shader file/source. For simple scripts use initLuaShader(name), makeLuaShader(tag, path), setLuaShader(tag, target), or setShaderOnSprite(sprite, tag).';
+    }
+
+    if (mentionsAny(lowerMessage, apiKey, ['getluasave', 'setluasave']))
+    {
+      return 'Lua save APIs use persistent FlxSave data. Use setLuaSave(key, value), then getLuaSave(key, fallback). Keep saved values simple: strings, numbers, booleans, or plain tables.';
+    }
+
+    if (mentionsAny(lowerMessage, apiKey, ['onfreeplaycreate', 'onfreeplayupdate', 'onfreeplayclose', 'onstorycreate', 'onstoryupdate', 'onstoryclose', 'onresultscreate', 'onresultsupdate', 'onresultsclose']))
+    {
+      return 'Freeplay, Story, and Results hooks load from scripts/freeplay, scripts/story, or scripts/results. Use the matching hook name for that screen.';
     }
 
     if (mentionsAny(lowerMessage, apiKey, ['reloadluascripts'])) return 'reloadLuaScripts() only works in PlayState. It requests the same Lua rescan as F5 and calls onReload() after reload.';

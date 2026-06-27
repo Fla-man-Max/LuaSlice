@@ -316,7 +316,7 @@ class TouchPointer extends FlxSprite
 
   override public function loadGraphic(graphic:FlxGraphicAsset, animated = false, frameWidth = 0, frameHeight = 0, unique = false, ?key:String):FlxSprite
   {
-    super.loadGraphic(graphic, animated, frameWidth, frameHeight, unique, key);
+    try super.loadGraphic(graphic, animated, frameWidth, frameHeight, unique, key) catch (_:Dynamic) makeGraphic(16, 16, FlxColor.TRANSPARENT);
     color = 0xff6666e1;
     blend = "screen";
     return this;

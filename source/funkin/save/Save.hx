@@ -61,6 +61,39 @@ class Save implements ConsoleClass
     _instance = Save.system.clearSlot(Constants.BASE_SAVE_SLOT);
   }
 
+  public function clearSongData():Void
+  {
+    data.scores.levels = [];
+    data.scores.songs = [];
+    Save.system.flush();
+  }
+
+  public function clearOptions():Void
+  {
+    var defaults = Save.getDefaultData();
+    var controls = data.options.controls;
+    data.options = defaults.options;
+    data.options.controls = controls;
+    #if mobile
+    var controlsScheme = data.mobileOptions.controlsScheme;
+    var noAds = data.mobileOptions.noAds;
+    data.mobileOptions = defaults.mobileOptions;
+    data.mobileOptions.controlsScheme = controlsScheme;
+    data.mobileOptions.noAds = noAds;
+    #end
+    Save.system.flush();
+  }
+
+  public function clearControls():Void
+  {
+    var defaults = Save.getDefaultData();
+    data.options.controls = defaults.options.controls;
+    #if mobile
+    data.mobileOptions.controlsScheme = defaults.mobileOptions.controlsScheme;
+    #end
+    Save.system.flush();
+  }
+
   /**
    * Constructing a new Save will load the default values.
    */

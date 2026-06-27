@@ -152,6 +152,12 @@ class LuaShaderManager
     return true;
   }
 
+  public function initShader(name:String, ?tag:String = ''):Bool
+  {
+    if (name == '') return false;
+    return createShader(tag == '' ? name : tag, name, '');
+  }
+
   public function clearCamera(camera:FlxCamera):Bool
   {
     if (camera == null) return false;

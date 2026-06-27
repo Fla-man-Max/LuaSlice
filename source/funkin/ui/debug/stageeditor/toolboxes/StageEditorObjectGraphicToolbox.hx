@@ -63,6 +63,7 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
           linkedObj.updateHitbox();
 
           state.removeUnusedBitmaps();
+          state.saved = false;
 
           refresh();
           objImageWidth.pos = objImageWidth.max;
@@ -85,6 +86,7 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
         linkedObj.updateHitbox();
 
         state.removeUnusedBitmaps();
+        state.saved = false;
 
         // Update the image preview.
         refresh();
@@ -103,6 +105,7 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
 
       // remove unused bitmaps
       state.removeUnusedBitmaps();
+      state.saved = false;
 
       // Update the image preview.
       refresh();
@@ -116,6 +119,7 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
 
       linkedObj.loadGraphic(linkedObj.graphic);
       refresh();
+      state.saved = false;
       stageEditorState.updateDialog(OBJECT_ANIMS);
     }
 
@@ -157,6 +161,7 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
 
       // Refresh the display.
       refresh();
+      state.saved = false;
 
       stageEditorState.updateDialog(OBJECT_ANIMS);
     }
@@ -214,6 +219,7 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
     linkedObj.animDatas.clear();
     linkedObj.animation.destroyAnimations();
     linkedObj.updateHitbox();
+    stageEditorState.saved = false;
     refresh();
 
     stageEditorState.notifyChange("Frame Setup Done", "Finished the Frame Setup for the Object " + linkedObj.name + ".");

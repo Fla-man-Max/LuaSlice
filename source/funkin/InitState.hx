@@ -71,13 +71,16 @@ class InitState extends FlxState
   {
     // Setup a bunch of important Flixel stuff.
     setupShit();
+    trace('Init setup finished.');
 
     // Load player options from save data.
     // Flixel has already loaded the save data, so we can just use it.
     Preferences.init();
+    trace('Preferences initialized.');
 
     // Load controls from save data.
     PlayerSettings.init();
+    trace('Player settings initialized.');
 
     startGame();
   }
@@ -298,11 +301,16 @@ class InitState extends FlxState
 
     ModuleHandler.buildModuleCallbacks();
     ModuleHandler.loadModuleCache();
+    trace('Calling module onCreate...');
     ModuleHandler.callOnCreate();
+    trace('Module onCreate finished.');
 
+    #if !mobile
     funkin.input.Cursor.hide();
+    #end
+    trace('Setup finished.');
 
-    #if !html5
+    #if !(html5 || mobile)
     // This fucking breaks on HTML5 builds because the "shared" library isn't loaded yet.
     funkin.FunkinMemory.initialCache();
     #end
@@ -321,7 +329,7 @@ class InitState extends FlxState
 
   function onGainFocus():Void
   {
-    #if !mobile
+    #if (android || !mobile)
     if (Preferences.unlockedFramerate)
     {
       FlxG.updateFramerate = 0;
@@ -354,7 +362,7 @@ class InitState extends FlxState
 
     #if SONG
     // -DSONG=bopeebo
-    startSong(defineSong(), defineDifficulty());
+    startSong(defineSong() ?? Constants.DEFAULT_SONG, defineDifficulty());
     #elseif LEVEL
     // -DLEVEL=week1 -DDIFFICULTY=hard
     startLevel(defineLevel(), defineDifficulty());

@@ -37,7 +37,11 @@ class CapsuleText extends FlxSpriteGroup
     super(x, y);
 
     blurredText = CapsuleText.initText(songTitle, size);
+    #if !android
     blurredText.shader = new GaussianBlurShader(1);
+    #else
+    blurredText.visible = false;
+    #end
     whiteText = CapsuleText.initText(songTitle, size);
     // whiteText.shader = new GaussianBlurShader(0.3);
     text = songTitle;
@@ -59,9 +63,11 @@ class CapsuleText extends FlxSpriteGroup
   {
     glowColor = styleData.getCapsuleSelCol();
     blurredText.color = glowColor;
+    #if !android
     whiteText.textField.filters = [new openfl.filters.GlowFilter(glowColor, 1, 5, 5, 210,
       BitmapFilterQuality.MEDIUM), // new openfl.filters.BlurFilter(5, 5, BitmapFilterQuality.LOW)
     ];
+    #end
   }
 
   // ???? none
@@ -114,9 +120,11 @@ class CapsuleText extends FlxSpriteGroup
     blurredText.text = value;
     whiteText.text = value;
     checkClipWidth();
+    #if !android
     whiteText.textField.filters = [new openfl.filters.GlowFilter(glowColor, 1, 5, 5, 210,
       BitmapFilterQuality.MEDIUM), // new openfl.filters.BlurFilter(5, 5, BitmapFilterQuality.LOW)
     ];
+    #end
 
     return text = value;
   }
@@ -201,17 +209,21 @@ class CapsuleText extends FlxSpriteGroup
       blurredText.blend = BlendMode.ADD;
       blurredText.color = 0xFFFFFFFF;
       whiteText.color = 0xFFFFFFFF;
+      #if !android
       whiteText.textField.filters = [new openfl.filters.GlowFilter(0xFFFFFF, 1, 5, 5, 210,
         BitmapFilterQuality.MEDIUM), // new openfl.filters.BlurFilter(5, 5, BitmapFilterQuality.LOW)
       ];
+      #end
     }
     else
     {
       blurredText.color = glowColor;
       whiteText.color = 0xFFDDDDDD;
+      #if !android
       whiteText.textField.filters = [new openfl.filters.GlowFilter(0xDDDDDD, 1, 5, 5, 210,
         BitmapFilterQuality.MEDIUM), // new openfl.filters.BlurFilter(5, 5, BitmapFilterQuality.LOW)
       ];
+      #end
     }
     flickerState = !flickerState;
   }

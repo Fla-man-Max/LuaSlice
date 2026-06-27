@@ -1113,8 +1113,7 @@ class Strumline extends FlxSpriteGroup
 
     if (cover != null)
     {
-      cover.holdNote = holdNote;
-      holdNote.cover = cover;
+      cover.attachToHoldNote(holdNote);
       cover.visible = true;
 
       cover.playStart();

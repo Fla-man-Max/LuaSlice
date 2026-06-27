@@ -24,6 +24,7 @@ import funkin.ui.FullScreenScaleMode;
 import funkin.ui.transition.stickers.StickerSubState;
 import funkin.util.SwipeUtil;
 import funkin.util.TouchUtil;
+import funkin.api.newgrounds.Referral;
 #if FEATURE_MOBILE_ADVERTISEMENTS
 import funkin.mobile.util.AdMobUtil;
 #end
@@ -59,9 +60,6 @@ class PauseSubState extends MusicBeatSubState
   static final PAUSE_MENU_ENTRIES_STANDARD:Array<PauseMenuEntry> = [{text: 'Resume', callback: resume}, {
     text: 'Restart Song',
     callback: restartPlayState
-  }, {
-    text: 'Options',
-    callback: openOptions
   }, {
     text: 'Change Difficulty',
     callback: switchMode.bind(_, Difficulty)
@@ -861,6 +859,7 @@ class PauseSubState extends MusicBeatSubState
     var hidden = readLuaBool(item, 'hidden', false);
     var position = readLuaInt(item, 'position', 999);
     var target = readLuaString(item, 'target', 'none');
+    var callbackName = readLuaString(item, 'callback', '');
     var entry = findLuaPauseMenuEntry(match);
 
     if (hidden)
@@ -873,8 +872,9 @@ class PauseSubState extends MusicBeatSubState
     var itemOptions = Reflect.hasField(item, 'options') ? Reflect.field(item, 'options') : optionsConfig;
     var callback = function(state:PauseSubState)
     {
+      if (callbackName != '' && customCallback != null) customCallback(callbackName);
       if (state.openLuaPauseMenuTarget(target, itemOptions)) return;
-      if (customCallback != null) customCallback(callbackId);
+      if (callbackName == '' && customCallback != null) customCallback(callbackId);
     };
 
     if (entry == null)
@@ -919,7 +919,7 @@ class PauseSubState extends MusicBeatSubState
 
     switch (targetKey)
     {
-      case 'resume':
+      case 'resume' | 'backtosong' | 'back_to_song' | 'song' | 'back':
         resume(this);
         return true;
       case 'restart' | 'restartsong' | 'restart_song':
@@ -932,9 +932,31 @@ class PauseSubState extends MusicBeatSubState
         enablePracticeMode(this);
         return true;
       case 'options' | 'optionsstate':
-        funkin.ui.options.OptionsState.prepareLuaPauseReturn(optionsConfig);
+        if (optionsConfig != null || !funkin.ui.options.OptionsState.hasPendingLuaPauseReturn())
+        {
+          funkin.ui.options.OptionsState.prepareLuaPauseReturn(optionsConfig);
+        }
         FlxG.switchState(() -> new funkin.ui.options.OptionsState());
         return true;
+      case 'story' | 'storymode' | 'story_mode':
+        FlxG.switchState(() -> new StoryMenuState());
+        return true;
+      case 'freeplay' | 'freeplaystate':
+        FlxG.switchState(() -> FreeplayState.build({character: FreeplayState.rememberedCharacterId}));
+        return true;
+      case 'credits' | 'creditsstate':
+        FlxG.switchState(() -> new funkin.ui.credits.CreditsState());
+        return true;
+      case 'merch':
+        Referral.doMerchReferral();
+        return true;
+      case 'upgrade':
+        #if FEATURE_MOBILE_IAP
+        funkin.mobile.util.InAppPurchasesUtil.purchase(funkin.mobile.util.InAppPurchasesUtil.UPGRADE_PRODUCT_ID, FlxG.resetState);
+        return true;
+        #else
+        return false;
+        #end
       case 'mainmenu' | 'menu' | 'exit' | 'exittomenu' | 'exit_to_menu':
         quitToMenu(this);
         return true;
@@ -1243,14 +1265,6 @@ class PauseSubState extends MusicBeatSubState
     #else
     state.close();
     #end
-  }
-
-  static function openOptions(state:PauseSubState):Void
-  {
-    #if FEATURE_LUA_SCRIPTS
-    funkin.ui.options.OptionsState.prepareLuaPauseReturn({hideExit: false, exitTarget: 'resume'});
-    #end
-    FlxG.switchState(() -> new funkin.ui.options.OptionsState());
   }
 
   /**

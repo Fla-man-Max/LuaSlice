@@ -25,12 +25,19 @@ class SongItemGroup extends FlxTypedGroup<SongMenuItem>
   {
     var capsule:SongMenuItem = super.recycle(#if hl cast #end cls, factory, force, revive);
 
+    #if !android
     // Apply the same shader instance to some elements so that we can use one draw call to render multiple of them.
     capsule.fakeBlurredRanking.shader = rankBlurredShader;
     capsule.blurredRanking.shader = rankBlurredShader;
     capsule.favIconBlurred.shader = favIconBlurredShader;
 
     capsule.weekText.filters = [weekTextFilter];
+    #else
+    capsule.fakeBlurredRanking.visible = false;
+    capsule.blurredRanking.visible = false;
+    capsule.favIconBlurred.visible = false;
+    capsule.weekText.filters = [];
+    #end
 
     return capsule;
   }

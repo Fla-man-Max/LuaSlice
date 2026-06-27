@@ -18,7 +18,7 @@ using StringTools;
 // Annotation embeds the asset in the executable for faster loading.
 // Polymod can't override this, so we can't use this technique elsewhere.
 #if FEATURE_TOUCH_HERE_TO_PLAY
-@:bitmap('art/touchHereToPlay.png')
+@:bitmap('art/icons/buildsOther/touchHereToPlay.png')
 class TouchHereToPlayImage extends BitmapData
 {
 }
@@ -150,7 +150,7 @@ class FunkinPreloader extends FlxBasePreloader
     // Desktop is always 1:1 scale, mobile needs DPI normalization for consistent positioning
     #if mobile
     var display = Lib.current.stage.window.display;
-    var dpiScale = display.dpi / 160.0; // 160 is Android's baseline DPI
+    var dpiScale = display == null ? 1.0 : display.dpi / 160.0; // 160 is Android's baseline DPI
     var normalizedWidth = this._width / dpiScale;
     ratio = normalizedWidth / BASE_WIDTH;
     #else

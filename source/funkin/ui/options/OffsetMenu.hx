@@ -145,6 +145,14 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
     _lastTime = musicTime;
   }
 
+  function nextOffsetBeat(currentBeat:Float, leadBeats:Int = 4, step:Int = 4):Float
+  {
+    var start = Math.ceil(currentBeat + leadBeats);
+    var remainder = start % step;
+    if (remainder != 0) start += step - remainder;
+    return start;
+  }
+
   function isOffsetIntroReady(currentBeat:Float):Bool
   {
     if (offsetLerp < 1) return false;
@@ -157,7 +165,8 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
 
       if (calibrating)
       {
-        arrowBeat = Math.floor(currentBeat);
+        clearOffsetArrows();
+        arrowBeat = nextOffsetBeat(currentBeat, 4, 2) - 2;
       }
       else
       {
@@ -165,11 +174,8 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
         testStrumline.noteData = [];
         testStrumline.nextNoteIndex = 0;
 
-        var floored = Math.floor(currentBeat);
-        arrowBeat = floored - (floored % 4) + 4;
+        arrowBeat = nextOffsetBeat(currentBeat, 4, 4);
         _lastDirection = 0;
-
-        if (Math.floor(arrowBeat - currentBeat) < 4) arrowBeat += 4;
 
         trace('Testing strumline starts after intro at beat: ' + arrowBeat);
       }

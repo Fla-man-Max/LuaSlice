@@ -4,10 +4,16 @@ package funkin.ui.options;
 import funkin.api.newgrounds.NewgroundsClient;
 #end
 import funkin.save.Save;
+import flixel.text.FlxText;
+import flixel.util.FlxColor;
+import funkin.graphics.FunkinSprite;
 
 class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
 {
   var items:TextMenuList;
+  var descriptions:Array<String> = [];
+  var descriptionText:FlxText;
+  var descriptionBox:FunkinSprite;
 
   public function new()
   {
@@ -15,12 +21,15 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
 
     add(items = new TextMenuList());
 
-    createItem("CLEAR SAVE DATA", openSaveDataPrompt);
+    createItem("CLEAR ALL DATA", "This will erase all data.", openSaveDataPrompt);
+    createItem("CLEAR SONGS DATA", "Erases all song data.", openSongDataPrompt);
+    createItem("CLEAR OPTIONS", "Sets options back to their default state.", openOptionsPrompt);
+    createItem("CLEAR CONTROLS", "Sets all controls back to their defaults.", openControlsPrompt);
 
     #if FEATURE_NEWGROUNDS
     if (NewgroundsClient.instance.isLoggedIn())
     {
-      createItem("LOAD FROM NG", function()
+      createItem("LOAD FROM NG", "Loads save data from Newgrounds.", function()
       {
         openConfirmPrompt("This will overwrite
         \nALL your save data.
@@ -28,7 +37,7 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
           () -> Save.loadFromNewgrounds(() -> FlxG.switchState(() -> new funkin.InitState())));
       });
 
-      createItem("SAVE TO NG", function()
+      createItem("SAVE TO NG", "Saves all data to Newgrounds.", function()
       {
         openConfirmPrompt("This will overwrite
         \nALL save data saved
@@ -38,7 +47,7 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
         });
       });
 
-      createItem("CLEAR NG SAVE DATA", function()
+      createItem("CLEAR NG SAVE DATA", "Erases all data saved on Newgrounds.", function()
       {
         openConfirmPrompt("This will delete
         \nALL save data saved
@@ -50,14 +59,28 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
     }
     #end
 
-    createItem("EXIT", exit);
+    createItem("EXIT", "Returns to the Options menu.", exit);
+
+    add(descriptionBox = new FunkinSprite());
+    descriptionBox.makeSolidColor(1, 1, FlxColor.BLACK);
+    descriptionBox.alpha = 0.6;
+    descriptionBox.setPosition(50, FlxG.height - 160);
+    descriptionBox.setGraphicSize(FlxG.width - 100, 110);
+    descriptionBox.updateHitbox();
+
+    add(descriptionText = new FlxText(70, FlxG.height - 145, FlxG.width - 140, descriptions[0], 30));
+    descriptionText.setFormat(Paths.font('vcr.ttf'), 30, FlxColor.WHITE, flixel.text.FlxText.FlxTextAlign.CENTER,
+      flixel.text.FlxText.FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+    descriptionText.borderSize = 2;
+    items.onChange.add(function(_) descriptionText.text = descriptions[items.selectedIndex]);
   }
 
-  function createItem(name:String, callback:Void->Void, fireInstantly = false)
+  function createItem(name:String, description:String, callback:Void->Void, fireInstantly = false)
   {
     var item = items.createItem(0, 100 + items.length * 100, name, BOLD, callback);
     item.fireInstantly = fireInstantly;
     item.screenCenter(X);
+    descriptions.push(description);
     return item;
   }
 
@@ -115,6 +138,33 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
       // Clear the save data.
       Save.clearData();
 
+      FlxG.switchState(() -> new funkin.InitState());
+    });
+  }
+
+  function openSongDataPrompt():Void
+  {
+    openConfirmPrompt("This will erase\nall song data.\nAre you sure?", "Delete", function()
+    {
+      Save.instance.clearSongData();
+      FlxG.switchState(() -> new funkin.InitState());
+    });
+  }
+
+  function openOptionsPrompt():Void
+  {
+    openConfirmPrompt("This will reset\nall options to default.\nAre you sure?", "Reset", function()
+    {
+      Save.instance.clearOptions();
+      FlxG.switchState(() -> new funkin.InitState());
+    });
+  }
+
+  function openControlsPrompt():Void
+  {
+    openConfirmPrompt("This will reset\nall controls to default.\nAre you sure?", "Reset", function()
+    {
+      Save.instance.clearControls();
       FlxG.switchState(() -> new funkin.InitState());
     });
   }

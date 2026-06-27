@@ -40,6 +40,9 @@ import funkin.play.scoring.Scoring.ScoringRank;
 import funkin.play.song.Song;
 import funkin.save.Save;
 import funkin.save.Save.SaveScoreData;
+#if FEATURE_LUA_SCRIPTS
+import funkin.scripting.LuaScriptManager;
+#end
 import funkin.ui.AtlasText;
 import funkin.ui.FullScreenScaleMode;
 import funkin.ui.MusicBeatSubState;
@@ -269,6 +272,9 @@ class FreeplayState extends MusicBeatSubState
   var styleData:Null<FreeplayStyle> = null;
   var fromCharSelect:Bool = false;
   var forceSkipIntro:Bool = false;
+  #if FEATURE_LUA_SCRIPTS
+  var luaScriptManager:Null<LuaScriptManager> = null;
+  #end
 
   public var freeplayArrow:Null<FlxText>;
 
@@ -341,7 +347,11 @@ class FreeplayState extends MusicBeatSubState
     difficultyDots = new FlxTypedSpriteGroup<DifficultyDot>(DEFAULT_DOTS_GROUP_POS[0], DEFAULT_DOTS_GROUP_POS[1]);
     letterSort = new LetterSort((CUTOUT_WIDTH * SONGS_POS_MULTI) + 400, 75);
     rankBg = new FunkinSprite(0, 0);
+    #if android
+    rankVignette = new FlxSprite(0, 0).makeGraphic(1, 1, FlxColor.TRANSPARENT);
+    #else
     rankVignette = new FlxSprite(0, 0).loadGraphic(Paths.image('freeplay/rankVignette'));
+    #end
     sparks = new FlxSprite(0, 0);
     sparksADD = new FlxSprite(0, 0);
     txtCompletion = new AtlasText(FlxG.width - (FullScreenScaleMode.gameNotchSize.x + 95), 87, '69', AtlasFont.FREEPLAY_CLEAR);
@@ -363,9 +373,11 @@ class FreeplayState extends MusicBeatSubState
     FlxG.state.persistentUpdate = false;
     FlxTransitionableState.skipNextTransIn = true;
 
+    #if !android
     var fadeShaderFilter:ShaderFilter = new ShaderFilter(fadeShader);
     funnyCam.filters = [fadeShaderFilter];
     funnyCam.filtersEnabled = false;
+    #end
 
     if (stickerSubState != null)
     {
@@ -855,6 +867,10 @@ class FreeplayState extends MusicBeatSubState
         onDJIntroDone();
       }
     }
+
+    #if FEATURE_LUA_SCRIPTS
+    luaScriptManager = LuaScriptManager.loadFreeplayScriptsForState(this);
+    #end
   }
 
   /**
@@ -1278,11 +1294,13 @@ class FreeplayState extends MusicBeatSubState
           {
             FlxTween.cancelTweensOf(capsule);
             // capsule.targetPos.x += 50;
+            #if !android
             capsule.fadeAnim(fromResultsParams?.newRank);
 
             rankVignette.color = capsule.getTrailColor();
             rankVignette.alpha = 1;
             FlxTween.tween(rankVignette, {alpha: 0}, 0.6, {ease: FlxEase.expoOut});
+            #end
 
             capsule.doLerp = false;
             capsule.setPosition(originalPos.x, originalPos.y);
@@ -1546,8 +1564,10 @@ class FreeplayState extends MusicBeatSubState
     FlxTween.tween(backButton, {alpha: 0}, 0.4, {ease: FlxEase.quadOut});
     #end
 
+    #if !android
     funnyCam.filtersEnabled = true;
     fadeShader.fade(1.0, 0.0, 0.8, {ease: FlxEase.quadIn});
+    #end
     FlxG.sound.music?.fadeOut(0.9, 0);
 
     // Passing the currrent Freeplay character to the CharSelect so we can start it with that character selected
@@ -1589,8 +1609,10 @@ class FreeplayState extends MusicBeatSubState
     });
     add(transitionGradient);
 
+    #if !android
     funnyCam.filtersEnabled = true;
     fadeShader.fade(0.0, 1.0, 0.8, {ease: FlxEase.quadIn, onComplete: (twn) -> funnyCam.filtersEnabled = false});
+    #end
 
     for (grpSpr in exitMoversCharSel.keys())
     {
@@ -1640,6 +1662,9 @@ class FreeplayState extends MusicBeatSubState
   override function update(elapsed:Float):Void
   {
     super.update(elapsed);
+    #if FEATURE_LUA_SCRIPTS
+    if (luaScriptManager != null) luaScriptManager.callHook('onFreeplayUpdate', [elapsed]);
+    #end
 
     Conductor.instance.update(FlxG.sound?.music?.time ?? 0.0);
 
@@ -2043,9 +2068,7 @@ class FreeplayState extends MusicBeatSubState
         if (!Math.isFinite(delta)) continue;
         if (Math.abs(delta) >= 2)
         {
-          var dpiScale = FlxG.stage.window.display.dpi / 160;
-
-          dpiScale = dpiScale.clamp(0.5, #if android 1 #else 2 #end);
+          var dpiScale = getTouchDpiScale();
 
           var moveLength = delta / FlxG.updateFramerate / dpiScale;
           _moveLength += Math.abs(moveLength);
@@ -2070,9 +2093,7 @@ class FreeplayState extends MusicBeatSubState
       if (Math.isFinite(flickVelocity))
       {
         _flickEnded = false;
-        var dpiScale = FlxG.stage.window.display.dpi / 160;
-
-        dpiScale = dpiScale.clamp(0.5, #if android 1 #else 2 #end);
+        var dpiScale = getTouchDpiScale();
         var velocityMove = flickVelocity * elapsed / dpiScale;
         _moveLength += Math.abs(velocityMove);
         curSelectedFloat -= velocityMove;
@@ -2107,6 +2128,18 @@ class FreeplayState extends MusicBeatSubState
         changeSelection(0);
       }
     }
+  }
+
+  function getTouchDpiScale():Float
+  {
+    var dpi:Float = 160;
+    try
+    {
+      dpi = FlxG.stage?.window?.display?.dpi ?? 160;
+    }
+    catch (_:Dynamic) {}
+
+    return (dpi / 160).clamp(0.5, #if android 1 #else 2 #end);
   }
 
   function handleTouchFavoritesAndDifficulties()
@@ -2228,6 +2261,14 @@ class FreeplayState extends MusicBeatSubState
 
   public override function destroy():Void
   {
+    #if FEATURE_LUA_SCRIPTS
+    if (luaScriptManager != null)
+    {
+      luaScriptManager.callHook('onFreeplayClose', []);
+      luaScriptManager.destroy();
+      luaScriptManager = null;
+    }
+    #end
     super.destroy();
     // remove and destroy freeplay camera
     FlxG.cameras.remove(funnyCam);

@@ -71,8 +71,9 @@ class StageEditorObjectAnimsToolbox extends StageEditorDefaultToolbox
       objAnimFramerate.pos = animData.frameRate ?? 24;
       objAnimStart.selected = objAnimName.text == linkedObj.startingAnimation;
 
-      objAnimOffsetX.pos = (animData.offsets[0] ?? 0);
-      objAnimOffsetY.pos = (animData.offsets[1] ?? 0);
+      var offsets = animData.offsets ?? [0, 0];
+      objAnimOffsetX.pos = (offsets[0] ?? 0);
+      objAnimOffsetY.pos = (offsets[1] ?? 0);
     }
 
     objAnimSave.onClick = function(_)
@@ -108,6 +109,7 @@ class StageEditorObjectAnimsToolbox extends StageEditorDefaultToolbox
       linkedObj.animation.remove(daAnim);
       linkedObj.animDatas.remove(daAnim);
       linkedObj.offset.set();
+      state.saved = false;
 
       state.notifyChange("Animation Deletion Done", "Animation "
         + objAnims.selectedItem.text
@@ -159,9 +161,11 @@ class StageEditorObjectAnimsToolbox extends StageEditorDefaultToolbox
 
     for (fname in linkedObj.frames.frames)
     {
-      if (fname != null) objFrameList.dataSource.add({name: fname.name});
-
-      previousFrames.push(fname.name);
+      if (fname != null)
+      {
+        objFrameList.dataSource.add({name: fname.name});
+        previousFrames.push(fname.name);
+      }
     }
   }
 
@@ -183,36 +187,57 @@ class StageEditorObjectAnimsToolbox extends StageEditorDefaultToolbox
 
   function addAnimation()
   {
-    if (linkedObj.animation.getNameList().contains(objAnimName.text))
+    var animName = (objAnimName.text ?? "").trim();
+    var animPrefix = (objAnimPrefix.text ?? "").trim();
+
+    if (animName == "" || animPrefix == "")
     {
-      linkedObj.animation.remove(objAnimName.text);
+      stageEditorState.notifyChange("Animation Saving Error", "Animation name and prefix are required.", true);
+      return;
     }
 
-    var indices:Array<Null<Int>> = [];
+    if (linkedObj.animation.getNameList().contains(animName))
+    {
+      linkedObj.animation.remove(animName);
+      linkedObj.animDatas.remove(animName);
+    }
+
+    var indices:Array<Int> = [];
 
     if ((objAnimIndices.text ?? "") != "")
     {
       var splitter = objAnimIndices.text.replace(" ", "").split(",");
 
       for (num in splitter)
-        indices.push(Std.parseInt(num));
+      {
+        if (num == "") continue;
+
+        var index = Std.parseInt(num);
+        if (index == null)
+        {
+          stageEditorState.notifyChange("Animation Saving Error", 'Invalid frame index "$num". Use numbers separated by commas.', true);
+          return;
+        }
+
+        indices.push(index);
+      }
     }
 
-    var shouldDoIndices:Bool = (indices.length > 0 && !indices.contains(null));
-
-    linkedObj.addAnim(objAnimName.text, objAnimPrefix.text, [objAnimOffsetX.pos, objAnimOffsetY.pos], (shouldDoIndices ? indices : []),
+    linkedObj.addAnim(animName, animPrefix, [objAnimOffsetX.pos, objAnimOffsetY.pos], indices,
       Std.int(objAnimFramerate.pos), objAnimLooped.selected, objAnimFlipX.selected, objAnimFlipY.selected);
 
-    if (linkedObj.animation.getByName(objAnimName.text) == null)
+    if (linkedObj.animation.getByName(animName) == null)
     {
       stageEditorState.notifyChange("Animation Saving Error", "Could not build Animation by the provided Frames.", true);
       return;
     }
 
-    if (objAnimStart.selected) linkedObj.startingAnimation = objAnimName.text;
-    linkedObj.playAnim(objAnimName.text);
+    if (objAnimStart.selected) linkedObj.startingAnimation = animName;
+    else if (linkedObj.startingAnimation == animName) linkedObj.startingAnimation = "";
+    linkedObj.playAnim(animName);
+    stageEditorState.saved = false;
 
-    stageEditorState.notifyChange("Animation Saving Done", "Animation " + objAnimName.text + " has been saved to the Object " + linkedObj.name + ".");
+    stageEditorState.notifyChange("Animation Saving Done", "Animation " + animName + " has been saved to the Object " + linkedObj.name + ".");
     updateAnimList();
 
     // Stop the animation after a certain time.

@@ -61,6 +61,9 @@ class Main extends Sprite
     // Initialize custom logging.
     haxe.Log.trace = funkin.util.logging.AnsiTrace.trace;
     funkin.util.logging.AnsiTrace.traceBF();
+    #if FEATURE_LUA_SCRIPTS
+    funkin.scripting.LuaLogger.init();
+    #end
 
     // Get OpenFL to stop complaining so much.
     // You can remove this line if you want to read debug messages.
@@ -102,6 +105,7 @@ class Main extends Sprite
     });
     #end
 
+    #if !mobile
     // Manually crash the game when using a software renderer in order to give a nicer error message.
     var context = stage.window.context.type;
     if (context != WEBGL && context != OPENGL && context != OPENGLES)
@@ -120,6 +124,7 @@ class Main extends Sprite
       WindowUtil.showError('Failed to initialize $tech', desc);
       System.exit(1);
     }
+    #end
 
     setupGame();
   }
@@ -166,9 +171,11 @@ class Main extends Sprite
 
     WindowUtil.setVSyncMode(funkin.Preferences.vsyncMode);
 
+    #if !mobile
     // Force a `FunkinCamera` to be the default camera.
     // This allows the blend mode shader to work everywhere.
     untyped FlxG.cameras = new funkin.graphics.FunkinCameraFrontEnd();
+    #end
 
     var framerate:Int = Preferences.unlockedFramerate ? 0 : Preferences.framerate;
 

@@ -356,6 +356,12 @@ class Project extends HXProject
   static final FEATURE_LOG_TRACE:FeatureFlag = "FEATURE_LOG_TRACE";
 
   /**
+   * `-DFEATURE_LOGGER`
+   * If this flag is enabled, LuaSlice opens live Lua logger output and keeps detailed Lua logs enabled.
+   */
+  static final FEATURE_LOGGER:FeatureFlag = "FEATURE_LOGGER";
+
+  /**
    * `-DFEATURE_DEBUG_FILE_LOGGING`
    * If this flag is enabled, the game will print debug traces to a log file near the game's executable.
    * Disable to improve performance a bunch.
@@ -527,6 +533,7 @@ class Project extends HXProject
    * `-DFEATURE_LUA_SCRIPTS`
    * If this flag is enabled, native C++ builds can load Lua scripts through hxlua.
    * hxlua does not support HTML5 builds.
+   * Use `-DNO_LUA` to build without LuaSlice Lua support.
    */
   static final FEATURE_LUA_SCRIPTS:FeatureFlag = "FEATURE_LUA_SCRIPTS";
 
@@ -537,6 +544,8 @@ class Project extends HXProject
   public function new()
   {
     super();
+
+    if (isAndroid() && hasDefine("ANDROID_EMULATOR_X64")) this.architectures = [Architecture.X64];
 
     envConfig = readEnvironmentFile("./.env");
 
@@ -848,7 +857,7 @@ class Project extends HXProject
     // Should be true only on web builds.
     // Enabling embedding and preloading is required to preload assets properly.
     EMBED_ASSETS.apply(this, isWeb());
-    PRELOAD_ALL.apply(this, isDesktop());
+    PRELOAD_ALL.apply(this, !isWeb());
 
     // Should default to true on workspace builds and false on release builds.
     REDIRECT_ASSETS_FOLDER.apply(this, isDebug() && isDesktop());
@@ -869,8 +878,14 @@ class Project extends HXProject
     //
 
     FEATURE_FUNKVIS.apply(this, true);
-    FEATURE_LOG_TRACE.apply(this, true);
+    FEATURE_LOG_TRACE.apply(this, !isAndroid());
     FEATURE_DEBUG_FILE_LOGGING.apply(this, FEATURE_DEBUG_FUNCTIONS.isEnabled(this));
+    FEATURE_LOGGER.apply(this, false);
+    if (FEATURE_LOGGER.isEnabled(this))
+    {
+      FEATURE_LOG_TRACE.enable(this);
+      FEATURE_DEBUG_FILE_LOGGING.enable(this);
+    }
     FEATURE_NAUGHTYNESS.apply(this, true);
     FEATURE_OPEN_URL.apply(this, true);
     FEATURE_PARTIAL_SOUNDS.apply(this, true);
@@ -878,7 +893,7 @@ class Project extends HXProject
 
     // Video playback should be enabled on desktop, web, and mobile.
     // HXCPP has trouble with iOS simulator builds though...
-    FEATURE_VIDEO_PLAYBACK.apply(this, !(isIOSSimulator() || isHashLink()));
+    FEATURE_VIDEO_PLAYBACK.apply(this, !(isAndroid() || isIOSSimulator() || isHashLink()));
 
     // Video subtitles only work via using hxvlc.
     FEATURE_VIDEO_SUBTITLES.apply(this, FEATURE_VIDEO_PLAYBACK.isEnabled(this) && !isWeb());
@@ -894,7 +909,7 @@ class Project extends HXProject
     FEATURE_LOST_FOCUS_VOLUME.apply(this, isDesktop());
 
     // Newgrounds features
-    FEATURE_NEWGROUNDS.apply(this, true);
+    FEATURE_NEWGROUNDS.apply(this, !isMobile());
     FEATURE_NEWGROUNDS_DEBUG.apply(this, false);
     FEATURE_NEWGROUNDS_TESTING_MEDALS.apply(this, FEATURE_NEWGROUNDS.isEnabled(this) && FEATURE_DEBUG_FUNCTIONS.isEnabled(this));
     FEATURE_NEWGROUNDS_AUTOLOGIN.apply(this, FEATURE_NEWGROUNDS.isEnabled(this) && isWeb());
@@ -950,6 +965,10 @@ class Project extends HXProject
 
     // hxlua only supports native C++ targets. HTML5 must use HScript instead.
     FEATURE_LUA_SCRIPTS.apply(this, isCPP() && !isWeb());
+    if (hasDefine("NO_LUA") || getHaxedef("NO_LUA") != null)
+    {
+      FEATURE_LUA_SCRIPTS.disable(this);
+    }
 
     renderFlagsTable();
   }
@@ -1158,6 +1177,7 @@ class Project extends HXProject
     // Set the output directory. Depends on the target platform and build type.
 
     var buildDir = 'export/${isDebug() ? 'debug' : 'release'}';
+    if (FEATURE_LOGGER.isEnabled(this)) buildDir = 'export/logger';
 
     // we use a dedicated 'tracy' folder, since it generally needs a recompile when in use
     if (FEATURE_DEBUG_TRACY.isEnabled(this)) buildDir += "-tracy";
@@ -1281,10 +1301,10 @@ class Project extends HXProject
     config.set("ios.deployment", "16.0");
 
     // launchStoryboard = new LaunchStoryboard();
-    // launchStoryboard.path = "./LaunchScreen.storyboard";
+    // launchStoryboard.path = "other/LaunchScreen.storyboard";
 
     // Grab the stuff from a fake plist and then embbed it into the original to maintain a clear format!
-    final documentTypes:String = File.getContent("documentTypes.plist");
+    final documentTypes:String = File.getContent("other/documentTypes.plist");
 
     @:nullSafety(Off)
     {
@@ -1520,9 +1540,8 @@ class Project extends HXProject
     addAssetLibrary("art", shouldEmbedArt, shouldPreloadArt);
     addAsset("art/readme.txt", "do NOT readme.txt", "art", shouldEmbedArt);
     addAsset("LICENSE.md", "LICENSE.md", "art", shouldEmbedArt);
-    addAsset("CHANGELOG - FNF.md", "CHANGELOG - FNF.md", "art", shouldEmbedArt);
-    addAsset("CHANGELOG - ENGINE.md", "CHANGELOG - ENGINE.md", "art", shouldEmbedArt);
-    addAsset("example_mods/mod-example.rar", "mods/mod-example.rar", "art", shouldEmbedArt);
+    addAsset("changelogs/CHANGELOG - FNF.md", "CHANGELOG - FNF.md", "art", shouldEmbedArt);
+    addAsset("changelogs/CHANGELOG - ENGINE.md", "CHANGELOG - ENGINE.md", "art", shouldEmbedArt);
     addAsset("example_mods/mod-example.zip", "mods/mod-example.zip", "art", shouldEmbedArt);
 
     if (shouldEmbed)
@@ -1623,19 +1642,18 @@ class Project extends HXProject
 
     if (isAndroid())
     {
-      // Adaptive icons
-      adaptiveIcon = new AdaptiveIcon('art/icons/android/', true);
+      addIcon('art/icons/builds/android/IconAndroid.png');
     }
     else if (isIOS())
     {
-      addIcon("art/icons/bf-iOS-Default-Icon.png");
+      addIcon("art/icons/builds/ios/bf-iOS-Default-Icon.png");
     }
     else
     {
-      addIcon("art/icons/icon16.png", 16);
-      addIcon("art/icons/icon32.png", 32);
-      addIcon("art/icons/icon64.png", 64);
-      addIcon("art/icons/iconOG.png");
+      addIcon("art/icons/builds/windows/icon16.png", 16);
+      addIcon("art/icons/builds/windows/icon32.png", 32);
+      addIcon("art/icons/builds/windows/icon64.png", 64);
+      addIcon("art/icons/builds/windows/iconOG.png");
     }
 
     info('Done configuring icons.');
@@ -2094,7 +2112,7 @@ class Project extends HXProject
   {
     var differentLibraries:Map<String, Array<String>> = new Map<String, Array<String>>();
 
-    var hmmData:Dynamic = haxe.Json.parse(sys.io.File.getContent(#if ios '../../../../../' + #end 'hmm.json'));
+    var hmmData:Dynamic = haxe.Json.parse(sys.io.File.getContent(#if ios '../../../../../' + #end 'other/hmm.json'));
 
     var dependencies:Array<Dynamic> = cast hmmData.dependencies;
 
@@ -2141,7 +2159,7 @@ class Project extends HXProject
 
     if (Lambda.count(differentLibraries) > 0)
     {
-      warn("Some libraries differ from the versions defined in hmm.json.".bold().yellow());
+      warn("Some libraries differ from the versions defined in other/hmm.json.".bold().yellow());
       warn("To ensure consistency, it's recommended to stop the build and run `hmm reinstall [library]`.".bold().yellow());
       warn("If you're intentionally using development builds or newer versions, you can ignore this warning.".bold().yellow());
 
@@ -2446,7 +2464,7 @@ class Project extends HXProject
   public function readASTCExclusion():Void
   {
     @:nullSafety(Off)
-    astcExcludes = haxe.Json.parse(File.getContent('./astc-compression-data.json')).excludes;
+    astcExcludes = haxe.Json.parse(File.getContent('other/astc-compression-data.json')).excludes;
 
     for (i in 0...astcExcludes.length)
       astcExcludes[i] = astcExcludes[i].trim();
@@ -2484,7 +2502,7 @@ class Project extends HXProject
     info('Compressing ASTC textures...');
 
     var args:Array<String> = ['run', 'astc-compressor', 'compress-from-json'];
-    args = args.concat(['-json', './astc-compression-data.json']);
+    args = args.concat(['-json', 'other/astc-compression-data.json']);
 
     Sys.command('haxelib', args);
 

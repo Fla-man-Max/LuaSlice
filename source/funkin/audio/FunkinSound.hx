@@ -437,7 +437,16 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
 
     // Load the sound.
     // Sets `exists = true` as a side effect.
-    sound.loadEmbedded(embeddedSound, looped, autoDestroy, onComplete);
+    try
+    {
+      sound.loadEmbedded(embeddedSound, looped, autoDestroy, onComplete);
+    }
+    catch (e:Dynamic)
+    {
+      FlxG.log.error('FunkinSound failed to load ${Std.string(embeddedSound)}: ${Std.string(e)}');
+      sound.destroy();
+      return null;
+    }
 
     if (embeddedSound is String)
     {
@@ -446,6 +455,13 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     else
     {
       sound._label = 'unknown';
+    }
+
+    if (sound._sound == null)
+    {
+      FlxG.log.error('FunkinSound failed to load ${Std.string(embeddedSound)}');
+      sound.destroy();
+      return null;
     }
 
     if (autoPlay) sound.play();

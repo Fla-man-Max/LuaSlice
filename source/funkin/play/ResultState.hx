@@ -29,6 +29,9 @@ import funkin.play.components.TallyCounter;
 import funkin.play.scoring.Scoring;
 import funkin.play.song.Song;
 import funkin.save.Save.SaveScoreData;
+#if FEATURE_LUA_SCRIPTS
+import funkin.scripting.LuaScriptManager;
+#end
 import funkin.ui.freeplay.charselect.PlayableCharacter;
 import funkin.ui.freeplay.FreeplayState;
 import funkin.ui.FullScreenScaleMode;
@@ -92,6 +95,9 @@ class ResultState extends MusicBeatSubState
 
   var playerCharacterId:Null<String> = null;
   var playerCharacter:Null<PlayableCharacter> = null;
+  #if FEATURE_LUA_SCRIPTS
+  var luaScriptManager:Null<LuaScriptManager> = null;
+  #end
 
   var introMusicAudio:Null<FunkinSound> = null;
 
@@ -559,6 +565,9 @@ class ResultState extends MusicBeatSubState
     refresh();
 
     super.create();
+    #if FEATURE_LUA_SCRIPTS
+    luaScriptManager = LuaScriptManager.loadResultsScriptsForState(this);
+    #end
   }
 
   function getMusicPath(playerCharacter:Null<PlayableCharacter>, rank:ScoringRank):String
@@ -810,6 +819,9 @@ class ResultState extends MusicBeatSubState
   override function update(elapsed:Float):Void
   {
     maskShaderDifficulty.swagSprX = difficulty.x;
+    #if FEATURE_LUA_SCRIPTS
+    if (luaScriptManager != null) luaScriptManager.callHook('onResultsUpdate', [elapsed]);
+    #end
 
     if (movingSongStuff)
     {
@@ -1095,6 +1107,19 @@ class ResultState extends MusicBeatSubState
       InAppReviewUtil.requestReview();
     }
     #end
+  }
+
+  override function destroy():Void
+  {
+    #if FEATURE_LUA_SCRIPTS
+    if (luaScriptManager != null)
+    {
+      luaScriptManager.callHook('onResultsClose', []);
+      luaScriptManager.destroy();
+      luaScriptManager = null;
+    }
+    #end
+    super.destroy();
   }
 }
 

@@ -51,6 +51,7 @@ class OptionsState extends MusicBeatState
   static var luaPauseHideExit:Bool = false;
 
   var optionsCodex:Codex<OptionsMenuPageName>;
+  var luaPauseExitTargetForThisState:Null<String>;
   #if FEATURE_LUA_SCRIPTS
   var luaOptionsScriptManager:Null<LuaScriptManager>;
   #end
@@ -87,13 +88,17 @@ class OptionsState extends MusicBeatState
     #end
     var saveData:SaveDataMenu = optionsCodex.addPage(SaveData, new SaveDataMenu());
 
+    luaPauseExitTargetForThisState = luaPauseExitTarget;
+    var hideExitForThisState = luaPauseHideExit;
+    clearLuaPauseReturn();
+
     options.addSaveDataOptionsItem(saveData);
     options.addExitItem();
-    if (luaPauseHideExit) options.removeLuaOptionsItem("EXIT");
+    if (hideExitForThisState) options.removeLuaOptionsItem("EXIT");
 
     if (options.hasMultipleOptions())
     {
-      options.onExit.add(luaPauseExitTarget == null ? exitToMainMenu : exitFromLuaPause);
+      options.onExit.add(luaPauseExitTargetForThisState == null ? exitToMainMenu : exitFromLuaPause);
       controls.onExit.add(exitControls);
       preferences.onExit.add(optionsCodex.switchPage.bind(Options));
       #if FEATURE_LAG_ADJUSTMENT
@@ -105,10 +110,10 @@ class OptionsState extends MusicBeatState
     {
       // No need to show Options page
       #if mobile
-      preferences.onExit.add(luaPauseExitTarget == null ? exitToMainMenu : exitFromLuaPause);
+      preferences.onExit.add(luaPauseExitTargetForThisState == null ? exitToMainMenu : exitFromLuaPause);
       optionsCodex.setPage(Preferences);
       #else
-      controls.onExit.add(luaPauseExitTarget == null ? exitToMainMenu : exitFromLuaPause);
+      controls.onExit.add(luaPauseExitTargetForThisState == null ? exitToMainMenu : exitFromLuaPause);
       optionsCodex.setPage(Controls);
       #end
     }
@@ -172,12 +177,11 @@ class OptionsState extends MusicBeatState
   {
     optionsCodex.currentPage.enabled = false;
     FlxG.keys.enabled = true;
-    var target = luaPauseExitTarget ?? 'resume';
-    clearLuaPauseReturn();
+    var target = luaPauseExitTargetForThisState ?? 'resume';
 
     switch (target.toLowerCase())
     {
-      case 'resume' | 'song' | 'back':
+      case 'resume' | 'backtosong' | 'back_to_song' | 'song' | 'back':
         if (!funkin.play.PlayState.restartLastSong()) FlxG.switchState(() -> new MainMenuState());
       case 'restart' | 'restartsong' | 'restart_song':
         if (!funkin.play.PlayState.restartLastSong()) FlxG.switchState(() -> new MainMenuState());
@@ -210,8 +214,13 @@ class OptionsState extends MusicBeatState
   #if FEATURE_LUA_SCRIPTS
   public static function prepareLuaPauseReturn(config:Dynamic):Void
   {
-    luaPauseExitTarget = readLuaString(config, 'exitTarget', 'resume');
-    luaPauseHideExit = readLuaBool(config, 'hideExit', false);
+    luaPauseExitTarget = readLuaString(config, 'howExit', readLuaString(config, 'exitTarget', 'resume'));
+    luaPauseHideExit = readLuaBool(config, 'hideExit', true);
+  }
+
+  public static function hasPendingLuaPauseReturn():Bool
+  {
+    return luaPauseExitTarget != null || luaPauseHideExit;
   }
 
   static function readLuaString(data:Dynamic, field:String, fallback:String):String
@@ -473,7 +482,3 @@ enum abstract OptionsMenuPageName(String) to PageName
   var Offsets = "offsets";
   var SaveData = "saveData";
 }
-
-
-
-

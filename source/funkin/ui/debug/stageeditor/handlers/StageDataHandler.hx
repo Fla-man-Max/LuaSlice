@@ -12,6 +12,7 @@ import funkin.data.stage.StageData.StageDataCharacter;
 import funkin.data.stage.StageRegistry;
 import openfl.utils.Assets as OpenFLAssets;
 import lime.utils.Assets as LimeAssets;
+import haxe.io.Path;
 
 using StringTools;
 
@@ -156,16 +157,17 @@ class StageDataHandler
 
     for (stuff in entries)
     {
-      var ext = stuff.fileName.split(".")[1];
+      var ext = Path.extension(stuff.fileName).toLowerCase();
+      var entryName = Path.withoutExtension(stuff.fileName);
 
       switch (ext)
       {
         case "png":
           var data = BitmapData.fromBytes(stuff.data);
-          state.bitmaps.set(stuff.fileName.replace(".png", ""), data);
+          state.bitmaps.set(entryName, data);
 
         case "xml":
-          xmls.set(stuff.fileName.replace(".xml", ""), stuff.data.toString());
+          xmls.set(entryName, stuff.data.toString());
 
         case "json":
           stageData = StageRegistry.instance.parseEntryDataRaw(stuff.data.toString(), stuff.fileName);
@@ -180,22 +182,22 @@ class StageDataHandler
     }
 
     // actual data unpacking
-    state.stageName = stageData.name;
-    state.stageZoom = stageData.cameraZoom;
+    state.stageName = stageData.name ?? "Unnamed";
+    state.stageZoom = stageData.cameraZoom ?? 1;
     state.stageFolder = stageData.directory ?? "shared";
 
     // chars
     state.loadCharDatas(stageData);
 
     // objects
-    for (objData in stageData.props)
+    for (objData in stageData.props ?? [])
     {
       // make the data and roll with it
       var spr = new StageEditorObject();
       spr.fromData({
         name: objData.name ?? "Unnamed",
         assetPath: objData.assetPath,
-        animations: objData.animations.copy(),
+        animations: objData.animations?.copy() ?? [],
         scale: objData.scale,
         position: objData.position,
         alpha: objData.alpha,
@@ -203,7 +205,7 @@ class StageDataHandler
         zIndex: objData.zIndex,
         danceEvery: objData.danceEvery,
         isPixel: objData.isPixel,
-        scroll: objData.scroll.copy(),
+        scroll: objData.scroll?.copy() ?? [1, 1],
         color: objData.color,
         blend: objData.blend,
         flipX: objData.flipX,
@@ -287,13 +289,13 @@ class StageDataHandler
       return;
     }
 
-    state.stageName = data.name;
-    state.stageZoom = data.cameraZoom;
+    state.stageName = data.name ?? "Unnamed";
+    state.stageZoom = data.cameraZoom ?? 1;
     state.stageFolder = data.directory ?? "shared";
 
     state.loadCharDatas(data);
 
-    for (objData in data.props)
+    for (objData in data.props ?? [])
     {
       var spr = new StageEditorObject();
       if (!objData.assetPath.startsWith("#")) state.bitmaps.set(objData.assetPath, Assets.getBitmapData(Paths.image(objData.assetPath)));
@@ -305,7 +307,7 @@ class StageDataHandler
       spr.fromData({
         name: objData.name ?? "Unnamed",
         assetPath: objData.assetPath,
-        animations: objData.animations.copy(),
+        animations: objData.animations?.copy() ?? [],
         scale: objData.scale,
         position: objData.position,
         alpha: objData.alpha,
@@ -313,7 +315,7 @@ class StageDataHandler
         zIndex: objData.zIndex,
         danceEvery: objData.danceEvery,
         isPixel: objData.isPixel,
-        scroll: objData.scroll.copy(),
+        scroll: objData.scroll?.copy() ?? [1, 1],
         color: objData.color,
         blend: objData.blend,
         flipX: objData.flipX,

@@ -255,15 +255,23 @@ class FunkinMemory
   {
     if (graphic == null) return;
 
-    var bmp:Null<FlxGraphic> = FlxG.bitmap.get(graphic.key);
-    if (bmp != null && bmp.bitmap != null) var _:Int = bmp.bitmap.width; // Trigger
+    try
+    {
+      var bmp:Null<FlxGraphic> = FlxG.bitmap.get(graphic.key);
+      if (bmp != null && bmp.bitmap != null) var _:Int = bmp.bitmap.width; // Trigger
 
-    // Draws sprite and actually caches it.
-    var sprite = new flixel.FlxSprite();
-    sprite.loadGraphic(graphic);
-    sprite.draw(); // Draw sprite and load it into game's memory.
-    graphic.bitmap?.getTexture(FlxG.stage.context3D); // Just in case that didn't work...
-    sprite.destroy();
+      var sprite = new flixel.FlxSprite();
+      sprite.loadGraphic(graphic);
+      sprite.draw(); // Draw sprite and load it into game's memory.
+      sprite.destroy();
+
+      final context = FlxG.stage?.context3D;
+      if (context != null && graphic.bitmap != null) graphic.bitmap.getTexture(context);
+    }
+    catch (e:Dynamic)
+    {
+      FlxG.log.warn('Failed to force-render cached graphic ${graphic.key}: $e');
+    }
   }
 
   /**
@@ -342,7 +350,16 @@ class FunkinMemory
       return;
     }
 
-    var sound:Null<Sound> = Assets.getSound(key, true);
+    var sound:Null<Sound> = null;
+    try
+    {
+      sound = Assets.getSound(key, true);
+    }
+    catch (e:Dynamic)
+    {
+      FlxG.log.warn('Failed to cache sound $key: ${Std.string(e)}');
+      return;
+    }
     if (sound == null) return;
     else
       currentCachedSounds.set(key, sound);
@@ -356,7 +373,16 @@ class FunkinMemory
   {
     if (permanentCachedSounds.exists(key)) return;
 
-    var sound:Null<Sound> = Assets.getSound(key, true);
+    var sound:Null<Sound> = null;
+    try
+    {
+      sound = Assets.getSound(key, true);
+    }
+    catch (e:Dynamic)
+    {
+      FlxG.log.warn('Failed to cache permanent sound $key: ${Std.string(e)}');
+      return;
+    }
     if (sound == null) return;
     else
       permanentCachedSounds.set(key, sound);
@@ -406,7 +432,15 @@ class FunkinMemory
     Assets.cache.clear("music");
     // Felt lazy.
     var key = Paths.music("freakyMenu/freakyMenu");
-    var sound:Null<Sound> = Assets.getSound(key, true);
+    var sound:Null<Sound> = null;
+    try
+    {
+      sound = Assets.getSound(key, true);
+    }
+    catch (e:Dynamic)
+    {
+      FlxG.log.warn('Failed to restore menu music cache $key: ${Std.string(e)}');
+    }
     if (sound != null)
     {
       permanentCachedSounds.set(key, sound);

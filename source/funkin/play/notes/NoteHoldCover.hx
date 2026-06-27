@@ -49,6 +49,8 @@ class NoteHoldCover extends FlxTypedSpriteGroup<FlxSprite>
 
   public function playStart():Void
   {
+    if (holdNote == null) return;
+
     glow.setPosition(this.x, this.y);
     var direction:NoteDirection = holdNote.noteDirection;
     glow.animation.play('holdCoverStart${direction.colorName.toTitleCase()}');
@@ -56,14 +58,41 @@ class NoteHoldCover extends FlxTypedSpriteGroup<FlxSprite>
 
   public function playContinue():Void
   {
+    if (holdNote == null) return;
+
     var direction:NoteDirection = holdNote.noteDirection;
     glow.animation.play('holdCover${direction.colorName.toTitleCase()}');
   }
 
   public function playEnd():Void
   {
+    if (holdNote == null)
+    {
+      kill();
+      return;
+    }
+
     var direction:NoteDirection = holdNote.noteDirection;
     glow.animation.play('holdCoverEnd${direction.colorName.toTitleCase()}');
+  }
+
+  public function isEnding():Bool
+  {
+    return (glow?.animation?.name ?? "").startsWith("holdCoverEnd");
+  }
+
+  public function attachToHoldNote(note:SustainTrail):Void
+  {
+    detachFromHoldNote();
+
+    holdNote = note;
+    if (holdNote != null) holdNote.cover = this;
+  }
+
+  function detachFromHoldNote():Void
+  {
+    if (holdNote != null && holdNote.cover == this) holdNote.cover = null;
+    holdNote = null;
   }
 
   public override function kill():Void
@@ -72,7 +101,7 @@ class NoteHoldCover extends FlxTypedSpriteGroup<FlxSprite>
 
     this.visible = false;
 
-    holdNote.cover = null;
+    detachFromHoldNote();
 
     if (glow != null) glow.visible = false;
     if (sparks != null) sparks.visible = false;

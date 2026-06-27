@@ -393,20 +393,42 @@ class Preferences
 
   public static var unlockedFramerate(get, set):Bool;
 
-  static function get_unlockedFramerate():Bool
+  public static function supportsUnlockedFramerate():Bool
   {
-    #if (mobile || web)
+    #if android
+    if (FlxG.stage == null || FlxG.stage.window == null) return false;
+    var display = FlxG.stage.window.display;
+    if (display != null)
+    {
+      for (mode in display.supportedModes)
+      {
+        if (mode.refreshRate > 60) return true;
+      }
+    }
+    return FlxG.stage.window.displayMode.refreshRate > 60;
+    #elseif (web || ios)
     return false;
     #else
-    return Save?.instance?.options?.unlockedFramerate ?? false;
+    return true;
+    #end
+  }
+
+  static function get_unlockedFramerate():Bool
+  {
+    #if (web || ios)
+    return false;
+    #else
+    return supportsUnlockedFramerate() && (Save?.instance?.options?.unlockedFramerate ?? false);
     #end
   }
 
   static function set_unlockedFramerate(value:Bool):Bool
   {
-    #if (mobile || web)
+    #if (web || ios)
     return false;
     #else
+    if (!supportsUnlockedFramerate()) value = false;
+
     if (value != Save.instance.options.unlockedFramerate)
     {
       toggleFramerateCap(value);
@@ -518,9 +540,14 @@ class Preferences
 
   static function toggleFramerateCap(unlocked:Bool):Void
   {
-    #if !(mobile || web)
-    FlxG.drawFramerate = unlocked ? 0 : framerate;
-    FlxG.updateFramerate = unlocked ? 0 : framerate;
+    #if !(web || ios)
+    #if android
+    var target:Int = unlocked && supportsUnlockedFramerate() ? 1000 : framerate;
+    #else
+    var target:Int = unlocked ? 0 : framerate;
+    #end
+    FlxG.drawFramerate = target;
+    FlxG.updateFramerate = target;
     #end
   }
 

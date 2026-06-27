@@ -75,6 +75,25 @@ class MainMenuState extends MusicBeatState
     return uiStateMachine.canInteract();
   }
 
+  function lockMenuInput(state:UIState):Void
+  {
+    uiStateMachine.transition(state);
+    if (menuItems != null) menuItems.busy = true;
+
+    #if mobile
+    if (optionsButton != null)
+    {
+      optionsButton.active = false;
+      optionsButton.enabled = false;
+    }
+    if (backButton != null)
+    {
+      backButton.active = false;
+      backButton.enabled = false;
+    }
+    #end
+  }
+
   static var rememberedSelectedIndex:Int = 0;
 
   // this should never be false on non-mobile targets.
@@ -90,7 +109,7 @@ class MainMenuState extends MusicBeatState
     uiStateMachine.transition(EnteringMainMenu);
 
     upgradeSparkles = new FlxTypedSpriteGroup<UpgradeSparkle>();
-    magenta = new FlxSprite(Paths.image('menuBGMagenta'));
+    magenta = makeMenuGraphic('menuBGMagenta', FlxColor.MAGENTA);
     camFollow = new FlxObject(0, 0, 1, 1);
 
     // TODO: enabling and disabling keys is a lil quirky,
@@ -125,7 +144,7 @@ class MainMenuState extends MusicBeatState
     persistentUpdate = true;
     persistentDraw = true;
 
-    bg = new FlxSprite(Paths.image('menuBG'));
+    bg = makeMenuGraphic('menuBG', 0xFF102030);
     bg.scrollFactor.x = #if !mobile 0 #else 0.17 #end; // we want a lil x scroll on mobile
     bg.scrollFactor.y = 0.17;
     bg.setGraphicSize(Std.int(FlxG.width * 1.2));
@@ -151,7 +170,7 @@ class MainMenuState extends MusicBeatState
     menuItems.onAcceptPress.add(_ ->
     {
       FlxFlicker.flicker(magenta, 1.1, 0.15, false, true);
-      uiStateMachine.transition(Interacting);
+      lockMenuInput(Interacting);
     });
 
     menuItems.enabled = true;
@@ -299,13 +318,13 @@ class MainMenuState extends MusicBeatState
 
     backButton?.onConfirmStart.add(() ->
     {
-      uiStateMachine.transition(Interacting);
+      lockMenuInput(Interacting);
       trace('BACK: Interact Start');
     });
 
     optionsButton?.onConfirmStart.add(() ->
     {
-      uiStateMachine.transition(Interacting);
+      lockMenuInput(Interacting);
       trace('OPTIONS: Interact Start');
     });
     #end
@@ -345,6 +364,30 @@ class MainMenuState extends MusicBeatState
     FlxG.camera.follow(camFollow, null, 0.06);
 
     if (snap) FlxG.camera.snapToTarget();
+  }
+
+  static function makeMenuGraphic(path:String, fallbackColor:FlxColor):FlxSprite
+  {
+    var sprite = new FlxSprite();
+    var graphic = try Paths.image(path) catch (_:Dynamic) null;
+
+    if (graphic == null || !funkin.Assets.exists(graphic, openfl.utils.AssetType.IMAGE))
+    {
+      sprite.makeGraphic(1, 1, fallbackColor);
+    }
+    else
+    {
+      try
+      {
+        sprite.loadGraphic(graphic);
+      }
+      catch (_:Dynamic)
+      {
+        sprite.makeGraphic(1, 1, fallbackColor);
+      }
+    }
+
+    return sprite;
   }
 
   function createMenuItem(name:String, atlas:String, callback:Void->Void, fireInstantly:Bool = false):Void
@@ -426,6 +469,7 @@ class MainMenuState extends MusicBeatState
         startExitState(() -> new funkin.ui.credits.CreditsState());
         return true;
       case 'freeplay' | 'freeplaystate':
+        lockMenuInput(Interacting);
         persistentDraw = true;
         persistentUpdate = false;
         rememberSelectedMenuItem();
@@ -568,7 +612,7 @@ class MainMenuState extends MusicBeatState
   {
     if (menuItems == null) return;
 
-    uiStateMachine.transition(Exiting); // Start fade out
+    lockMenuInput(Exiting); // Start fade out
     rememberSelectedMenuItem();
 
     // the fadeout duration for the initial alpha tweens, not the screen wipe fadeout!
@@ -602,7 +646,7 @@ class MainMenuState extends MusicBeatState
     Conductor.instance.update();
 
     #if mobile
-    if (gyroPan != null && bg != null && !ControlsHandler.usingExternalInputDevice)
+    if (gyroPan != null && bg != null && !ControlsHandler.usingExternalInputDevice #if android && false #end)
     {
       gyroPan.add(FlxG.gyroscope.pitch * -1.25, FlxG.gyroscope.roll * -1.25);
 
@@ -773,7 +817,7 @@ class MainMenuState extends MusicBeatState
 
   function goBack():Void
   {
-    uiStateMachine.transition(Exiting);
+    lockMenuInput(Exiting);
     rememberSelectedMenuItem();
     FunkinSound.playOnce(Paths.sound('cancelMenu'));
 

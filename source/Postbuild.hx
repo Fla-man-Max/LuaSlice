@@ -15,7 +15,37 @@ class Postbuild
 
   static function main():Void
   {
+    patchAndroidManifestOrientation();
+    patchAndroidActivityOrientation();
     printBuildTime();
+  }
+
+  static function patchAndroidManifestOrientation():Void
+  {
+    var manifestPath = 'export/release/android/bin/app/src/main/AndroidManifest.xml';
+    if (!FileSystem.exists(manifestPath)) return;
+
+    var manifest = File.getContent(manifestPath);
+    var patched = manifest.replace('android:screenOrientation="sensorLandscape"', 'android:screenOrientation="landscape"');
+    if (patched != manifest) File.saveContent(manifestPath, patched);
+  }
+
+  static function patchAndroidActivityOrientation():Void
+  {
+    var activityPath = 'export/release/android/bin/app/src/main/java/org/libsdl/app/SDLActivity.java';
+    if (!FileSystem.exists(activityPath)) return;
+
+    var activity = File.getContent(activityPath);
+    var patched = activity;
+
+    if (!patched.contains('import android.content.pm.ActivityInfo;'))
+      patched = patched.replace('import android.os.Bundle;', 'import android.os.Bundle;\nimport android.content.pm.ActivityInfo;');
+
+    if (!patched.contains('setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);'))
+      patched = patched.replace('super.onCreate(savedInstanceState);',
+        'super.onCreate(savedInstanceState);\n\t\tsetRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);');
+
+    if (patched != activity) File.saveContent(activityPath, patched);
   }
 
   static function printBuildTime():Void

@@ -852,10 +852,17 @@ class SongDifficulty
   {
     var suffix:String = (instId != '') ? '-$instId' : '';
 
-    FlxG.sound.music = FunkinSound.load(Paths.inst(this.song.id, suffix), volume, looped, false, true, false, null, null, true);
+    var inst:Null<FunkinSound> = FunkinSound.load(Paths.inst(this.song.id, suffix), volume, looped, false, true, false, null, null, true);
+    if (inst == null)
+    {
+      FlxG.log.error('Failed to load instrumental for ${this.song.id}${suffix}');
+      return;
+    }
+
+    FlxG.sound.music = inst;
 
     // Workaround for a bug where FlxG.sound.music.update() was being called twice.
-    FlxG.sound.list.remove(FlxG.sound.music);
+    if (FlxG.sound.music != null) FlxG.sound.list.remove(FlxG.sound.music);
   }
 
   /**
@@ -1008,14 +1015,16 @@ class SongDifficulty
     for (playerVoice in playerVoiceList)
     {
       if (!Assets.exists(playerVoice)) continue;
-      result.addPlayerVoice(FunkinSound.load(playerVoice, 1.0, false, false, false, false, null, null, true));
+      var playerSound:Null<FunkinSound> = FunkinSound.load(playerVoice, 1.0, false, false, false, false, null, null, true);
+      if (playerSound != null) result.addPlayerVoice(playerSound);
     }
 
     // Add opponent vocals.
     for (opponentVoice in opponentVoiceList)
     {
       if (!Assets.exists(opponentVoice)) continue;
-      result.addOpponentVoice(FunkinSound.load(opponentVoice, 1.0, false, false, false, false, null, null, true));
+      var opponentSound:Null<FunkinSound> = FunkinSound.load(opponentVoice, 1.0, false, false, false, false, null, null, true);
+      if (opponentSound != null) result.addOpponentVoice(opponentSound);
     }
 
     if (result.members.length == 0)
@@ -1025,7 +1034,8 @@ class SongDifficulty
       var legacyPath = Paths.voices(this.song.id, '$suffix');
       if (Assets.exists(legacyPath))
       {
-        result.addPlayerVoice(FunkinSound.load(legacyPath, 1.0, false, false, false, false, null, null, true));
+        var legacySound:Null<FunkinSound> = FunkinSound.load(legacyPath, 1.0, false, false, false, false, null, null, true);
+        if (legacySound != null) result.addPlayerVoice(legacySound);
       }
     }
 

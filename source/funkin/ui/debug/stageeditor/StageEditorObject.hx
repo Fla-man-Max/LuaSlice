@@ -62,7 +62,11 @@ class StageEditorObject extends FunkinSprite
 
     animation.play(name, restart, reversed, 0);
 
-    if (animDatas.exists(name)) offset.set(animDatas[name].offsets[0], animDatas[name].offsets[1]);
+    if (animDatas.exists(name))
+    {
+      var offsets = animDatas[name].offsets ?? [0, 0];
+      offset.set(offsets[0] ?? 0, offsets[1] ?? 0);
+    }
     else
       offset.set();
   }
@@ -103,6 +107,10 @@ class StageEditorObject extends FunkinSprite
   public function addAnim(name:String, prefix:String, offsets:Array<Float>, indices:Array<Int>, frameRate:Int = 24, looped:Bool = true, flipX:Bool = false,
       flipY:Bool = false)
   {
+    offsets ??= [0, 0];
+    indices ??= [];
+    animDatas.remove(name);
+
     if (indices.length > 0) animation.addByIndices(name, prefix, indices, "", frameRate, looped, flipX, flipY);
     else
       animation.addByPrefix(name, prefix, frameRate, looped, flipX, flipY);

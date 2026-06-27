@@ -177,7 +177,6 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     }, Preferences.autoFullscreen);
     #end
 
-    // disable on mobile and web since it barely has any effect
     #if !(mobile || web)
     createPrefItemEnum('VSync', "When enabled, the game attempts to match the framerate with your monitor's refresh rate.",
       ["Off" => WindowVSyncMode.OFF, "On" => WindowVSyncMode.ON, "Adaptive" => WindowVSyncMode.ADAPTIVE,], function(key:String, value:WindowVSyncMode):Void
@@ -190,11 +189,23 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
         case WindowVSyncMode.ON: "On";
         case WindowVSyncMode.ADAPTIVE: "Adaptive";
       });
-    createPrefItemCheckbox('Unlocked Framerate', 'When enabled, the framerate is unlocked.\nThis setting is mutually exclusive with FPS.',
+    #end
+    #if (android || (!mobile && !web))
+    #if android
+    if (Preferences.supportsUnlockedFramerate())
+    {
+    #end
+    createPrefItemCheckbox(#if android 'Unlimited FPS' #else 'Unlocked Framerate' #end,
+      #if android 'Removes the software framerate limit. Your display may still limit the result.' #else 'When enabled, the framerate is unlocked.\nThis setting is mutually exclusive with FPS.' #end,
       function(value:Bool):Void
       {
         Preferences.unlockedFramerate = value;
       }, Preferences.unlockedFramerate);
+    #if android
+    }
+    #end
+    #end
+    #if !(mobile || web)
     createPrefItemNumber('FPS', 'The maximum framerate that the game targets.\nThis setting is mutually exclusive with Unlocked Framerate.',
       function(value:Float)
       {

@@ -40,7 +40,7 @@ class AssetDataHandler
       alpha: obj.alpha,
       danceEvery: obj.animation.getNameList().length > 0 ? obj.danceEvery : 0,
       scroll: [obj.scrollFactor.x, obj.scrollFactor.y],
-      animations: [for (n => d in obj.animDatas) d],
+      animations: [for (n in obj.animation.getNameList()) if (obj.animDatas.exists(n)) obj.animDatas[n]],
       startingAnimation: obj.startingAnimation,
       animType: "sparrow", // automatically making sparrow atlases yeah
       angle: obj.angle,
@@ -80,12 +80,19 @@ class AssetDataHandler
    */
   public static function fromData(object:StageEditorObject, data:StageEditorObjectData)
   {
+    var objectName = data.name ?? "Unnamed";
+    var assetPath = data.assetPath ?? "#FFFFFF";
+    var animations = data.animations ?? [];
+    var startingAnimation = data.startingAnimation ?? "";
+    var animData = data.animData ?? "";
+
     if (data.bitmap != null)
     {
-      if (data.animations != null && data.animations.length > 0)
+      if (animations.length > 0)
       {
-        var bitToLoad = state.addBitmap(data.bitmap.clone(), data.name);
-        object.frames = FlxAtlasFrames.fromSparrow(state.bitmaps[bitToLoad], data.animData);
+        var bitToLoad = state.addBitmap(data.bitmap.clone(), objectName);
+        if (animData != "") object.frames = FlxAtlasFrames.fromSparrow(state.bitmaps[bitToLoad], animData);
+        else object.loadGraphic(state.bitmaps[bitToLoad]);
       }
       else if (areTheseBitmapsEqual(data.bitmap, getDefaultGraphic()))
       {
@@ -93,59 +100,62 @@ class AssetDataHandler
       }
       else
       {
-        var bitToLoad = state.addBitmap(data.bitmap.clone(), data.name);
+        var bitToLoad = state.addBitmap(data.bitmap.clone(), objectName);
         object.loadGraphic(state.bitmaps[bitToLoad]);
       }
     }
     else
     {
-      if (data.animations != null && data.animations.length > 0) // considering we're unpacking we might as well just do this instead of switch
+      if (animations.length > 0 && animData != "" && state.bitmaps.exists(assetPath)) // considering we're unpacking we might as well just do this instead of switch
       {
-        if (data.animData.contains("</TextureAtlas>"))
+        if (animData.contains("</TextureAtlas>"))
         {
-          object.frames = FlxAtlasFrames.fromSparrow(state.bitmaps[data.assetPath].clone(), data.animData);
+          object.frames = FlxAtlasFrames.fromSparrow(state.bitmaps[assetPath].clone(), animData);
         }
         else
         {
-          object.frames = FlxAtlasFrames.fromSpriteSheetPacker(state.bitmaps[data.assetPath].clone(), data.animData);
+          object.frames = FlxAtlasFrames.fromSpriteSheetPacker(state.bitmaps[assetPath].clone(), animData);
         }
       }
-      else if (data.assetPath.startsWith("#"))
+      else if (assetPath.startsWith("#") || !state.bitmaps.exists(assetPath))
       {
         object.loadGraphic(getDefaultGraphic());
-        object.color = FlxColor.fromString(data.assetPath);
+        object.color = FlxColor.fromString(assetPath.startsWith("#") ? assetPath : "#FF00FF");
       }
       else
-        object.loadGraphic(state.bitmaps[data.assetPath].clone());
+        object.loadGraphic(state.bitmaps[assetPath].clone());
     }
 
-    object.name = data.name;
-    object.setPosition(data.position[0], data.position[1]);
-    object.zIndex = data.zIndex;
-    object.antialiasing = !data.isPixel;
-    object.alpha = data.alpha;
-    object.danceEvery = data.danceEvery;
-    object.scrollFactor.set(data.scroll[0], data.scroll[1]);
-    object.startingAnimation = data.startingAnimation;
-    object.angle = data.angle;
-    object.blend = blendFromString(data.blend);
-    if (!data.assetPath.startsWith("#")) object.color = FlxColor.fromString(data.color);
+    object.name = objectName;
+    var position = data.position ?? [0, 0];
+    object.setPosition(position[0] ?? 0, position[1] ?? 0);
+    object.zIndex = data.zIndex ?? 0;
+    object.antialiasing = !(data.isPixel ?? false);
+    object.alpha = data.alpha ?? 1;
+    object.danceEvery = data.danceEvery ?? 0;
+    var scroll = data.scroll ?? [1, 1];
+    object.scrollFactor.set(scroll[0] ?? 1, scroll[1] ?? 1);
+    object.startingAnimation = startingAnimation;
+    object.angle = data.angle ?? 0;
+    object.blend = blendFromString(data.blend ?? "");
+    if (!assetPath.startsWith("#")) object.color = FlxColor.fromString(data.color ?? "#FFFFFF");
 
-    for (anim in data.animations)
+    for (anim in animations)
     {
       object.addAnim(anim.name, anim.prefix, anim.offsets ?? [0, 0], anim.frameIndices ?? [], anim.frameRate ?? 24, anim.looped ?? false, anim.flipX ?? false,
         anim.flipY ?? false);
     }
 
-    if (object.animation.getNameList().contains(data.startingAnimation)) object.startingAnimation = data.startingAnimation;
+    if (object.animation.getNameList().contains(startingAnimation)) object.startingAnimation = startingAnimation;
+    else object.startingAnimation = "";
 
-    switch (data.scale)
+    switch (data.scale ?? Left(1.0))
     {
       case Left(value):
         object.scale.set(value, value);
 
       case Right(values):
-        object.scale.set(values[0], values[1]);
+        object.scale.set(values[0] ?? 1, values[1] ?? values[0] ?? 1);
     }
     object.updateHitbox();
 
