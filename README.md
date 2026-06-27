@@ -6,7 +6,7 @@ You can download the LuaSlice Versions Here:
 - [Source Code](https://github.com/Fla-man-Max/LuaSlice)
 - [Gamebanana](https://gamebanana.com/tools/23050)
 
-# Lua API (More Will be added)
+## Lua API Support
 
 ### Script Types
 
@@ -14,6 +14,8 @@ You can download the LuaSlice Versions Here:
 - `.luag` scripts are global. They share globals with other global Lua scripts.
 - Both script types can use the Lua API.
 - `.luag` is best for shared helpers and compatibility modules.
+- Lua support is enabled by default on native C++ builds, including normal `lime build windows` and `lime test windows`.
+- Use `-DNO_LUA` to build without Lua support.
 
 ### Script Load Folders
 
@@ -25,6 +27,12 @@ LuaSlice looks for scripts in these places:
 - `mods/scripts/global.luag`
 - `mods/scripts/*.lua`
 - `mods/scripts/*.luag`
+- `mods/scripts/freeplay/*.lua`
+- `mods/scripts/freeplay/*.luag`
+- `mods/scripts/story/*.lua`
+- `mods/scripts/story/*.luag`
+- `mods/scripts/results/*.lua`
+- `mods/scripts/results/*.luag`
 - `mods/scripts/song-SongId.lua`
 - `mods/scripts/SongId.lua`
 - `mods/scripts/stage-StageId.lua`
@@ -50,6 +58,12 @@ LuaSlice looks for scripts in these places:
 - `mods/<mod name>/script/*.luag`
 - `mods/<mod name>/scripts/*.lua`
 - `mods/<mod name>/scripts/*.luag`
+- `mods/<mod name>/scripts/freeplay/*.lua`
+- `mods/<mod name>/scripts/freeplay/*.luag`
+- `mods/<mod name>/scripts/story/*.lua`
+- `mods/<mod name>/scripts/story/*.luag`
+- `mods/<mod name>/scripts/results/*.lua`
+- `mods/<mod name>/scripts/results/*.luag`
 
 Folder rule:
 
@@ -58,6 +72,9 @@ Folder rule:
 - `scripts/menu` loads on the Main Menu only.
 - `scripts/options` loads in the Options menu only.
 - `scripts/pause` loads in PlayState and can configure the pause menu when it opens.
+- `scripts/freeplay` loads in Freeplay.
+- `scripts/story` loads in Story Menu.
+- `scripts/results` loads in Results.
 - F5 reloads PlayState Lua from normal gameplay folders, including modules, gameplay, player/opponent, songs, stages, characters, events, notekinds, shaders, dialogue, levels, pause, lua, and luag folders.
 - Other script folders can load both `.lua` and `.luag`.
 
@@ -90,16 +107,58 @@ Folder rule:
 
 ### Simple Helpers
 
-These are small wrappers for common menu/shader work:
+These are small wrappers for common Lua work:
 
-- Pause menu item targets: `resume`, `restartSong`, `changeDifficulty`, `practiceMode`, `exitToMenu`, `options`, `callback`, or a custom `.hx/.hxc` state class.
-- Pause menu items are added/edited with `configureLuaPauseMenu({ items = {...} })`.
 - `addLuaMainMenu(id, position, target, assetPath, animName)` adds a main menu item.
 - `makeLuaMenuSimple(id, items, x, y, spacing)` creates a simple text menu.
 - `makeLuaImageMenuSimple(id, items, x, y, spacing)` creates a simple image menu.
-- `makeLuaShader(tag, path)`, `setLuaShader(tag, target)`, and `setLuaCameraShader(tag, camera)` wrap common shader setup.
+- `initLuaShader(name)` loads a shader by name and uses that name as the tag.
+- `initLuaShader(name, tag)` loads a shader by name and stores it under a custom tag.
+- `makeLuaShader(tag, path, vertexPath)` creates a shader from a fragment path/source and optional vertex path/source.
+- `setLuaShader(tag, target)` applies a shader to a Lua object or engine path.
+- `setShaderOnSprite(sprite, tag)` applies a shader to a sprite using sprite-first argument order.
+- `setLuaCameraShader(tag, camera)` applies a shader to a camera.
+- `getLuaSave(key, fallback)` and `setLuaSave(key, value)` store Lua data in the game save.
 
 Options still use the normal simple option API: `createLuaOptionPage`, `addLuaCheckbox`, `addLuaNumber`, and `addLuaEnum`.
+
+### Advanced Helpers
+
+- Pause menu items are added/edited with `configureLuaPauseMenu({ items = {...} })`.
+- Pause menu item targets: `resume`, `restartSong`, `changeDifficulty`, `practiceMode`, `exitToMenu`, `options`, `callback`, or a custom `.hx/.hxc` state class.
+- Pause menu targets can use per-item config, such as `options = { hideExit = true, howExit = "BackToSong" }` for the pause-opened Options screen.
+- `setLuaPauseOptions(howExit)` controls where pause-opened Options goes when backing out.
+- Freeplay hooks:
+  - `onFreeplayCreate()`
+  - `onFreeplayUpdate(elapsed)`
+  - `onFreeplayClose()`
+- Story Menu hooks:
+  - `onStoryCreate()`
+  - `onStoryUpdate(elapsed)`
+  - `onStoryClose()`
+- Results hooks:
+  - `onResultsCreate()`
+  - `onResultsUpdate(elapsed)`
+  - `onResultsClose()`
+- These screen hooks load from `scripts/freeplay`, `scripts/story`, and `scripts/results`.
+
+### Lua Error Reports
+
+- Lua errors write reports to `logs/lua`.
+- Error windows show script path, hook/API name, line number when Lua provides it, report path, and the error text.
+- Suggestions show in the popup when LuaSlice knows a likely fix.
+- If there is no useful suggestion, reports say `Suggestions: None`.
+- Per-frame hook errors show a warning when repeated errors could hurt FPS or memory.
+
+### Dev Logger
+
+- `-DFEATURE_LOGGER` enables LuaSlice's live Lua logger.
+- Example: `lime test windows -DFEATURE_LOGGER`.
+- Logger builds still include the Lua API by default unless `-DNO_LUA` is also passed.
+- Logger output includes loaded Lua script lists, Lua errors, and simple variable logs.
+- Logger builds output to `export/logger/<target>/bin`.
+- The normal Windows build keeps `FEATURE_LOGGER` disabled and outputs to `export/release/<target>/bin`.
+
 ### Supported API Areas
 
 - Core helpers: `require`, JSON, text files, random numbers, keyboard input, mouse input.
@@ -117,8 +176,12 @@ Options still use the normal simple option API: `createLuaOptionPage`, `addLuaCh
 - Tweens/timers: tagged tweens, X/Y/alpha/angle aliases, canceling, timers, completion hooks.
 - Custom options: `LuaOptionManager` makes Lua options easier, cleaner, and less complex.
 - Custom menus: `LuaMenusManager` can make Lua menus, insert real main menu entries, configure pause menu items, and open base menus or custom `.hx/.hxc` state classes.
-- Shaders: `LuaShaderManager` makes shaders easier to apply and un-apply from Lua.
+- Shaders: `LuaShaderManager` makes shaders easier to load, apply, and un-apply from Lua.
+- Lua save data: persistent Lua values through `getLuaSave` and `setLuaSave`.
+- Menu hooks: Freeplay, Story Menu, and Results scripts can run create/update/close hooks.
+- Lua logger: `-DFEATURE_LOGGER` enables cleaner live Lua logging for scripts, errors, and simple variable logs.
 - Raw bridge: `getProperty`, `setProperty`, `callMethod`, static access, arrays, stored objects, object creation/destruction.
 
 ### Current Limits
 - HTML5 does not use hxlua. | Never.
+- `-DNO_LUA` disables Lua support for builds that need it.
