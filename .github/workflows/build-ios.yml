@@ -1,0 +1,56 @@
+name: Build iOS Simulator
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    runs-on: macos-15
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout LuaSlice
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Restore dependency manifest
+        shell: bash
+        run: cp other/hmm.json hmm.json
+
+      - name: Setup Haxe and dependencies
+        uses: ./.github/actions/setup-haxe
+        with:
+          targets: ios
+          gh-token: ${{ github.token }}
+
+      - name: Setup HXCPP tools
+        shell: bash
+        run: |
+          cd .haxelib/hxcpp/git/tools/hxcpp
+          haxe compile.hxml
+
+      - name: Build iOS Simulator app
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p BuildLogs/ios
+          LOG="BuildLogs/ios/log-iosbuild-$(date +%Y-%m-%d-%H-%M-%S).txt"
+          haxelib run lime build ios -simulator -release -DGITHUB_BUILD 2>&1 | tee "$LOG"
+          echo "Build Log located at: $LOG" | tee -a "$LOG"
+
+      - name: Package Simulator app
+        shell: bash
+        run: |
+          APP_PATH="$(find export/release/ios -type d -name '*.app' -print -quit)"
+          test -n "$APP_PATH"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_PATH" LuaSlice-iOS-Simulator.zip
+
+      - name: Upload iOS build
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaSlice-iOS-Simulator
+          path: |
+            LuaSlice-iOS-Simulator.zip
+            BuildLogs/ios/*.txt
+          if-no-files-found: error

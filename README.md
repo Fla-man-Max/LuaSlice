@@ -1,25 +1,25 @@
 # LuaSlice
 I added Lua Support to V-slice. I don't know what to add mor-
 
+Join mine Discord Server!
+- [LuaSlice Engine](https://discord.gg/sCr5rpPwBn)
+
 You can download the LuaSlice Versions Here:
 - [Versions](https://github.com/Fla-man-Max/LuaSlice/releases)
 - [Source Code](https://github.com/Fla-man-Max/LuaSlice)
 - [Gamebanana](https://gamebanana.com/tools/23050)
 
-## Lua API Support
+# LuaSlice Lua API
 
-### Script Types
+LuaSlice supports isolated `.lua` scripts and global `.luag` scripts. Lua is enabled by default on native C++ builds. Use `-DNO_LUA` only if you need a build without Lua.
 
-- `.lua` scripts are isolated. They get private script environments.
-- `.luag` scripts are global. They share globals with other global Lua scripts.
-- Both script types can use the Lua API.
-- `.luag` is best for shared helpers and compatibility modules.
-- Lua support is enabled by default on native C++ builds, including normal `lime build windows` and `lime test windows`.
-- Use `-DNO_LUA` to build without Lua support.
+## Script Types
 
-### Script Load Folders
+- `.lua`: isolated script environment.
+- `.luag`: global shared script environment.
+- `.luag` is best for shared modules, global toggles, and compatibility helpers.
 
-LuaSlice looks for scripts in these places:
+## Main Script Folders
 
 - `mods/global.lua`
 - `mods/global.luag`
@@ -27,58 +27,40 @@ LuaSlice looks for scripts in these places:
 - `mods/scripts/global.luag`
 - `mods/scripts/*.lua`
 - `mods/scripts/*.luag`
+- `mods/scripts/lua/*.lua`
+- `mods/scripts/luag/*.luag`
+- `mods/scripts/menu/*.lua`
+- `mods/scripts/menu/*.luag`
+- `mods/scripts/options/*.lua`
+- `mods/scripts/options/*.luag`
+- `mods/scripts/pause/*.lua`
+- `mods/scripts/pause/*.luag`
 - `mods/scripts/freeplay/*.lua`
 - `mods/scripts/freeplay/*.luag`
 - `mods/scripts/story/*.lua`
 - `mods/scripts/story/*.luag`
 - `mods/scripts/results/*.lua`
 - `mods/scripts/results/*.luag`
+- `mods/scripts/characters/CharacterId.lua`
+- `mods/scripts/characters/CharacterId.luag`
 - `mods/scripts/song-SongId.lua`
-- `mods/scripts/SongId.lua`
+- `mods/scripts/song-SongId.luag`
 - `mods/scripts/stage-StageId.lua`
-- `mods/scripts/StageId.lua`
 - `mods/scripts/stages/StageId.lua`
-- `mods/SongId/script.lua`
-- `mods/SongId/scripts/song.lua`
-- `mods/stages/StageId.lua`
-- `mods/<mod name>/global.lua`
-- `mods/<mod name>/global.luag`
-- `mods/<mod name>/script.lua`
-- `mods/<mod name>/script.luag`
-- `mods/<mod name>/scripts/global.lua`
-- `mods/<mod name>/scripts/global.luag`
-- `mods/<mod name>/scripts/song-SongId.lua`
-- `mods/<mod name>/scripts/SongId.lua`
-- `mods/<mod name>/scripts/stage-StageId.lua`
-- `mods/<mod name>/scripts/stages/StageId.lua`
-- `mods/<mod name>/songs/SongId/script.lua`
-- `mods/<mod name>/data/songs/SongId/script.lua`
-- `mods/<mod name>/stages/StageId.lua`
-- `mods/<mod name>/script/*.lua`
-- `mods/<mod name>/script/*.luag`
 - `mods/<mod name>/scripts/*.lua`
 - `mods/<mod name>/scripts/*.luag`
-- `mods/<mod name>/scripts/freeplay/*.lua`
-- `mods/<mod name>/scripts/freeplay/*.luag`
-- `mods/<mod name>/scripts/story/*.lua`
-- `mods/<mod name>/scripts/story/*.luag`
-- `mods/<mod name>/scripts/results/*.lua`
-- `mods/<mod name>/scripts/results/*.luag`
+- `mods/<mod name>/scripts/lua/*.lua`
+- `mods/<mod name>/scripts/luag/*.luag`
+- `mods/<mod name>/scripts/menu/*.lua`
+- `mods/<mod name>/scripts/options/*.luag`
+- `mods/<mod name>/scripts/pause/*.luag`
+- `mods/<mod name>/songs/SongId/script.lua`
+- `mods/<mod name>/songs/SongId/script.luag`
+- `mods/<mod name>/data/songs/SongId/script.lua`
+- `mods/<mod name>/data/songs/SongId/script.luag`
+- `mods/<mod name>/stages/StageId.lua`
 
-Folder rule:
-
-- `scripts/lua` loads `.lua` only.
-- `scripts/luag` loads `.luag` only.
-- `scripts/menu` loads on the Main Menu only.
-- `scripts/options` loads in the Options menu only.
-- `scripts/pause` loads in PlayState and can configure the pause menu when it opens.
-- `scripts/freeplay` loads in Freeplay.
-- `scripts/story` loads in Story Menu.
-- `scripts/results` loads in Results.
-- F5 reloads PlayState Lua from normal gameplay folders, including modules, gameplay, player/opponent, songs, stages, characters, events, notekinds, shaders, dialogue, levels, pause, lua, and luag folders.
-- Other script folders can load both `.lua` and `.luag`.
-
-### Require Paths
+## Require Paths
 
 - `mods/?.lua`
 - `mods/?.luag`
@@ -97,91 +79,397 @@ Folder rule:
 - `mods/<mod name>/scripts/?.lua`
 - `mods/<mod name>/scripts/?.luag`
 
-### Hot Reload
+## Hot Reload
 
-- F5 reloads Lua scripts in PlayState.
-- `reloadLuaScripts()` safely requests the same reload from Lua.
-- Reload rescans mod folders, so added or removed `.lua` and `.luag` scripts update.
-- `onReload()` is called after scripts reload.
-- Script-created sprites, text, sounds, tweens, timers, menus, shaders, and objects are cleaned up before reload.
+- `F5` reloads Lua in PlayState.
+- `reloadLuaScripts()` requests the same reload from Lua.
+- `onReload()` runs after reload.
+- Lua-created sprites, text, sounds, tweens, timers, menus, shaders, and registered objects are cleaned before reload.
 
-### Simple Helpers
+## New Helper API
 
-These are small wrappers for common Lua work:
+### Docs
 
-- `addLuaMainMenu(id, position, target, assetPath, animName)` adds a main menu item.
-- `makeLuaMenuSimple(id, items, x, y, spacing)` creates a simple text menu.
-- `makeLuaImageMenuSimple(id, items, x, y, spacing)` creates a simple image menu.
-- `initLuaShader(name)` loads a shader by name and uses that name as the tag.
-- `initLuaShader(name, tag)` loads a shader by name and stores it under a custom tag.
-- `makeLuaShader(tag, path, vertexPath)` creates a shader from a fragment path/source and optional vertex path/source.
-- `setLuaShader(tag, target)` applies a shader to a Lua object or engine path.
-- `setShaderOnSprite(sprite, tag)` applies a shader to a sprite using sprite-first argument order.
-- `setLuaCameraShader(tag, camera)` applies a shader to a camera.
-- `getLuaSave(key, fallback)` and `setLuaSave(key, value)` store Lua data in the game save.
+- `LuaSlice.version`
+- `LuaSlice.versionAtLeast(version)`
+- `requiresLuaSlice(version)`
+- `LuaSlice.api.list(category?)`
+- `LuaSlice.api.find(name)`
+- `LuaSlice.api.docs()`
+- `LuaSlice.api.writeDocs(path?)`
 
-Options still use the normal simple option API: `createLuaOptionPage`, `addLuaCheckbox`, `addLuaNumber`, and `addLuaEnum`.
+### Debug
 
-### Advanced Helpers
+- `debug.print(message)`
+- `debug.info(message)`
+- `debug.warn(message)`
+- `debug.error(message)`
 
-- Pause menu items are added/edited with `configureLuaPauseMenu({ items = {...} })`.
-- Pause menu item targets: `resume`, `restartSong`, `changeDifficulty`, `practiceMode`, `exitToMenu`, `options`, `callback`, or a custom `.hx/.hxc` state class.
-- Pause menu targets can use per-item config, such as `options = { hideExit = true, howExit = "BackToSong" }` for the pause-opened Options screen.
-- `setLuaPauseOptions(howExit)` controls where pause-opened Options goes when backing out.
-- Freeplay hooks:
-  - `onFreeplayCreate()`
-  - `onFreeplayUpdate(elapsed)`
-  - `onFreeplayClose()`
-- Story Menu hooks:
-  - `onStoryCreate()`
-  - `onStoryUpdate(elapsed)`
-  - `onStoryClose()`
-- Results hooks:
-  - `onResultsCreate()`
-  - `onResultsUpdate(elapsed)`
-  - `onResultsClose()`
-- These screen hooks load from `scripts/freeplay`, `scripts/story`, and `scripts/results`.
+### Properties
 
-### Lua Error Reports
+- `property.get(path)`
+- `property.set(path, value)`
+- `property.setMany(target, values)`
+- `property.ref(path)`
 
-- Lua errors write reports to `logs/lua`.
-- Error windows show script path, hook/API name, line number when Lua provides it, report path, and the error text.
-- Suggestions show in the popup when LuaSlice knows a likely fix.
-- If there is no useful suggestion, reports say `Suggestions: None`.
-- Per-frame hook errors show a warning when repeated errors could hurt FPS or memory.
+### Sprites
 
-### Dev Logger
+- `sprite.create(tag, data, x?, y?)`
+- `sprite.add(tag, options?)`
+- `sprite.remove(tag)`
+- `sprite.exists(tag)`
+- `sprite.set(tag, values)`
+- `sprite.setAlpha(tag, value)`
+- `sprite.setCamera(tag, camera)`
+- `sprite.setLayer(tag, layer)`
 
-- `-DFEATURE_LOGGER` enables LuaSlice's live Lua logger.
-- Example: `lime test windows -DFEATURE_LOGGER`.
-- Logger builds still include the Lua API by default unless `-DNO_LUA` is also passed.
-- Logger output includes loaded Lua script lists, Lua errors, and simple variable logs.
-- Logger builds output to `export/logger/<target>/bin`.
-- The normal Windows build keeps `FEATURE_LOGGER` disabled and outputs to `export/release/<target>/bin`.
+Named layers:
 
-### Supported API Areas
+- `background`
+- `stage`
+- `characters`
+- `foreground`
+- `hud`
+- `top`
 
-- Core helpers: `require`, JSON, text files, random numbers, keyboard input, mouse input.
-- PlayState/song: song position, beat, step, section, song id/name, difficulty, variation, stage id, playback rate, scroll speed, health, score, combo, tallies, accuracy, botplay, practice mode, countdown, restart, end song, vocals volume.
-- Events: create, reload, update, step, beat, section, destroy, countdown, song start/end, pause/resume, game over, note hit/miss, ghost miss, hold drop, note incoming, song events, retry, key up/down, focus, state/substate, dialogue.
-- Live event editing: current event access, event fields, event canceling, propagation control.
-- Notes: note payloads, strum time, direction, kind/noteData, raw note object access.
-- Strumlines: player/opponent strumlines, position, alpha, visible, receptor positions, receptor animations, note splashes, scroll speed.
-- Characters: boyfriend, dad, girlfriend, health icons, animations, raw fields and methods.
-- Stage: current stage, stage props, stage characters, camera zoom, raw stage access, PlayState object insertion, z-index refresh.
-- Sprites: static sprites, Sparrow sprites, solid sprites, cameras, position, scale, size, alpha, visibility, angle, color, velocity, acceleration, scroll factor, zIndex, screen centering, kill/revive, animations.
-- Text/HUD: FlxText creation, formatting, HUD camera, score text, health bar, combo popups, icons.
-- Cameras: flash, fade, shake, zoom, alpha, background color, visibility, position, follow point, camera bop, reset, tween zoom, tween position, cancel camera tweens.
-- Audio: tagged sounds, music controls, vocals, volume controls, raw `FlxG.sound` access.
-- Tweens/timers: tagged tweens, X/Y/alpha/angle aliases, canceling, timers, completion hooks.
-- Custom options: `LuaOptionManager` makes Lua options easier, cleaner, and less complex.
-- Custom menus: `LuaMenusManager` can make Lua menus, insert real main menu entries, configure pause menu items, and open base menus or custom `.hx/.hxc` state classes.
-- Shaders: `LuaShaderManager` makes shaders easier to load, apply, and un-apply from Lua.
-- Lua save data: persistent Lua values through `getLuaSave` and `setLuaSave`.
-- Menu hooks: Freeplay, Story Menu, and Results scripts can run create/update/close hooks.
-- Lua logger: `-DFEATURE_LOGGER` enables cleaner live Lua logging for scripts, errors, and simple variable logs.
-- Raw bridge: `getProperty`, `setProperty`, `callMethod`, static access, arrays, stored objects, object creation/destruction.
+### Groups
 
-### Current Limits
-- HTML5 does not use hxlua. | Never.
-- `-DNO_LUA` disables Lua support for builds that need it.
+- `group.create(name)`
+- `group.add(name, tag)`
+- `group.each(name, callback)`
+- `group.set(name, values)`
+- `group.setAlpha(name, alpha)`
+- `group.setLayer(name, layer)`
+- `group.tween(name, values, duration, options?)`
+- `group.remove(name, tag?)`
+
+### Camera
+
+- `camera.setZoom(cameraName, zoom)`
+- `camera.flash(cameraName, color, duration)`
+- `camera.shake(cameraName, intensity, duration)`
+
+### Shaders
+
+- `shader.init(name, tag?)`
+- `shader.make(tag, path, vertex?)`
+- `shader.apply(target, tag)`
+- `shader.remove(target)`
+- `shader.exists(tag)`
+- `initLuaShader(name, tag?)`
+- `makeLuaShader(tag, pathOrSource?, vertexPathOrSource?)`
+- `setLuaShader(tag, target)`
+- `setShaderOnSprite(sprite, tag)`
+- `removeLuaShader(target)`
+- `setLuaCameraShader(tag, camera?)`
+- `removeLuaCameraShader(camera?)`
+- `setLuaShaderFloatSimple(tag, name, value)`
+
+### Save
+
+- `save.get(key, fallback?)`
+- `save.set(key, value)`
+- `save.flush()`
+- `getLuaSave(key, fallback?)`
+- `setLuaSave(key, value)`
+- `flushSave()`
+
+### Sound
+
+- `sound.play(tag, key, volume?, looped?)`
+- `sound.stop(tag)`
+- `sound.exists(tag)`
+
+### Scripts
+
+- `script.disableHook(name)`
+- `script.enableHook(name)`
+- `script.reload()`
+- `disableLuaHook(name)`
+- `enableLuaHook(name)`
+
+### Tweens And Timers
+
+- `tween.to(target, values, duration, options?)`
+- `tween.cancel(tag)`
+- `timer.after(delay, callback)`
+- `timer.every(delay, callback)`
+
+### Song Events
+
+- `song.getPosition()`
+- `song.atBeat(beat, callback)`
+- `song.atStep(step, callback)`
+- `event.on(name, callback)`
+- `event.once(name, callback)`
+
+### Menus
+
+- `addLuaMainMenu(id, position, target, assetPath?, animName?)`
+- `makeLuaMenuSimple(id, items, x?, y?, spacing?)`
+- `makeLuaImageMenuSimple(id, items, x?, y?, spacing?)`
+
+## Raw Bridge API
+
+### Core
+
+- `debugPrint`
+- `luaTrace`
+- `reloadLuaScripts`
+- `jsonParse`
+- `jsonStringify`
+- `fileExists`
+- `directoryExists`
+- `readTextFile`
+- `writeTextFile`
+- `randomFloat`
+- `randomInt`
+
+### Event Control
+
+- `getCurrentEvent`
+- `getEventField`
+- `setEventField`
+- `cancelEvent`
+- `stopEventPropagation`
+
+### Reflection And Objects
+
+- `getProperty`
+- `setProperty`
+- `setProperties`
+- `getPropertyRef`
+- `setPropertyRef`
+- `objectExists`
+- `getObjectProperty`
+- `setObjectProperty`
+- `callMethod`
+- `classExists`
+- `getStaticProperty`
+- `setStaticProperty`
+- `callStatic`
+- `createInstance`
+- `storeObject`
+- `forgetObject`
+- `addObjectToState`
+- `removeObjectFromState`
+- `destroyObject`
+- `getArrayLength`
+- `getArrayItem`
+- `setArrayItem`
+
+### Input
+
+- `keyPressed`
+- `keyJustPressed`
+- `keyJustReleased`
+- `mouseX`
+- `mouseY`
+- `mousePressed`
+- `mouseJustPressed`
+- `mouseJustReleased`
+
+### Song And PlayState
+
+- `getSongPosition`
+- `getBeat`
+- `getStep`
+- `getSongName`
+- `getDifficulty`
+- `getVariation`
+- `getStageId`
+- `changeStage`
+- `changeCharacter`
+- `getPlaybackRate`
+- `setPlaybackRate`
+- `getScrollSpeed`
+- `setScrollSpeed`
+- `getChartNotes`
+- `getChartEvents`
+- `setBotplay`
+- `setPracticeMode`
+- `getPreference`
+- `setPreference`
+- `getHealth`
+- `setHealth`
+- `addHealth`
+- `getScore`
+- `setScore`
+- `addScore`
+- `getCombo`
+- `setCombo`
+- `getAccuracy`
+- `getTallies`
+- `setVocalsVolume`
+- `startCountdown`
+- `startConversation`
+- `endSong`
+- `restartSong`
+
+### Strumlines
+
+- `setStrumlinePosition`
+- `setStrumlineAlpha`
+- `setStrumlineVisible`
+- `setStrumlineNotePosition`
+- `playStrumlineAnimation`
+
+### Screen
+
+- `getScreenWidth`
+- `getScreenHeight`
+- `setFullscreen`
+
+### Sprites And Text
+
+- `addSprite`
+- `loadGraphic`
+- `loadSparrow`
+- `makeSolidSprite`
+- `removeSprite`
+- `setSpriteCamera`
+- `addText`
+- `setText`
+- `setTextFormat`
+- `removeText`
+- `setObjectCamera`
+- `setObjectPosition`
+- `getObjectX`
+- `getObjectY`
+- `getObjectWidth`
+- `getObjectHeight`
+- `getObjectAlpha`
+- `getObjectVisible`
+- `getObjectAngle`
+- `setObjectScale`
+- `setObjectSize`
+- `setObjectAlpha`
+- `setObjectVisible`
+- `setObjectAngle`
+- `setObjectColor`
+- `setObjectVelocity`
+- `setObjectAcceleration`
+- `setObjectScrollFactor`
+- `setObjectZIndex`
+- `screenCenter`
+- `killObject`
+- `reviveObject`
+- `addAnimByPrefix`
+- `playAnim`
+- `hasAnim`
+
+### Lua Options
+
+- `defineLuaOption`
+- `getLuaOption`
+- `setLuaOption`
+- `hasLuaOption`
+- `removeLuaOption`
+- `getLuaOptions`
+- `createLuaOptionPage`
+- `addLuaCheckbox`
+- `addLuaNumber`
+- `addLuaEnum`
+
+### Lua Menus And Pause
+
+- `createLuaMenu`
+- `createLuaImageMenu`
+- `addLuaMainMenuItem`
+- `configureLuaPauseMenu`
+- `setLuaPauseOptions`
+- `setLuaPauseOptionsBehavior`
+- `setLuaPauseMenuItem`
+- `setLuaMenuItems`
+- `setLuaMenuPosition`
+- `showLuaMenu`
+- `hideLuaMenu`
+- `removeLuaMenu`
+- `getLuaMenuSelected`
+
+### Shader Bridge
+
+- `initLuaShaderRaw`
+- `initLuaShader`
+- `makeLuaShader`
+- `setLuaShader`
+- `setShaderOnSprite`
+- `createShader`
+- `destroyShader`
+- `setShaderFloat`
+- `setShaderFloatArray`
+- `setShaderInt`
+- `setShaderBool`
+- `applyShader`
+- `clearShader`
+- `applyCameraShader`
+- `clearCameraShader`
+
+### Audio And Video
+
+- `playSound`
+- `stopSound`
+- `pauseSound`
+- `resumeSound`
+- `setSoundVolume`
+- `soundExists`
+- `playMusic`
+- `stopMusic`
+- `pauseMusic`
+- `resumeMusic`
+- `setMusicVolume`
+- `playVideo`
+- `pauseVideo`
+- `resumeVideo`
+- `finishVideo`
+- `isVideoPlaying`
+
+### Cameras
+
+- `setCamZoom`
+- `cameraFlash`
+- `cameraFade`
+- `cameraShake`
+- `setCameraZoom`
+- `setCameraAlpha`
+- `setCameraBgColor`
+- `setCameraVisible`
+- `setCameraPosition`
+- `setCameraFollow`
+- `setCameraBop`
+- `setHealthBarColors`
+- `resetCamera`
+- `tweenCameraZoom`
+- `tweenCameraToPosition`
+- `cancelCameraTweens`
+- `tweenScrollSpeed`
+- `cancelScrollSpeedTweens`
+
+### Paths
+
+- `pathImage`
+- `pathSound`
+- `pathMusic`
+- `pathFont`
+- `pathFile`
+- `pathJson`
+
+### Compatibility Aliases
+
+- `makeLuaSprite`
+- `makeAnimatedLuaSprite`
+- `makeGraphic`
+- `addLuaSprite`
+- `removeLuaSprite`
+- `makeLuaText`
+- `setTextString`
+- `removeLuaText`
+- `doTween`
+- `doTweenX`
+- `doTweenY`
+- `doTweenAlpha`
+- `doTweenAngle`
+- `runTimer`
+- `cancelTimer`
+
+LuaSlice warns once when some old aliases are used, then keeps the script running.
