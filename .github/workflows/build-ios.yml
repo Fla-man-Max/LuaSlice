@@ -39,14 +39,20 @@ jobs:
           cd .haxelib/hxcpp/git/tools/hxcpp
           haxe compile.hxml
 
+      - name: Rebuild Lime for iOS Simulator
+        shell: bash
+        run: haxelib run lime rebuild ios -simulator -release
+
       - name: Build iOS Simulator app
         shell: bash
         run: |
-          set -o pipefail
+          set +e
           mkdir -p BuildLogs/ios
           LOG="BuildLogs/ios/log-iosbuild-$(date +%Y-%m-%d-%H-%M-%S).txt"
           haxelib run lime build ios -simulator -release -DGITHUB_BUILD 2>&1 | tee "$LOG"
+          STATUS=${PIPESTATUS[0]}
           echo "Build Log located at: $LOG" | tee -a "$LOG"
+          exit "$STATUS"
 
       - name: Package Simulator app
         shell: bash
@@ -59,7 +65,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: LuaSlice-iOS-Simulator
-          path: |
-            LuaSlice-iOS-Simulator.zip
-            BuildLogs/ios/*.txt
+          path: LuaSlice-iOS-Simulator.zip
           if-no-files-found: error
+
+      - name: Upload iOS build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaSlice-iOS-Build-Logs
+          path: BuildLogs/ios/*.txt
+          if-no-files-found: warn
