@@ -18,6 +18,15 @@ jobs:
         shell: bash
         run: cp other/hmm.json hmm.json
 
+      - name: Prepare optional example mod
+        shell: bash
+        run: |
+          if [[ ! -f example_mods/mod-example.zip ]]; then
+            mkdir -p example_mods "$RUNNER_TEMP/mod-example"
+            printf 'The full LuaSlice example mod is included with desktop releases.\n' > "$RUNNER_TEMP/mod-example/README.txt"
+            ditto -c -k "$RUNNER_TEMP/mod-example" example_mods/mod-example.zip
+          fi
+
       - name: Setup Haxe and dependencies
         uses: ./.github/actions/setup-haxe
         with:
