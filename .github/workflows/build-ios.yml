@@ -1,4 +1,4 @@
-name: Build iOS Simulator
+name: Build iOS
 
 on:
   workflow_dispatch:
@@ -74,4 +74,46 @@ jobs:
         with:
           name: LuaSlice-iOS-Build-Logs
           path: BuildLogs/ios/*.txt
+          if-no-files-found: warn
+
+      - name: Rebuild Lime for physical iPhone
+        shell: bash
+        run: haxelib run lime rebuild ios -release -arm64
+
+      - name: Build unsigned physical iPhone app
+        shell: bash
+        run: |
+          set +e
+          mkdir -p BuildLogs/ios
+          LOG="BuildLogs/ios/log-ios-device-$(date +%Y-%m-%d-%H-%M-%S).txt"
+          haxelib run lime build ios -release -arm64 -nosign -DGITHUB_BUILD 2>&1 | tee "$LOG"
+          APP_PATH="$(find export/release/ios -type d -path '*Release-iphoneos/*.app' -print -quit)"
+          echo "Build Log located at: $LOG" | tee -a "$LOG"
+          test -n "$APP_PATH"
+
+      - name: Package unsigned physical iPhone IPA
+        shell: bash
+        run: |
+          APP_PATH="$(find export/release/ios -type d -path '*Release-iphoneos/*.app' -print -quit)"
+          test -n "$APP_PATH"
+          rm -rf "$APP_PATH/_CodeSignature"
+          rm -f "$APP_PATH/embedded.mobileprovision"
+          rm -rf Payload LuaSlice-iOS-Unsigned.ipa
+          mkdir Payload
+          ditto "$APP_PATH" "Payload/$(basename "$APP_PATH")"
+          zip -qry LuaSlice-iOS-Unsigned.ipa Payload
+
+      - name: Upload physical iPhone IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaSlice-iOS-Unsigned-IPA
+          path: LuaSlice-iOS-Unsigned.ipa
+          if-no-files-found: error
+
+      - name: Upload physical iPhone build log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaSlice-iOS-Device-Build-Logs
+          path: BuildLogs/ios/log-ios-device-*.txt
           if-no-files-found: warn
