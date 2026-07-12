@@ -7,7 +7,9 @@ import flixel.addons.transition.Transition;
 import funkin.ui.FullScreenScaleMode;
 import flixel.FlxCamera;
 import flixel.FlxObject;
+import flixel.FlxSprite;
 import flixel.FlxSubState;
+import flixel.group.FlxSpriteGroup;
 import flixel.math.FlxMath;
 import flixel.math.FlxPoint;
 import flixel.sound.FlxSound;
@@ -36,7 +38,9 @@ import funkin.input.PreciseInputManager;
 import funkin.modding.events.ScriptEvent;
 import funkin.api.newgrounds.Events;
 import funkin.modding.events.ScriptEventDispatcher;
+import funkin.modding.PolymodErrorHandler;
 import funkin.play.character.BaseCharacter;
+import funkin.play.character.BaseCharacter.CharacterType;
 import funkin.data.character.CharacterData.CharacterDataParser;
 import funkin.play.components.HealthIcon;
 import funkin.play.components.PopUpStuff;
@@ -152,6 +156,12 @@ typedef PlayStateParams =
    */
   ?overrideMusic:Bool,
   /**
+   * Whether song-specific scripted classes and global Lua scripts should load.
+   * Used by Chart Editor playtesting.
+   * @default `true`
+   */
+  ?enableSongScripts:Bool,
+  /**
    * The initial camera follow point.
    * Used to persist the position of the `cameraFollowPosition` between levels.
    */
@@ -218,9 +228,21 @@ class PlayState extends MusicBeatSubState
    */
   public var currentStage:Null<Stage> = null;
 
+  var activeStageId:Null<String> = null;
+  var originalStageId:String = Constants.DEFAULT_STAGE;
+  var originalPlayerId:String = Constants.DEFAULT_CHARACTER;
+  var originalOpponentId:String = Constants.DEFAULT_CHARACTER;
+  var originalGirlfriendId:String = '';
+  var cameraFocusTarget:Int = 1;
+  var cameraFocusOffsetX:Float = 0;
+  var cameraFocusOffsetY:Float = 0;
+
   #if FEATURE_LUA_SCRIPTS
   var luaScriptManager:Null<LuaScriptManager> = null;
+  var songLuagScriptsEnabled:Bool = true;
   var pendingLuaReload:Bool = false;
+  var pendingLuaStageChange:Null<String> = null;
+  var pendingLuaCharacterChanges:Array<{target:Int, id:String}> = [];
   #end
 
   /**
@@ -645,6 +667,8 @@ class PlayState extends MusicBeatSubState
    */
   public var comboPopUps:PopUpStuff;
 
+  var lowQualityCulledSprites:Array<FlxSprite> = [];
+
   public var isSongEnd:Bool = false;
 
   #if mobile
@@ -709,6 +733,7 @@ class PlayState extends MusicBeatSubState
 
   function get_currentStageId():String
   {
+    if (activeStageId != null) return activeStageId;
     var stage:String = currentChart?.stage ?? '';
     return stage == '' ? Constants.DEFAULT_STAGE : stage;
   }
@@ -778,6 +803,9 @@ class PlayState extends MusicBeatSubState
     startTimestamp = params.startTimestamp ?? 0.0;
     playbackRate = params.playbackRate ?? 1.0;
     overrideMusic = params.overrideMusic ?? false;
+    #if FEATURE_LUA_SCRIPTS
+    songLuagScriptsEnabled = params.enableSongScripts ?? true;
+    #end
     previousCameraFollowPoint = params.cameraFollowPoint;
     mirrorSongData = params.mirrored ?? false;
 
@@ -809,6 +837,13 @@ class PlayState extends MusicBeatSubState
     camTransition = new FunkinCamera('playStateCamTransition');
 
     var currentChart = currentSong.getDifficulty(currentDifficulty, currentVariation);
+    if (currentChart != null)
+    {
+      originalStageId = currentChart.stage == null || currentChart.stage == '' ? Constants.DEFAULT_STAGE : currentChart.stage;
+      originalPlayerId = currentChart.characters.player;
+      originalOpponentId = currentChart.characters.opponent;
+      originalGirlfriendId = currentChart.characters.girlfriend;
+    }
     var noteStyleId:Null<String> = currentChart?.noteStyle;
     var nulNoteStyle:Null<NoteStyle> = NoteStyleRegistry.instance.fetchEntry(noteStyleId ?? Constants.DEFAULT_NOTE_STYLE);
     if (nulNoteStyle == null) throw "Failed to retrieve both note style and default note style. This shouldn't happen!";
@@ -920,6 +955,7 @@ class PlayState extends MusicBeatSubState
     }
     initStrumlines();
     initPopups();
+    applyPerformanceOptions();
 
     #if mobile
     if (!ControlsHandler.hasExternalInputDevice)
@@ -1062,6 +1098,7 @@ class PlayState extends MusicBeatSubState
     if (criticalFailure) return;
 
     super.update(elapsed);
+    updateLowQualityCulling();
 
     #if FEATURE_LUA_SCRIPTS
     if (FlxG.keys.justPressed.F5)
@@ -1075,6 +1112,10 @@ class PlayState extends MusicBeatSubState
     {
       pendingLuaReload = false;
       reloadLuaScriptsFromDisk();
+    }
+    else
+    {
+      processPendingLuaStateChanges();
     }
     #end
 
@@ -1092,7 +1133,7 @@ class PlayState extends MusicBeatSubState
 
       previousDifficulty = currentDifficulty;
 
-      currentStage?.resetStage();
+      if (!restoreChartStageAndCharacters(true)) currentStage?.resetStage();
 
       dispatchEvent(retryEvent);
 
@@ -1427,7 +1468,7 @@ class PlayState extends MusicBeatSubState
           persistentUpdate = false;
           persistentDraw = true;
 
-          if (!isSubState && event.gitaroo)
+          if (!isSubState && event.gitaroo && !Preferences.isLowQualityMax())
           {
             if (currentStage != null) this.remove(currentStage);
             FlxG.switchState(() -> new GitarooPause(lastParams));
@@ -2021,8 +2062,59 @@ class PlayState extends MusicBeatSubState
     pendingLuaReload = true;
   }
 
+  public function requestLuaStageChange(id:String):Bool
+  {
+    if (id == null || id == '' || !StageRegistry.instance.hasEntry(id)) return false;
+    pendingLuaStageChange = id;
+    return true;
+  }
+
+  public function requestLuaCharacterChange(target:Int, id:String):Bool
+  {
+    if ((target < 0 || target > 2) || id == null || id == '' || CharacterDataParser.fetchCharacterData(id) == null) return false;
+    pendingLuaCharacterChanges.push({target: target, id: id});
+    return true;
+  }
+
+  function processPendingLuaStateChanges():Void
+  {
+    final stageId:Null<String> = pendingLuaStageChange;
+    final characterChanges = pendingLuaCharacterChanges.copy();
+    pendingLuaStageChange = null;
+    pendingLuaCharacterChanges.resize(0);
+
+    final stageWillChange:Bool = stageId != null && stageId != currentStageId;
+    var characterWillChange:Bool = false;
+    for (change in characterChanges)
+    {
+      final currentId:Null<String> = switch (change.target)
+      {
+        case 0: currentStage?.getBoyfriend()?.characterId;
+        case 1: currentStage?.getDad()?.characterId;
+        case 2: currentStage?.getGirlfriend()?.characterId;
+        default: null;
+      };
+      if (currentId != change.id) characterWillChange = true;
+    }
+    if (!stageWillChange && !characterWillChange) return;
+
+    if (!stageWillChange)
+    {
+      luaScriptManager?.callHook('onDestroy', []);
+      luaScriptManager?.destroy();
+      luaScriptManager = null;
+    }
+    if (stageWillChange && stageId != null) changeStage(stageId, false, false);
+    for (change in characterChanges)
+      changeCharacter(change.target, change.id);
+
+    initLuaScripts();
+    luaScriptManager?.callHook('onCreate', []);
+  }
+
   public function reloadLuaScriptsFromDisk():Bool
   {
+    restoreChartStageAndCharacters(false);
     luaScriptManager?.callHook('onDestroy', []);
     luaScriptManager?.destroy();
     luaScriptManager = null;
@@ -2051,13 +2143,25 @@ class PlayState extends MusicBeatSubState
       'mods/scripts/global.lua',
       'mods/scripts/song-${currentSong.id}.lua',
       'mods/scripts/${currentSong.id}.lua',
+      'mods/scripts/stage-${currentStageId}.luag',
       'mods/scripts/stage-${currentStageId}.lua',
+      'mods/scripts/${currentStageId}.luag',
       'mods/scripts/${currentStageId}.lua',
+      'mods/scripts/stages/${currentStageId}.luag',
       'mods/scripts/stages/${currentStageId}.lua',
       'mods/${currentSong.id}/script.lua',
       'mods/${currentSong.id}/scripts/song.lua',
+      'mods/stages/${currentStageId}.luag',
       'mods/stages/${currentStageId}.lua'
     ];
+
+    if (songLuagScriptsEnabled)
+    {
+      scriptPaths.push('mods/scripts/song-${currentSong.id}.luag');
+      scriptPaths.push('mods/scripts/${currentSong.id}.luag');
+    }
+
+    addCharacterLuaScriptPaths('mods/scripts', scriptPaths);
 
     collectLuaScripts('mods/scripts', scriptPaths, '.luag');
     collectLuaScripts('mods/scripts', scriptPaths, '.lua');
@@ -2089,18 +2193,46 @@ class PlayState extends MusicBeatSubState
       scriptPaths.push('${modPath}/script.lua');
       scriptPaths.push('${modPath}/scripts/global.luag');
       scriptPaths.push('${modPath}/scripts/global.lua');
+      if (songLuagScriptsEnabled)
+      {
+        scriptPaths.push('${modPath}/scripts/song-${currentSong.id}.luag');
+        scriptPaths.push('${modPath}/scripts/${currentSong.id}.luag');
+        scriptPaths.push('${modPath}/songs/${currentSong.id}/script.luag');
+        scriptPaths.push('${modPath}/data/songs/${currentSong.id}/script.luag');
+      }
       scriptPaths.push('${modPath}/scripts/song-${currentSong.id}.lua');
       scriptPaths.push('${modPath}/scripts/${currentSong.id}.lua');
+      scriptPaths.push('${modPath}/scripts/${currentStageId}.luag');
+      scriptPaths.push('${modPath}/scripts/${currentStageId}.lua');
+      scriptPaths.push('${modPath}/scripts/stage-${currentStageId}.luag');
       scriptPaths.push('${modPath}/scripts/stage-${currentStageId}.lua');
+      scriptPaths.push('${modPath}/scripts/stages/${currentStageId}.luag');
       scriptPaths.push('${modPath}/scripts/stages/${currentStageId}.lua');
       scriptPaths.push('${modPath}/songs/${currentSong.id}/script.lua');
       scriptPaths.push('${modPath}/data/songs/${currentSong.id}/script.lua');
+      scriptPaths.push('${modPath}/stages/${currentStageId}.luag');
       scriptPaths.push('${modPath}/stages/${currentStageId}.lua');
+      addCharacterLuaScriptPaths('${modPath}/scripts', scriptPaths);
 
       collectLuaScripts('${modPath}/script', scriptPaths, '.luag');
       collectLuaScripts('${modPath}/script', scriptPaths, '.lua');
       collectLuaScripts('${modPath}/scripts', scriptPaths, '.luag');
       collectLuaScripts('${modPath}/scripts', scriptPaths, '.lua');
+    }
+  }
+
+  function addCharacterLuaScriptPaths(scriptsPath:String, scriptPaths:Array<String>):Void
+  {
+    final characterIds:Array<String> = [
+      currentStage?.getBoyfriend()?.characterId ?? '',
+      currentStage?.getDad()?.characterId ?? '',
+      currentStage?.getGirlfriend()?.characterId ?? ''
+    ];
+    for (characterId in characterIds)
+    {
+      if (characterId == '') continue;
+      scriptPaths.push('${scriptsPath}/characters/${characterId}.luag');
+      scriptPaths.push('${scriptsPath}/characters/${characterId}.lua');
     }
   }
 
@@ -2118,8 +2250,46 @@ class PlayState extends MusicBeatSubState
         continue;
       }
 
-      if (!shouldSkipLuaFolder(folder, extension) && StringTools.endsWith(path, extension)) scriptPaths.push(path);
+      if (!shouldSkipLuaFolder(folder, extension)
+        && !isStageScopedLuaFile(path)
+        && !isSongScopedLuagFile(path)
+        && StringTools.endsWith(path, extension)) scriptPaths.push(path);
     }
+  }
+
+  function isStageScopedLuaFile(path:String):Bool
+  {
+    var normalized = StringTools.replace(path, '\\', '/');
+    var parts = normalized.split('/');
+    if (parts.length == 0) return false;
+
+    var fileName = parts[parts.length - 1];
+    var parentName = parts.length > 1 ? parts[parts.length - 2].toLowerCase() : '';
+    var dotIndex = fileName.lastIndexOf('.');
+    var baseName = dotIndex > 0 ? fileName.substr(0, dotIndex) : fileName;
+
+    if (parentName == 'stages') return true;
+    if (parentName != 'scripts') return false;
+    if (StringTools.startsWith(baseName.toLowerCase(), 'stage-')) return true;
+    return StageRegistry.instance.hasEntry(baseName);
+  }
+
+  function isSongScopedLuagFile(path:String):Bool
+  {
+    if (!StringTools.endsWith(path.toLowerCase(), '.luag')) return false;
+
+    var normalized = StringTools.replace(path, '\\', '/');
+    var parts = normalized.split('/');
+    if (parts.length < 2) return false;
+
+    var fileName = parts[parts.length - 1];
+    var parentName = parts[parts.length - 2].toLowerCase();
+    if (parentName != 'scripts') return false;
+
+    var dotIndex = fileName.lastIndexOf('.');
+    var baseName = dotIndex > 0 ? fileName.substr(0, dotIndex) : fileName;
+    if (StringTools.startsWith(baseName.toLowerCase(), 'song-')) return true;
+    return baseName == currentSong.id || SongRegistry.instance.hasEntry(baseName);
   }
 
   function shouldSkipLuaFolder(folder:String, extension:String):Bool
@@ -2128,7 +2298,7 @@ class PlayState extends MusicBeatSubState
     var parts = normalized.split('/');
     var folderName = parts.length > 0 ? parts[parts.length - 1].toLowerCase() : '';
 
-    if (folderName == 'menu' || folderName == 'options') return true;
+    if (folderName == 'menu' || folderName == 'options' || folderName == 'stages' || folderName == 'characters') return true;
     if (folderName == 'luag') return extension == '.lua';
     if (folderName == 'lua') return extension == '.luag';
     return false;
@@ -2209,6 +2379,14 @@ class PlayState extends MusicBeatSubState
     healthBarBG.cameras = [camHUD];
     scoreText.cameras = [camHUD];
 
+    if (Preferences.isLowQualityMax())
+    {
+      healthBar.visible = false;
+      healthBar.active = false;
+      healthBarBG.visible = false;
+      healthBarBG.active = false;
+    }
+
     // Create subtitles if they are enabled.
     if (Preferences.subtitles)
     {
@@ -2230,7 +2408,7 @@ class PlayState extends MusicBeatSubState
      */
   function initStage():Void
   {
-    loadStage(currentStageId);
+    loadStage(currentStageId, true);
   }
 
   function initMinimalMode():Void
@@ -2251,17 +2429,32 @@ class PlayState extends MusicBeatSubState
      * and adds it to the state.
      * @param id
      */
-  function loadStage(id:String):Void
+  function loadStage(id:String, fresh:Bool = false):Void
   {
-    currentStage = StageRegistry.instance.fetchEntry(id);
+    final cachedStage:Null<Stage> = StageRegistry.instance.fetchEntry(id);
+    Paths.setCurrentLevel(cachedStage?._data?.directory ?? 'shared');
+    final scriptedClassName:Null<String> = fresh ? StageRegistry.instance.getScriptedEntryClassName(id) : null;
+    final scriptErrorSerial:Int = PolymodErrorHandler.scriptErrorSerial;
+    currentStage = fresh ? StageRegistry.instance.createFreshEntry(id) : StageRegistry.instance.fetchEntry(id);
+
+    if (fresh && currentStage == null) currentStage = StageRegistry.instance.createDataEntry(id);
 
     if (currentStage != null)
     {
+      activeStageId = id;
       currentStage.revive(); // Stages are killed and props destroyed when the PlayState is destroyed to save memory.
 
       // Actually create and position the sprites.
       var event:ScriptEvent = new ScriptEvent(CREATE, false);
       ScriptEventDispatcher.callEvent(currentStage, event);
+
+      if (scriptedClassName != null && PolymodErrorHandler.scriptErrorSerial != scriptErrorSerial)
+      {
+        currentStage.destroy();
+        currentStage = StageRegistry.instance.createDataEntry(id);
+        if (currentStage == null) return;
+        ScriptEventDispatcher.callEvent(currentStage, new ScriptEvent(CREATE, false));
+      }
 
       resetCameraZoom();
 
@@ -2277,6 +2470,312 @@ class PlayState extends MusicBeatSubState
       // lolol
       funkin.util.WindowUtil.showError('Stage Error', 'Unable to load stage $id, is its data corrupted?.');
     }
+  }
+
+  public function changeStage(id:String, force:Bool = false, reloadLua:Bool = true):Bool
+  {
+    if (isMinimalMode || id == null || id == '') return false;
+
+    if (!StageRegistry.instance.hasEntry(id)) return false;
+    if (!force && id == activeStageId)
+    {
+      activeStageId = id;
+      return true;
+    }
+
+    #if FEATURE_LUA_SCRIPTS
+    luaScriptManager?.callHook('onDestroy', []);
+    luaScriptManager?.destroy();
+    luaScriptManager = null;
+    #end
+
+    final boyfriend:Null<BaseCharacter> = currentStage?.getBoyfriend(true);
+    final girlfriend:Null<BaseCharacter> = currentStage?.getGirlfriend(true);
+    final dad:Null<BaseCharacter> = currentStage?.getDad(true);
+    final boyfriendId:String = boyfriend?.characterId ?? '';
+    final girlfriendId:String = girlfriend?.characterId ?? '';
+    final dadId:String = dad?.characterId ?? '';
+
+    clearStageVisualEffects(boyfriend, girlfriend, dad);
+
+    for (character in [boyfriend, girlfriend, dad])
+    {
+      if (character == null) continue;
+      ScriptEventDispatcher.callEvent(character, new ScriptEvent(DESTROY, false));
+      character.kill();
+      character.destroy();
+    }
+
+    if (currentStage != null)
+    {
+      currentStage.forEach(function(sprite:FlxSprite)
+      {
+        if (sprite != null) FlxTween.cancelTweensOf(sprite);
+      });
+      FlxTween.cancelTweensOf(currentStage);
+      ScriptEventDispatcher.callEvent(currentStage, new ScriptEvent(DESTROY, false));
+      remove(currentStage);
+      currentStage.destroy();
+      currentStage = null;
+    }
+
+    loadStage(id, true);
+    if (currentStage == null) return false;
+
+    if (girlfriendId != '') changeCharacter(2, girlfriendId);
+    if (boyfriendId != '') changeCharacter(0, boyfriendId);
+    if (dadId != '') changeCharacter(1, dadId);
+    currentStage.refresh();
+    refreshCameraAfterStageOrCharacterChange();
+
+    #if FEATURE_LUA_SCRIPTS
+    if (reloadLua)
+    {
+      initLuaScripts();
+      luaScriptManager?.callHook('onCreate', []);
+    }
+    #end
+
+    applyPerformanceOptions();
+    return true;
+  }
+
+  function restoreChartStageAndCharacters(reloadLua:Bool = false):Bool
+  {
+    if (isMinimalMode || currentChart == null || currentStage == null) return false;
+
+    final stageChanged:Bool = activeStageId != originalStageId;
+    final playerChanged:Bool = currentStage.getBoyfriend()?.characterId != originalPlayerId;
+    final opponentChanged:Bool = currentStage.getDad()?.characterId != originalOpponentId;
+    final girlfriendChanged:Bool = currentStage.getGirlfriend()?.characterId != originalGirlfriendId;
+    final cameraChanged:Bool = cameraFocusTarget != 1 || cameraFocusOffsetX != 0 || cameraFocusOffsetY != 0;
+    if (!stageChanged && !playerChanged && !opponentChanged && !girlfriendChanged && !cameraChanged) return false;
+
+    cameraFocusTarget = 1;
+    cameraFocusOffsetX = 0;
+    cameraFocusOffsetY = 0;
+    if (stageChanged)
+    {
+      if (!changeStage(originalStageId, true, false)) return false;
+    }
+    else
+    {
+      currentStage.resetStage();
+
+      #if FEATURE_LUA_SCRIPTS
+      if (reloadLua && (playerChanged || opponentChanged || girlfriendChanged))
+      {
+        luaScriptManager?.callHook('onDestroy', []);
+        luaScriptManager?.destroy();
+        luaScriptManager = null;
+      }
+      #end
+    }
+
+    if (currentStage?.getBoyfriend()?.characterId != originalPlayerId) changeCharacter(0, originalPlayerId);
+    if (currentStage?.getDad()?.characterId != originalOpponentId) changeCharacter(1, originalOpponentId);
+    if (currentStage?.getGirlfriend()?.characterId != originalGirlfriendId) changeCharacter(2, originalGirlfriendId);
+    refreshCameraAfterStageOrCharacterChange();
+
+    #if FEATURE_LUA_SCRIPTS
+    if (reloadLua && (stageChanged || playerChanged || opponentChanged || girlfriendChanged))
+    {
+      initLuaScripts();
+      luaScriptManager?.callHook('onCreate', []);
+    }
+    #end
+    applyPerformanceOptions();
+    return true;
+  }
+
+  function clearStageVisualEffects(boyfriend:Null<BaseCharacter>, girlfriend:Null<BaseCharacter>, dad:Null<BaseCharacter>):Void
+  {
+    if (boyfriend != null) @:nullSafety(Off) boyfriend.shader = null;
+    if (girlfriend != null) @:nullSafety(Off) girlfriend.shader = null;
+    if (dad != null) @:nullSafety(Off) dad.shader = null;
+
+    currentStage?.forEach(function(sprite:FlxSprite)
+    {
+      if (sprite != null) @:nullSafety(Off) sprite.shader = null;
+    });
+
+    for (camera in FlxG.cameras.list)
+    {
+      if (camera != null) camera.filters = [];
+    }
+  }
+
+  function applyPerformanceOptions():Void
+  {
+    if (!Preferences.allowSongShaders())
+    {
+      clearStageVisualEffects(currentStage?.getBoyfriend(), currentStage?.getGirlfriend(), currentStage?.getDad());
+    }
+
+    if (Preferences.isLowQualityMinimal())
+    {
+      if (iconP1 != null)
+      {
+        iconP1.visible = false;
+        iconP1.active = false;
+      }
+      if (iconP2 != null)
+      {
+        iconP2.visible = false;
+        iconP2.active = false;
+      }
+    }
+
+    if (Preferences.isLowQualityMax())
+    {
+      healthBar.visible = false;
+      healthBar.active = false;
+      healthBarBG.visible = false;
+      healthBarBG.active = false;
+    }
+  }
+
+  function updateLowQualityCulling():Void
+  {
+    if (!Preferences.isLowQualityMinimal())
+    {
+      for (sprite in lowQualityCulledSprites)
+      {
+        if (sprite != null) sprite.visible = true;
+      }
+      lowQualityCulledSprites = [];
+      return;
+    }
+    if (currentStage == null || camGame == null) return;
+
+    currentStage.forEach(function(sprite:FlxSprite)
+    {
+      if (sprite == null) return;
+      if (Std.isOfType(sprite, FlxSpriteGroup)) return;
+
+      var wasCulled = lowQualityCulledSprites.contains(sprite);
+      if (!wasCulled && !sprite.visible) return;
+
+      var isVisibleNow = sprite.isOnScreen(camGame);
+      if (!isVisibleNow && !wasCulled)
+      {
+        sprite.visible = false;
+        lowQualityCulledSprites.push(sprite);
+      }
+      else if (isVisibleNow && wasCulled)
+      {
+        sprite.visible = true;
+        lowQualityCulledSprites.remove(sprite);
+      }
+    });
+  }
+
+  public function changeCharacter(char:Int, id:String, reloadLua:Bool = false):Bool
+  {
+    if (isMinimalMode || currentStage == null || id == null) return false;
+
+    final currentCharacter:Null<BaseCharacter> = switch (char)
+    {
+      case 0: currentStage.getBoyfriend();
+      case 1: currentStage.getDad();
+      case 2: currentStage.getGirlfriend();
+      default: return false;
+    };
+    if (currentCharacter?.characterId == id) return true;
+
+    if (id == '' && char != 2) return false;
+    var newCharacter:Null<BaseCharacter> = id == '' ? null : CharacterDataParser.fetchCharacter(id);
+    if (id != '' && newCharacter == null) return false;
+
+    final oldCharacter:Null<BaseCharacter> = switch (char)
+    {
+      case 0: currentStage.getBoyfriend(true);
+      case 1: currentStage.getDad(true);
+      case 2: currentStage.getGirlfriend(true);
+      default: null;
+    };
+
+    #if FEATURE_LUA_SCRIPTS
+    if (reloadLua)
+    {
+      luaScriptManager?.callHook('onDestroy', []);
+      luaScriptManager?.destroy();
+      luaScriptManager = null;
+    }
+    #end
+
+    if (oldCharacter != null)
+    {
+      ScriptEventDispatcher.callEvent(oldCharacter, new ScriptEvent(DESTROY, false));
+      oldCharacter.kill();
+      oldCharacter.destroy();
+    }
+
+    if (newCharacter != null)
+    {
+      final characterType:CharacterType = switch (char)
+      {
+        case 0: BF;
+        case 1: DAD;
+        case 2: GF;
+        default: return false;
+      };
+      final scriptErrorSerial:Int = PolymodErrorHandler.scriptErrorSerial;
+      currentStage.addCharacter(newCharacter, characterType);
+      if (PolymodErrorHandler.scriptErrorSerial != scriptErrorSerial)
+      {
+        final brokenCharacter:Null<BaseCharacter> = switch (char)
+        {
+          case 0: currentStage.getBoyfriend(true);
+          case 1: currentStage.getDad(true);
+          case 2: currentStage.getGirlfriend(true);
+          default: null;
+        };
+        if (brokenCharacter != null) ScriptEventDispatcher.callEvent(brokenCharacter, new ScriptEvent(DESTROY, false));
+        brokenCharacter?.destroy();
+        newCharacter = CharacterDataParser.fetchCharacter(id, false, false);
+        if (newCharacter == null) return false;
+        currentStage.addCharacter(newCharacter, characterType);
+      }
+    }
+    currentStage.refresh();
+    if (newCharacter != null && !startingSong) ScriptEventDispatcher.callEvent(newCharacter, new ScriptEvent(SONG_START, false));
+    if (cameraFocusTarget == char) refreshCameraAfterStageOrCharacterChange();
+
+    #if FEATURE_LUA_SCRIPTS
+    if (reloadLua)
+    {
+      initLuaScripts();
+      luaScriptManager?.callHook('onCreate', []);
+    }
+    #end
+    return true;
+  }
+
+  public function setCameraFocusTarget(target:Int, offsetX:Float, offsetY:Float):Void
+  {
+    cameraFocusTarget = target;
+    cameraFocusOffsetX = offsetX;
+    cameraFocusOffsetY = offsetY;
+  }
+
+  function refreshCameraAfterStageOrCharacterChange():Void
+  {
+    if (currentStage == null) return;
+
+    final character:Null<BaseCharacter> = switch (cameraFocusTarget)
+    {
+      case 0: currentStage.getBoyfriend();
+      case 1: currentStage.getDad();
+      case 2: currentStage.getGirlfriend();
+      default: null;
+    };
+
+    if (character != null)
+    {
+      cameraFollowPoint.setPosition(character.cameraFocusPoint.x + cameraFocusOffsetX, character.cameraFocusPoint.y + cameraFocusOffsetY);
+    }
+    resetCamera(true, true, true);
   }
 
   public function resetCameraZoom():Void
@@ -2342,6 +2841,11 @@ class PlayState extends MusicBeatSubState
       iconP2.zIndex = 850;
       add(iconP2);
       iconP2.cameras = [camHUD];
+      if (Preferences.isLowQualityMinimal())
+      {
+        iconP2.visible = false;
+        iconP2.active = false;
+      }
 
       #if FEATURE_DISCORD_RPC
       discordRPCAlbum = 'album-${currentChart?.album}';
@@ -2365,6 +2869,11 @@ class PlayState extends MusicBeatSubState
       iconP1.zIndex = 850;
       add(iconP1);
       iconP1.cameras = [camHUD];
+      if (Preferences.isLowQualityMinimal())
+      {
+        iconP1.visible = false;
+        iconP1.active = false;
+      }
     }
 
     //
@@ -3491,7 +4000,7 @@ class PlayState extends MusicBeatSubState
     if (isComboBreak)
     {
       // Break the combo, but don't increment tallies.misses.
-      if (Highscore.tallies.combo >= 10) comboPopUps.displayCombo(0);
+      if (!Preferences.isLowQualityMax() && Highscore.tallies.combo >= 10) comboPopUps.displayCombo(0);
       Highscore.tallies.combo = 0;
     }
     else
@@ -3529,7 +4038,7 @@ class PlayState extends MusicBeatSubState
       }
     }
     comboPopUps.displayRating(daRating);
-    if (combo >= 10) comboPopUps.displayCombo(combo);
+    if (!Preferences.isLowQualityMax() && combo >= 10) comboPopUps.displayCombo(combo);
 
     if (vocals != null) vocals.playerVolume = playerVocalsVolume;
   }

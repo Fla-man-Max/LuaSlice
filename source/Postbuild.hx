@@ -15,9 +15,11 @@ class Postbuild
 
   static function main():Void
   {
+    final target:String = Sys.args().length > 0 ? Sys.args()[0] : 'unknown';
     patchAndroidManifestOrientation();
     patchAndroidActivityOrientation();
-    printBuildTime();
+    final duration:String = printBuildTime();
+    printBuildLog(target, duration);
   }
 
   static function patchAndroidManifestOrientation():Void
@@ -48,9 +50,8 @@ class Postbuild
     if (patched != activity) File.saveContent(activityPath, patched);
   }
 
-  static function printBuildTime():Void
+  static function printBuildTime():String
   {
-    // get buildEnd before fs operations since they are blocking
     var end:Float = Sys.time();
     if (FileSystem.exists(BUILD_TIME_FILE))
     {
@@ -60,8 +61,39 @@ class Postbuild
 
       sys.FileSystem.deleteFile(BUILD_TIME_FILE);
 
-      Sys.println(' INFO '.info() + ' Build took: ${format(end - start)}');
+      final duration:String = format(end - start);
+      Sys.println(' INFO '.info() + ' Build took: $duration');
+      return duration;
     }
+    return 'Unknown';
+  }
+
+  static function printBuildLog(target:String, duration:String):Void
+  {
+    final platform:String = target == '' ? 'unknown' : target.toLowerCase();
+    final directory:String = 'BuildLogs/$platform';
+    if (!FileSystem.exists('BuildLogs')) FileSystem.createDirectory('BuildLogs');
+    if (!FileSystem.exists(directory)) FileSystem.createDirectory(directory);
+
+    final now:Date = Date.now();
+    final stamp:String = DateTools.format(now, '%Y-%m-%d-%H-%M-%S');
+    final baseName:String = 'log-${platform}build-$stamp';
+    var path:String = '$directory/$baseName.txt';
+    var index:Int = 2;
+    while (FileSystem.exists(path))
+    {
+      path = '$directory/$baseName($index).txt';
+      index++;
+    }
+
+    File.saveContent(path, [
+      'LuaSlice Build Log',
+      'Target: $platform',
+      'Status: Success',
+      'Finished: ${now.toString()}',
+      'Duration: $duration'
+    ].join('\n') + '\n');
+    Sys.println('Build Log located at: ${FileSystem.fullPath(path)}');
   }
 
   static function format(time:Float, decimals:Int = 1):String

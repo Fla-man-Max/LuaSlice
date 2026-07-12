@@ -339,7 +339,7 @@ class MainMenuState extends MusicBeatState
   {
     if (leftWatermarkText == null) return;
 
-    leftWatermarkText.text = 'V-slice: v0.8.5 | LuaSlice: v0.0.4';
+    leftWatermarkText.text = 'V-slice: v0.8.5 | LuaSlice: v0.0.5';
 
     #if FEATURE_NEWGROUNDS
     if (NewgroundsClient.instance.isLoggedIn())

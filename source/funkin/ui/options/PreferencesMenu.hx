@@ -16,7 +16,6 @@ import funkin.ui.TextMenuList.TextMenuItem;
 import funkin.ui.options.items.CheckboxPreferenceItem;
 import funkin.ui.options.items.NumberPreferenceItem;
 import funkin.ui.options.items.EnumPreferenceItem;
-import funkin.ui.debug.FunkinDebugDisplay.DebugDisplayMode;
 #if mobile
 import funkin.mobile.ui.FunkinBackButton;
 import funkin.mobile.input.ControlsHandler;
@@ -25,7 +24,6 @@ import funkin.util.TouchUtil;
 import funkin.util.SwipeUtil;
 #end
 import funkin.util.HapticUtil;
-import lime.ui.WindowVSyncMode;
 
 class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
 {
@@ -154,18 +152,6 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     {
       Preferences.subtitles = value;
     }, Preferences.subtitles);
-    #if FEATURE_DEBUG_DISPLAY
-    // note: technically we can do DebugDisplayMode.Advanced => DebugDisplayMode.Advanced, etc. here, but that's a bit headache inducing.
-    createPrefItemEnum('Debug Display', 'When enabled, FPS and other debug stats are displayed.',
-      ["Advanced" => DebugDisplayMode.Advanced, "Simple" => DebugDisplayMode.Simple, "Off" => DebugDisplayMode.Off], (key:String, value:DebugDisplayMode) ->
-      {
-        Preferences.debugDisplay = value;
-      }, Preferences.debugDisplay);
-    createPrefItemPercentage('Debug Display BG', "Adjust the debug display's background opacity.", function(value:Int):Void
-    {
-      Preferences.debugDisplayBGOpacity = value;
-    }, Preferences.debugDisplayBGOpacity);
-    #end
     #if !mobile
     createPrefItemCheckbox('Pause on Unfocus', 'When enabled, the game automatically pauses when losing focus.', function(value:Bool):Void
     {
@@ -175,42 +161,6 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     {
       Preferences.autoFullscreen = value;
     }, Preferences.autoFullscreen);
-    #end
-
-    #if !(mobile || web)
-    createPrefItemEnum('VSync', "When enabled, the game attempts to match the framerate with your monitor's refresh rate.",
-      ["Off" => WindowVSyncMode.OFF, "On" => WindowVSyncMode.ON, "Adaptive" => WindowVSyncMode.ADAPTIVE,], function(key:String, value:WindowVSyncMode):Void
-    {
-      trace("Setting vsync mode to " + key);
-      Preferences.vsyncMode = value;
-    }, switch (Preferences.vsyncMode)
-      {
-        case WindowVSyncMode.OFF: "Off";
-        case WindowVSyncMode.ON: "On";
-        case WindowVSyncMode.ADAPTIVE: "Adaptive";
-      });
-    #end
-    #if (android || (!mobile && !web))
-    #if android
-    if (Preferences.supportsUnlockedFramerate())
-    {
-    #end
-    createPrefItemCheckbox(#if android 'Unlimited FPS' #else 'Unlocked Framerate' #end,
-      #if android 'Removes the software framerate limit. Your display may still limit the result.' #else 'When enabled, the framerate is unlocked.\nThis setting is mutually exclusive with FPS.' #end,
-      function(value:Bool):Void
-      {
-        Preferences.unlockedFramerate = value;
-      }, Preferences.unlockedFramerate);
-    #if android
-    }
-    #end
-    #end
-    #if !(mobile || web)
-    createPrefItemNumber('FPS', 'The maximum framerate that the game targets.\nThis setting is mutually exclusive with Unlocked Framerate.',
-      function(value:Float)
-      {
-        Preferences.framerate = Std.int(value);
-      }, null, Preferences.framerate, 30, 500, 5, 0);
     #end
 
     #if FEATURE_SCREENSHOTS
@@ -283,12 +233,15 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     var checkbox:CheckboxPreferenceItem = new CheckboxPreferenceItem(funkin.ui.FullScreenScaleMode.gameNotchSize.x, 120 * (items.length - 1 + 1),
       defaultValue, available);
 
-    items.createItem(0, (120 * items.length) + 30, prefName, AtlasFont.BOLD, function()
+    var menuItem = items.createItem(0, (120 * items.length) + 30, prefName, AtlasFont.BOLD, function()
     {
       var value = !checkbox.currentValue;
       onChange(value);
       checkbox.currentValue = value;
     }, false, available);
+
+    menuItem.camera = menuCamera;
+    checkbox.camera = menuCamera;
 
     preferenceItems.add(checkbox);
     preferenceDesc.push(prefDesc);
@@ -309,6 +262,8 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
   {
     var item = new NumberPreferenceItem(funkin.ui.FullScreenScaleMode.gameNotchSize.x, (120 * items.length) + 30, prefName, defaultValue, min, max, step,
       precision, onChange, valueFormatter);
+    item.camera = menuCamera;
+    item.lefthandText.camera = menuCamera;
     items.addItem(prefName, item);
     preferenceItems.add(item.lefthandText);
     preferenceDesc.push(prefDesc);
@@ -333,6 +288,8 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     };
     var item = new NumberPreferenceItem(funkin.ui.FullScreenScaleMode.gameNotchSize.x, (120 * items.length) + 30, prefName, defaultValue, min, max, 10, 0,
       newCallback, formatter);
+    item.camera = menuCamera;
+    item.lefthandText.camera = menuCamera;
     items.addItem(prefName, item);
     preferenceItems.add(item.lefthandText);
     preferenceDesc.push(prefDesc);
@@ -347,6 +304,8 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
   function createPrefItemEnum<T>(prefName:String, prefDesc:String, values:Map<String, T>, onChange:String->T->Void, defaultKey:String):Void
   {
     var item = new EnumPreferenceItem<T>(funkin.ui.FullScreenScaleMode.gameNotchSize.x, (120 * items.length) + 30, prefName, values, defaultKey, onChange);
+    item.camera = menuCamera;
+    item.lefthandText.camera = menuCamera;
     items.addItem(prefName, item);
     preferenceItems.add(item.lefthandText);
     preferenceDesc.push(prefDesc);

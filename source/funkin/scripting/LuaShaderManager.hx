@@ -4,6 +4,8 @@ package funkin.scripting;
 import flixel.FlxCamera;
 import flixel.addons.display.FlxRuntimeShader;
 import funkin.Paths;
+import funkin.Preferences;
+import funkin.play.PlayState;
 import openfl.Assets;
 import openfl.filters.ShaderFilter;
 import sys.FileSystem;
@@ -41,6 +43,11 @@ class LuaShaderManager
   public function destroyShader(tag:String):Bool
   {
     return shaders.remove(tag);
+  }
+
+  public function hasShader(tag:String):Bool
+  {
+    return tag != null && tag != '' && shaders.exists(tag);
   }
 
   public function setFloat(tag:String, name:String, value:Float):Bool
@@ -109,6 +116,7 @@ class LuaShaderManager
 
   public function applyToTarget(tag:String, target:Dynamic):Bool
   {
+    if (PlayState.instance != null && !Preferences.allowSongShaders()) return false;
     var shader = shaders.get(tag);
     if (shader == null || target == null) return false;
     try
@@ -141,6 +149,7 @@ class LuaShaderManager
 
   public function applyToCamera(tag:String, camera:FlxCamera):Bool
   {
+    if (PlayState.instance != null && !Preferences.allowSongShaders()) return false;
     var shader = shaders.get(tag);
     if (shader == null || camera == null) return false;
     clearCamera(camera);

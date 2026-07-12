@@ -279,7 +279,9 @@ class ChartEditorHoldNoteSprite extends SustainTrail
     {
       this.x += origin.x;
       this.y += origin.y;
+      this.y = parentState.transformChartY(this.y, this.height);
     }
+    this.flipY = parentState.isViewDownscroll;
 
     // Account for expanded clickable hitbox.
     this.x += this.offset.x;

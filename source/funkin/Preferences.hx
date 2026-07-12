@@ -1,5 +1,9 @@
 package funkin;
 
+#if android
+import funkin.external.android.DisplayUtil;
+#end
+
 #if mobile
 import funkin.mobile.ui.FunkinHitbox;
 import funkin.mobile.util.InAppPurchasesUtil;
@@ -144,6 +148,73 @@ class Preferences
     save.options.zoomCamera = value;
     Save.system.flush();
     return value;
+  }
+
+  /**
+   * If enabled, song gameplay may use stage and character shaders.
+   * Low Quality Minimal/Max forces this off.
+   * @default `true`
+   */
+  public static var songShaders(get, set):Bool;
+
+  static function get_songShaders():Bool
+  {
+    if (isLowQualityMinimal()) return false;
+    return Save?.instance?.options?.songShaders ?? true;
+  }
+
+  static function set_songShaders(value:Bool):Bool
+  {
+    var save:Save = Save.instance;
+    save.options.songShaders = isLowQualityMinimal() ? false : value;
+    Save.system.flush();
+    return save.options.songShaders;
+  }
+
+  /**
+   * `None`, `Minimal`, or `Max`.
+   * @default `None`
+   */
+  public static var lowQualityMode(get, set):String;
+
+  static function get_lowQualityMode():String
+  {
+    var value = Save?.instance?.options?.lowQualityMode ?? 'None';
+    return switch (value)
+    {
+      case 'Minimal' | 'Max': value;
+      default: 'None';
+    };
+  }
+
+  static function set_lowQualityMode(value:String):String
+  {
+    var cleanValue = switch (value)
+    {
+      case 'Minimal' | 'Max': value;
+      default: 'None';
+    };
+
+    var save:Save = Save.instance;
+    save.options.lowQualityMode = cleanValue;
+    if (cleanValue != 'None') save.options.songShaders = false;
+    Save.system.flush();
+    return cleanValue;
+  }
+
+  public static function isLowQualityMinimal():Bool
+  {
+    return lowQualityMode == 'Minimal' || lowQualityMode == 'Max';
+  }
+
+  public static function isLowQualityMax():Bool
+  {
+    return lowQualityMode == 'Max';
+  }
+
+  public static function allowSongShaders():Bool
+  {
+    return songShaders && !isLowQualityMinimal();
   }
 
   /**
@@ -392,20 +463,35 @@ class Preferences
   }
 
   public static var unlockedFramerate(get, set):Bool;
+  static var cachedUnlockedFramerateSupport:Null<Bool>;
 
   public static function supportsUnlockedFramerate():Bool
   {
     #if android
+    if (cachedUnlockedFramerateSupport != null) return cachedUnlockedFramerateSupport;
+
+    var maximumRefreshRate:Float = DisplayUtil.getMaximumRefreshRate();
+    if (maximumRefreshRate > 0)
+    {
+      cachedUnlockedFramerateSupport = maximumRefreshRate > 60.5;
+      return cachedUnlockedFramerateSupport;
+    }
+
     if (FlxG.stage == null || FlxG.stage.window == null) return false;
     var display = FlxG.stage.window.display;
     if (display != null)
     {
       for (mode in display.supportedModes)
       {
-        if (mode.refreshRate > 60) return true;
+        if (mode.refreshRate > 60)
+        {
+          cachedUnlockedFramerateSupport = true;
+          return true;
+        }
       }
     }
-    return FlxG.stage.window.displayMode.refreshRate > 60;
+    cachedUnlockedFramerateSupport = FlxG.stage.window.displayMode.refreshRate > 60;
+    return cachedUnlockedFramerateSupport;
     #elseif (web || ios)
     return false;
     #else
@@ -429,10 +515,7 @@ class Preferences
     #else
     if (!supportsUnlockedFramerate()) value = false;
 
-    if (value != Save.instance.options.unlockedFramerate)
-    {
-      toggleFramerateCap(value);
-    }
+    toggleFramerateCap(value);
 
     var save:Save = Save.instance;
     save.options.unlockedFramerate = value;
@@ -542,7 +625,9 @@ class Preferences
   {
     #if !(web || ios)
     #if android
-    var target:Int = unlocked && supportsUnlockedFramerate() ? 1000 : framerate;
+    var supported = supportsUnlockedFramerate();
+    DisplayUtil.setHighRefreshRateEnabled(unlocked && supported);
+    var target:Int = unlocked && supported ? 1000 : framerate;
     #else
     var target:Int = unlocked ? 0 : framerate;
     #end

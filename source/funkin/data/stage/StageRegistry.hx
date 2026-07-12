@@ -21,6 +21,19 @@ class StageRegistry extends BaseRegistry<Stage, StageData, StageEntryParams> imp
   {
     super('STAGE', 'stages', STAGE_DATA_VERSION_RULE);
   }
+
+  public function createFreshEntry(id:String):Null<Stage>
+  {
+    if (!hasEntry(id)) return null;
+
+    final scriptedClassName:Null<String> = getScriptedEntryClassName(id);
+    return scriptedClassName == null ? createEntry(id) : createScriptedEntry(scriptedClassName);
+  }
+
+  public function createDataEntry(id:String):Null<Stage>
+  {
+    return hasEntry(id) ? createEntry(id) : null;
+  }
 }
 
 typedef StageEntryParams =

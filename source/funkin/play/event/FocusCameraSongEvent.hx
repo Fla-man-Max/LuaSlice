@@ -134,7 +134,10 @@ class FocusCameraSongEvent extends SongEvent
 
       default:
         trace('Unknown camera focus: ' + data);
+        return;
     }
+
+    PlayState.instance.setCameraFocusTarget(char, posX, posY);
 
     // Apply tween based on ease.
     switch (ease)

@@ -20,6 +20,7 @@ import funkin.graphics.shaders.BlueFade;
 import funkin.modding.events.ScriptEvent;
 import funkin.modding.events.ScriptEventDispatcher;
 import funkin.play.stage.Stage;
+import funkin.Preferences;
 import funkin.save.Save;
 import funkin.ui.freeplay.FreeplayState;
 import funkin.ui.freeplay.charselect.PlayableCharacter;
@@ -68,6 +69,7 @@ class CharSelectSubState extends MusicBeatSubState
   var curChar(default, set):String = Constants.DEFAULT_CHARACTER;
   var rememberedChar:String;
   var nametag:Nametag;
+  var crowd:Null<FunkinSprite> = null;
   var camFollow:FlxObject = new FlxObject(0, 0, 1, 1);
   var autoFollow:Bool = false;
   var availableChars:Map<Int, String> = new Map<Int, String>();
@@ -172,7 +174,7 @@ class CharSelectSubState extends MusicBeatSubState
     bg.scrollFactor.set(0.1, 0.1);
     add(bg);
 
-    var crowd:FunkinSprite = FunkinSprite.createTextureAtlas(cutoutSize, 0, "charSelect/crowd", {
+    crowd = FunkinSprite.createTextureAtlas(cutoutSize, 0, "charSelect/crowd", {
       applyStageMatrix: true
     });
     crowd.anim.play('');
@@ -299,6 +301,7 @@ class CharSelectSubState extends MusicBeatSubState
     }
 
     nametag.scrollFactor.set();
+    applyPerformanceOptions();
 
     FlxG.debugger.addTrackerProfile(new TrackerProfile(FunkinSprite, ["x", "y", "alpha", "scale", "blend"]));
     FlxG.debugger.addTrackerProfile(new TrackerProfile(FlxSound, ["pitch", "volume"]));
@@ -340,6 +343,15 @@ class CharSelectSubState extends MusicBeatSubState
       startingVolume: 0,
       overrideExisting: true,
       restartTrack: true,
+      onLoad: function()
+      {
+        @:privateAccess
+        gfChill.analyzer = new SpectralAnalyzer(FlxG.sound.music._channel.__audioSource, 7, 0.1);
+        #if sys
+        @:privateAccess
+        gfChill.analyzer.fftN = 512;
+        #end
+      }
     });
 
     initLocks();
@@ -735,6 +747,7 @@ class CharSelectSubState extends MusicBeatSubState
   override public function update(elapsed:Float):Void
   {
     super.update(elapsed);
+    applyPerformanceOptions();
 
     Conductor.instance.update();
 
@@ -956,6 +969,23 @@ class CharSelectSubState extends MusicBeatSubState
     cursorLocIntended.y += cursorOffsetY;
 
     cursors.lerpToLocation(cursorLocIntended);
+  }
+
+  function applyPerformanceOptions():Void
+  {
+    if (!Preferences.isLowQualityMax()) return;
+
+    if (crowd != null)
+    {
+      crowd.visible = false;
+      crowd.active = false;
+    }
+
+    if (nametag != null)
+    {
+      nametag.visible = false;
+      nametag.active = false;
+    }
   }
 
   function goBack():Void

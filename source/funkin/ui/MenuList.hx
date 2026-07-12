@@ -83,7 +83,7 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
       }
     }
 
-    touchBuddy = new FlxSprite().makeGraphic(10, 10);
+    touchBuddy = new FlxSprite().makeGraphic(20, 20);
     _isMainMenuState = Std.isOfType(FlxG.state, funkin.ui.mainmenu.MainMenuState);
 
     #if FEATURE_TOUCH_CONTROLS
@@ -172,8 +172,8 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
       {
         final item = members[i];
         final menuCamera = item.camera ?? FlxG.camera;
-        final isTouchingItem:Bool = TouchUtil.overlaps(item, menuCamera) || directTouchOverlaps(item, menuCamera) || rawPointerOverlaps(item, menuCamera)
-          || FlxG.mouse.overlaps(item, menuCamera);
+        final isTouchingItem:Bool = _isMainMenuState ? mainMenuPointerOverlaps(item, menuCamera) : TouchUtil.overlaps(item, menuCamera)
+          || directTouchOverlaps(item, menuCamera) || rawPointerOverlaps(item, menuCamera) || FlxG.mouse.overlaps(item, menuCamera);
 
         if (item.available && isTouchingItem && (TouchUtil.justPressed || hasDirectTouchPress() || rawPointerJustPressed || FlxG.mouse.justPressed))
         {
@@ -246,6 +246,34 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
     for (touch in FlxG.touches.list)
     {
       if (touch != null && touch.justPressed && touch.overlaps(item, camera)) return true;
+    }
+
+    return false;
+  }
+
+  function mainMenuPointerOverlaps(item:T, camera:flixel.FlxCamera):Bool
+  {
+    for (touch in FlxG.touches.list)
+    {
+      if (touch == null || !touch.justPressed) continue;
+      final point = touch.getViewPosition(camera, FlxPoint.get());
+      final bounds = item.getScreenBounds(null, camera);
+      final overlaps:Bool = bounds.containsPoint(point);
+      bounds.put();
+      point.put();
+      if (overlaps) return true;
+    }
+
+    if (rawPointerJustPressed && FlxG.stage != null)
+    {
+      final viewX:Float = rawPointerX * FlxG.width / FlxG.stage.stageWidth;
+      final viewY:Float = rawPointerY * FlxG.height / FlxG.stage.stageHeight;
+      final point = FlxPoint.get(viewX, viewY);
+      final bounds = item.getScreenBounds(null, camera);
+      final overlaps:Bool = bounds.containsPoint(point);
+      bounds.put();
+      point.put();
+      if (overlaps) return true;
     }
 
     return false;

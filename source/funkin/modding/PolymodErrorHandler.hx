@@ -5,6 +5,17 @@ import polymod.Polymod.PolymodError;
 @:nullSafety
 class PolymodErrorHandler
 {
+  public static var scriptErrorSerial(default, null):Int = 0;
+  static final reportedScriptErrors:Map<String, Bool> = [];
+
+  static function skipScriptError(error:PolymodError):Void
+  {
+    scriptErrorSerial++;
+    if (reportedScriptErrors.exists(error.message)) return;
+    reportedScriptErrors.set(error.message, true);
+    trace(' ERROR '.error() + ' Skipping broken script code: ' + error.message);
+  }
+
   public static function onPolymodError(error:PolymodError):Void
   {
     // Perform an action based on the error code.
@@ -144,22 +155,13 @@ class PolymodErrorHandler
       //
 
       case SCRIPT_PARSE_FAILED:
-        // A syntax error when parsing a script.
-        trace(' ERROR '.error() + ' ' + error.message);
-        // Notify the user via popup.
-        funkin.util.WindowUtil.showError('Script Parsing Error', error.message);
+        skipScriptError(error);
 
       case SCRIPT_RUNTIME_EXCEPTION:
-        // A runtime error when running a script.
-        trace(' ERROR '.error() + ' ' + error.message);
-        // Notify the user via popup.
-        funkin.util.WindowUtil.showError('Script Exception', error.message);
+        skipScriptError(error);
 
       case SCRIPTED_CLASS_NOT_REGISTERED:
-        // Polymod attempted to initialize a scripted class, but it wasn't registered.
-        trace(' ERROR '.error() + ' ' + error.message);
-        // Notify the user via popup.
-        funkin.util.WindowUtil.showError('Script Parsing Error', error.message);
+        skipScriptError(error);
 
       case SCRIPTED_CLASS_ALREADY_REGISTERED:
         // Polymod attempted to register a scripted class, but one with the same name and package already exists.
@@ -172,22 +174,13 @@ class PolymodErrorHandler
         trace(' WARNING '.warning() + ' ' + error.message);
 
       case SCRIPTED_CLASS_UNRESOLVED_IMPORT:
-        // A scripted class tried to import a module that doesn't exist.
-        trace(' ERROR '.error() + ' ' + error.message);
-        // Notify the user via popup.
-        funkin.util.WindowUtil.showError('Script Import Error', error.message);
+        skipScriptError(error);
 
       case SCRIPTED_CLASS_BLACKLISTED_MODULE:
-        // A scripted class tried to import a module that's blacklisted.
-        trace(' ERROR '.error() + ' ' + error.message);
-        // Notify the user via popup.
-        funkin.util.WindowUtil.showError('Script Blacklist Violation', error.message);
+        skipScriptError(error);
 
       case SCRIPTED_CLASS_BLACKLISTED_FIELD:
-        // A scripted class tried to access a field that's blacklisted.
-        trace(' ERROR '.error() + ' ' + error.message);
-        // Notify the user via popup.
-        funkin.util.WindowUtil.showError('Script Blacklist Violation', error.message);
+        skipScriptError(error);
 
       //
       // Other Errors

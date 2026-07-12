@@ -232,7 +232,7 @@ class PauseSubState extends MusicBeatSubState
   // ===============
   // Audio Variables
   // ===============
-  var pauseMusic:FunkinSound;
+  var pauseMusic:Null<FunkinSound>;
 
   // ===============
   // Constructor
@@ -268,7 +268,7 @@ class PauseSubState extends MusicBeatSubState
 
     startPauseMusic();
 
-    if (lostFocus && Preferences.autoPause) pauseMusic.pause();
+    if (lostFocus && Preferences.autoPause) pauseMusic?.pause();
 
     buildBackground();
 
@@ -307,7 +307,7 @@ class PauseSubState extends MusicBeatSubState
     dataFadeTimer = null;
     hapticTimer.cancel();
     hapticTimer = null;
-    pauseMusic.stop();
+    pauseMusic?.stop();
     onPause = null;
   }
 
@@ -352,11 +352,18 @@ class PauseSubState extends MusicBeatSubState
   function startPauseMusic():Void
   {
     var pauseMusicPath:String = Paths.music('breakfast$musicSuffix/breakfast$musicSuffix');
-    pauseMusic = FunkinSound.load(pauseMusicPath, 0, true, true);
+    pauseMusic = FunkinSound.load(pauseMusicPath, 0, true, true, false, false, null, null, true);
+
+    if (pauseMusic == null && musicSuffix != '')
+    {
+      pauseMusicPath = Paths.music('breakfast/breakfast');
+      pauseMusic = FunkinSound.load(pauseMusicPath, 0, true, true, false, false, null, null, true);
+    }
 
     if (pauseMusic == null)
     {
-      FlxG.log.warn('Could not play pause music: ${pauseMusicPath} does not exist!');
+      FlxG.log.warn('Could not play pause music: $pauseMusicPath');
+      return;
     }
 
     // Start playing at a random point in the song.
@@ -370,7 +377,7 @@ class PauseSubState extends MusicBeatSubState
   public override function onFocusLost():Void
   {
     super.onFocusLost();
-    if (Preferences.autoPause) pauseMusic.pause();
+    if (Preferences.autoPause) pauseMusic?.pause();
   }
 
   /**
@@ -379,7 +386,7 @@ class PauseSubState extends MusicBeatSubState
   public override function onFocus():Void
   {
     super.onFocus();
-    if (Preferences.autoPause) pauseMusic.resume();
+    if (Preferences.autoPause) pauseMusic?.resume();
   }
 
   /**

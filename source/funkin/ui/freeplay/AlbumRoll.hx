@@ -6,6 +6,7 @@ import flixel.util.FlxSort;
 import flixel.util.FlxTimer;
 import funkin.data.freeplay.album.AlbumRegistry;
 import funkin.graphics.FunkinSprite;
+import funkin.Preferences;
 import funkin.util.SortUtil;
 
 /**
@@ -77,6 +78,13 @@ class AlbumRoll extends FlxSpriteGroup
    */
   function updateAlbum():Void
   {
+    if (Preferences.isLowQualityMax())
+    {
+      this.visible = false;
+      this.active = false;
+      return;
+    }
+
     if (albumId == null)
     {
       this.visible = false;
@@ -156,6 +164,13 @@ class AlbumRoll extends FlxSpriteGroup
    */
   public function playIntro():Void
   {
+    if (Preferences.isLowQualityMax())
+    {
+      this.visible = false;
+      this.active = false;
+      return;
+    }
+
     this.visible = true;
 
     if (albumTitle != null) albumTitle.visible = false;
@@ -175,6 +190,13 @@ class AlbumRoll extends FlxSpriteGroup
 
   public function skipIntro():Void
   {
+    if (Preferences.isLowQualityMax())
+    {
+      this.visible = false;
+      this.active = false;
+      return;
+    }
+
     this.visible = true;
     // Weird workaround
     newAlbumArt.anim.play('switch', true);
@@ -183,6 +205,7 @@ class AlbumRoll extends FlxSpriteGroup
 
   public function showTitle():Void
   {
+    if (Preferences.isLowQualityMax()) return;
     if (albumTitle != null && albumTitle.frames != null) albumTitle.visible = true;
   }
 
@@ -240,6 +263,7 @@ class AlbumRoll extends FlxSpriteGroup
    */
   public function showStars():Void
   {
+    if (Preferences.isLowQualityMax()) return;
     difficultyStars.visible = true;
     difficultyStars.flameCheck();
   }

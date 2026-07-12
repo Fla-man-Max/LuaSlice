@@ -6,6 +6,7 @@ import funkin.data.song.importer.FNFLegacyData;
 import funkin.data.song.importer.FNFLegacyImporter;
 import funkin.data.song.importer.OsuManiaData;
 import funkin.data.song.importer.OsuManiaImporter;
+import funkin.data.song.importer.PsychEngineImporter;
 import funkin.data.song.importer.StepManiaData;
 import funkin.data.song.importer.StepManiaImporter;
 import funkin.data.song.SongData.SongCharacterData;
@@ -1112,6 +1113,7 @@ class ChartEditorDialogHandler
     var prettyFormat:String = switch (format)
     {
       case 'legacy': 'FNF Legacy';
+      case 'psych': 'Psych Engine (V1.0.4)';
       case 'stepmania': 'StepMania';
       case 'osumania': 'osu!Mania';
       default: 'Unknown';
@@ -1119,7 +1121,7 @@ class ChartEditorDialogHandler
 
     var fileFilter = switch (format)
     {
-      case 'legacy':
+      case 'legacy' | 'psych':
         [{label: 'JSON Data File (.json)', extension: 'json'}];
       case 'stepmania':
         [{label: 'StepMania File (.sm)', extension: 'sm'}];
@@ -1218,6 +1220,27 @@ class ChartEditorDialogHandler
           songChartData = FNFLegacyImporter.migrateChartData(fnfLegacyData);
 
           loadedText = 'Loaded chart file';
+        case 'psych':
+          var psychData:Dynamic = PsychEngineImporter.parseRaw(content, path.toString());
+          if (psychData == null)
+          {
+            state.error('Failure', 'Failed to parse Psych Engine chart (${path.file}.${path.ext})');
+            return;
+          }
+
+          var externalEvents:Dynamic = null;
+          #if sys
+          var eventsPath = Path.join([path.dir ?? '', 'events.json']);
+          if (eventsPath != path.toString() && FileUtil.fileExists(eventsPath))
+          {
+            externalEvents = PsychEngineImporter.parseRaw(FileUtil.readStringFromPath(eventsPath), eventsPath);
+          }
+          #end
+
+          var psychDifficulty = PsychEngineImporter.inferDifficulty(path.file);
+          songMetadata = PsychEngineImporter.migrateMetadata(psychData, psychDifficulty);
+          songChartData = PsychEngineImporter.migrateChartData(psychData, psychDifficulty, externalEvents);
+          loadedText = 'Loaded Psych Engine chart and events';
         case 'stepmania':
           var stepmaniaData:Null<StepManiaData> = StepManiaImporter.parseStepManiaFile(content);
 
@@ -1254,7 +1277,7 @@ class ChartEditorDialogHandler
           loadedText = 'Loaded beatmap file';
       }
 
-      if (songMetadata == null || songMetadata == null)
+      if (songMetadata == null || songChartData == null)
       {
         state.error('Failure', 'Failed to load song (${path.file}.${path.ext})');
         return;

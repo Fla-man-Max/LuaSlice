@@ -34,6 +34,7 @@ class ChartEditorWelcomeDialog extends ChartEditorBaseDialog
     this.splashCreateFromSongErectOnly.onClick = _ -> onClickLinkCreateErectOnly();
     this.splashCreateFromSongBasicErect.onClick = _ -> onClickLinkCreateBasicErect();
     this.splashImportChartLegacy.onClick = _ -> onClickLinkImport("legacy");
+    this.splashImportChartPsych.onClick = _ -> onClickLinkImport("psych");
     this.splashImportChartOsuMania.onClick = _ -> onClickLinkImport("osumania");
     this.splashImportChartStepMania.onClick = _ -> onClickLinkImport('stepmania');
 

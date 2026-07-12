@@ -20,6 +20,7 @@ import openfl.Lib;
 import openfl.media.Video;
 import openfl.net.NetStream;
 import funkin.util.WindowUtil;
+import funkin.util.CLIUtil;
 
 using funkin.util.AnsiUtil;
 
@@ -38,6 +39,10 @@ class Main extends Sprite
 
   public static function main():Void
   {
+    #if !mobile
+    CLIUtil.resetWorkingDir();
+    #end
+
     // Set the current working directory for Android and iOS devices
     #if android
     // On Android use External Files Dir.

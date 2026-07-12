@@ -96,6 +96,16 @@ adb install path\to\LuaSlice.apk
 
 iOS needs macOS and Xcode.
 
+Windows users can start the macOS GitHub Actions build with:
+
+```bat
+docs\setup\build-ios-from-windows.bat
+```
+
+The batch file handles the GitHub build and puts both files on your Desktop: a Simulator ZIP and an unsigned iPhone IPA. Make sure `build-ios.yml` has been pushed to `Fla-man-Max/LuaSlice` first.
+
+The IPA is made for real ARM64 iPhones, but it still needs signing before iOS will install it. For testing, sign it with Sideloadly or AltStore. TestFlight and App Store releases need an Apple Developer account.
+
 Real device:
 
 ```sh

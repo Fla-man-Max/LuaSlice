@@ -95,6 +95,7 @@ class CharSelectGF extends FunkinSprite implements IBPMSyncedScriptedClass
     var assetPath:Null<String> = gfData?.assetPath ?? "";
 
     currentGFPath = assetPath;
+    enableVisualizer = gfData?.visualizer ?? false;
 
     // We don't need to update any anims if we didn't change GF
     if (currentGFPath == "")
@@ -119,7 +120,6 @@ class CharSelectGF extends FunkinSprite implements IBPMSyncedScriptedClass
         return;
       }
 
-      enableVisualizer = gfData?.visualizer ?? false;
     }
 
     anim.play("idle", true);

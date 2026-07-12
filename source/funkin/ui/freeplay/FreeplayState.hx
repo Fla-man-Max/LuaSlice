@@ -1,6 +1,7 @@
 package funkin.ui.freeplay;
 
 import flixel.FlxCamera;
+import flixel.FlxBasic;
 import flixel.FlxObject;
 import flixel.FlxSprite;
 import flixel.addons.transition.FlxTransitionableState;
@@ -34,6 +35,7 @@ import funkin.graphics.shaders.StrokeShader;
 import funkin.input.Controls;
 import funkin.modding.events.ScriptEvent;
 import funkin.modding.events.ScriptEventDispatcher;
+import funkin.Preferences;
 import funkin.play.PlayStatePlaylist;
 import funkin.play.scoring.Scoring;
 import funkin.play.scoring.Scoring.ScoringRank;
@@ -808,6 +810,8 @@ class FreeplayState extends MusicBeatSubState
 
       refreshDots(5, allDifficulties.indexOf(currentDifficulty), allDifficulties.indexOf(currentDifficulty));
       fadeDots(true);
+      applyPerformanceOptions(backingImage, backingCard, dj, fpScoreDisplay, txtCompletion, letterSort, albumRoll, grpDifficulties, difficultyDots, diffSelLeft,
+        diffSelRight, ostName, fnfHighscoreSpr, clearBoxSprite);
 
       #if FEATURE_TOUCH_CONTROLS
       FlxG.touches.swipeThreshold.x = 60;
@@ -3191,6 +3195,34 @@ class FreeplayState extends MusicBeatSubState
         });
       }
     }
+  }
+
+  function applyPerformanceOptions(?backingImage:FlxBasic, ?backingCard:FlxBasic, ?dj:FlxBasic, ?fpScoreDisplay:FlxBasic, ?txtCompletion:FlxBasic,
+      ?letterSort:FlxBasic, ?albumRoll:FlxBasic, ?grpDifficulties:FlxBasic, ?difficultyDots:FlxBasic, ?diffSelLeft:FlxBasic, ?diffSelRight:FlxBasic,
+      ?ostName:FlxBasic, ?fnfHighscoreSpr:FlxBasic, ?clearBoxSprite:FlxBasic):Void
+  {
+    if (!Preferences.isLowQualityMinimal()) return;
+
+    hideLowQuality(ostName);
+
+    if (!Preferences.isLowQualityMax()) return;
+
+    hideLowQuality(dj);
+    hideLowQuality(fpScoreDisplay);
+    hideLowQuality(txtCompletion);
+    hideLowQuality(letterSort);
+    hideLowQuality(albumRoll);
+    hideLowQuality(diffSelLeft);
+    hideLowQuality(diffSelRight);
+    hideLowQuality(fnfHighscoreSpr);
+    hideLowQuality(clearBoxSprite);
+  }
+
+  function hideLowQuality(sprite:Null<FlxBasic>):Void
+  {
+    if (sprite == null) return;
+    sprite.visible = false;
+    sprite.active = false;
   }
 }
 

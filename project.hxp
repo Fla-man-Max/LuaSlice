@@ -641,7 +641,8 @@ class Project extends HXProject
 
     // Tell Lime to run some prebuild and postbuild scripts.
     this.preBuildCallbacks.push(buildHaxeCLICommand(PREBUILD_HX));
-    this.postBuildCallbacks.push(buildHaxeCLICommand(POSTBUILD_HX));
+    var postBuildCommand = new CLICommand('haxe', ['--run', 'source.Postbuild', Std.string(this.target).toLowerCase()]);
+    this.postBuildCallbacks.push(postBuildCommand);
 
     // set the app' local languages.
     this.languages = LANGUAGES;
@@ -1542,6 +1543,7 @@ class Project extends HXProject
     addAsset("LICENSE.md", "LICENSE.md", "art", shouldEmbedArt);
     addAsset("changelogs/CHANGELOG - FNF.md", "CHANGELOG - FNF.md", "art", shouldEmbedArt);
     addAsset("changelogs/CHANGELOG - ENGINE.md", "CHANGELOG - ENGINE.md", "art", shouldEmbedArt);
+    addAsset("changelogs/LuaSlice Lua API.md", "LuaSlice Lua API.md", "art", shouldEmbedArt);
     addAsset("example_mods/mod-example.zip", "mods/mod-example.zip", "art", shouldEmbedArt);
 
     if (shouldEmbed)

@@ -69,7 +69,7 @@
   </menu>
   <menu text="View">
     <vbox width="100%">
-    <menu-checkbox width="100%" id="menubarItemDownscroll" text="Downscroll" disabled="true" />
+    <menu-checkbox width="100%" id="menubarItemDownscroll" text="Downscroll" />
     </vbox>
     <menu text="Theme">
       <menu-option-box id="menuBarItemThemeLight" text="Light" group="menubarItemThemeGroup" />

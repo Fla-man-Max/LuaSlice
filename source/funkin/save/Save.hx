@@ -137,6 +137,8 @@ class Save implements ConsoleClass
         downscroll: false,
         flashingLights: true,
         zoomCamera: true,
+        songShaders: true,
+        lowQualityMode: 'None',
         debugDisplay: 'Off',
         debugDisplayBGOpacity: 50,
         subtitles: true,
@@ -1186,6 +1188,18 @@ typedef SaveDataOptions =
    * @default `false`
    */
   var zoomCamera:Bool;
+
+  /**
+   * If enabled, song gameplay may use stage and character shaders.
+   * @default `true`
+   */
+  var songShaders:Bool;
+
+  /**
+   * Low quality mode. Valid values are `None`, `Minimal`, and `Max`.
+   * @default `None`
+   */
+  var lowQualityMode:String;
 
   /**
    * If enabled, an FPS and memory counter will be displayed even if this is not a debug build.

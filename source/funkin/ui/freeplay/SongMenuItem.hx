@@ -26,6 +26,7 @@ import funkin.ui.story.Level;
 import funkin.ui.PixelatedIcon;
 import funkin.util.TouchUtil;
 import funkin.util.SwipeUtil;
+import funkin.Preferences;
 
 using StringTools;
 
@@ -724,6 +725,17 @@ class SongMenuItem extends FlxSpriteGroup
     theActualHitbox.y = y + 20;
 
     super.update(elapsed);
+    applyPerformanceOptions();
+  }
+
+  function applyPerformanceOptions():Void
+  {
+    if (!Preferences.isLowQualityMinimal()) return;
+
+    if (pixelIcon != null) pixelIcon.visible = false;
+    if (bpmText != null) bpmText.visible = false;
+    if (difficultyText != null) difficultyText.visible = false;
+    if (weekText != null) weekText.visible = false;
   }
 
   /**

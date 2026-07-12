@@ -260,6 +260,7 @@ class LuaOptionManager
         return;
       }
     }
+
     page.items.push(item);
   }
 

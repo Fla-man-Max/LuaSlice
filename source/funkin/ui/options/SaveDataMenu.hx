@@ -7,6 +7,9 @@ import funkin.save.Save;
 import flixel.text.FlxText;
 import flixel.util.FlxColor;
 import funkin.graphics.FunkinSprite;
+#if mobile
+import funkin.mobile.ui.FunkinBackButton;
+#end
 
 class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
 {
@@ -59,7 +62,9 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
     }
     #end
 
+    #if !mobile
     createItem("EXIT", "Returns to the Options menu.", exit);
+    #end
 
     add(descriptionBox = new FunkinSprite());
     descriptionBox.makeSolidColor(1, 1, FlxColor.BLACK);
@@ -73,6 +78,10 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
       flixel.text.FlxText.FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
     descriptionText.borderSize = 2;
     items.onChange.add(function(_) descriptionText.text = descriptions[items.selectedIndex]);
+
+    #if mobile
+    add(new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, exit, 1.0));
+    #end
   }
 
   function createItem(name:String, description:String, callback:Void->Void, fireInstantly = false)

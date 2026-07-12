@@ -1,14 +1,3 @@
-# LuaSlice
-I added Lua Support to V-slice. I don't know what to add mor-
-
-Join mine Discord Server!
-- [LuaSlice Engine](https://discord.gg/sCr5rpPwBn)
-
-You can download the LuaSlice Versions Here:
-- [Versions](https://github.com/Fla-man-Max/LuaSlice/releases)
-- [Source Code](https://github.com/Fla-man-Max/LuaSlice)
-- [Gamebanana](https://gamebanana.com/tools/23050)
-
 # LuaSlice Lua API
 
 LuaSlice supports isolated `.lua` scripts and global `.luag` scripts. Lua is enabled by default on native C++ builds. Use `-DNO_LUA` only if you need a build without Lua.

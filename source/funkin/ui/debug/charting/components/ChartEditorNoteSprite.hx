@@ -212,6 +212,7 @@ class ChartEditorNoteSprite extends FlxSprite
     {
       this.x += origin.x;
       this.y += origin.y;
+      this.y = parentState.transformChartY(this.y, this.height);
     }
 
     this.updateTooltipPosition();

@@ -43,6 +43,8 @@ class ChartEditorMeasureTicks extends FlxTypedSpriteGroup<FlxSprite>
    */
   var measurePositions:Array<Float> = [];
 
+  var downscroll:Bool = false;
+
   /**
    * A map of the
    * @param value
@@ -86,6 +88,14 @@ class ChartEditorMeasureTicks extends FlxTypedSpriteGroup<FlxSprite>
   public function updateTheme():Void
   {
     buildMeasureTicksSprite();
+    updateMeasureNumbers(true);
+  }
+
+  public function setDownscroll(value:Bool):Void
+  {
+    if (downscroll == value) return;
+    downscroll = value;
+    measureTicksSprite.flipY = value;
     updateMeasureNumbers(true);
   }
 
@@ -199,7 +209,7 @@ class ChartEditorMeasureTicks extends FlxTypedSpriteGroup<FlxSprite>
       var shouldDisplayMeasureNumber:Bool = measureTimeInPixels + MIN_MEASURE_HEIGHT <= chartEditorState.songLengthInPixels;
       var shouldDisplayMeasureDivider:Bool = true;
 
-      var relativeMeasureTimeInPixels:Float = measureTimeInPixels + this.y;
+      var relativeMeasureTimeInPixels:Float = measureTimeInPixels + ChartEditorState.GRID_INITIAL_Y_POS - chartEditorState.scrollPositionInPixels;
 
       final SCREEN_PADDING:Float = ChartEditorState.GRID_SIZE / 2;
 
@@ -220,7 +230,7 @@ class ChartEditorMeasureTicks extends FlxTypedSpriteGroup<FlxSprite>
         // Measures are base ZERO gah!
         final OFFSET = 2;
         measureNumber.text = '${targetMeasure + 1}';
-        measureNumber.y = relativeMeasureTimeInPixels + OFFSET;
+        measureNumber.y = chartEditorState.transformChartY(relativeMeasureTimeInPixels + OFFSET, measureNumber.height);
         measureNumber.x = this.x;
       }
 
@@ -229,7 +239,8 @@ class ChartEditorMeasureTicks extends FlxTypedSpriteGroup<FlxSprite>
         // Reuse an existing divider. If we need a new divider, create one with makeMeasureDivider().
         final REVIVE:Bool = true;
         var measureDivider = measureDividers.recycle(makeMeasureDivider, false, REVIVE);
-        measureDivider.y = relativeMeasureTimeInPixels - (ChartEditorThemeHandler.MEASURE_TICKS_MEASURE_WIDTH / 2);
+        measureDivider.y = chartEditorState.transformChartY(relativeMeasureTimeInPixels - (ChartEditorThemeHandler.MEASURE_TICKS_MEASURE_WIDTH / 2),
+          measureDivider.height);
         measureDivider.x = this.x + (measureTicksSprite.width);
       }
     }

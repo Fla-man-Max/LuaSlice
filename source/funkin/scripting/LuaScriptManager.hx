@@ -20,6 +20,7 @@ import funkin.Highscore;
 import funkin.Paths;
 import funkin.Preferences;
 import funkin.save.Save;
+import funkin.data.stage.StageRegistry;
 import funkin.graphics.FunkinSprite;
 import funkin.modding.events.ScriptEvent;
 import funkin.play.cutscene.VideoCutscene;
@@ -27,6 +28,7 @@ import funkin.play.PauseSubState;
 import funkin.play.PlayState;
 import funkin.ui.mainmenu.MainMenuState;
 import funkin.ui.options.OptionsState;
+import funkin.util.WindowUtil;
 import haxe.Json;
 import hxlua.Lua;
 import hxlua.LuaL;
@@ -133,7 +135,9 @@ class LuaScriptManager
   var scriptGlobalModes:Map<String, Bool> = [];
   var scriptEnvRefs:Map<String, Int> = [];
   var globalScriptHookRefs:Map<String, Map<String, Int>> = [];
+  var isolatedScriptHookRefs:Map<String, Map<String, Int>> = [];
   var hookPresence:Map<String, Bool> = [];
+  var pathPartsCache:Map<String, Array<String>> = [];
   var sprites:Map<String, FunkinSprite> = [];
   var texts:Map<String, FlxText> = [];
   var objects:Map<String, Dynamic> = [];
@@ -144,6 +148,8 @@ class LuaScriptManager
   var menusManager:LuaMenusManager;
   var shaderManager:LuaShaderManager;
   var disabledHooks:Map<String, Bool> = [];
+  var scriptPriorities:Map<String, Int> = [];
+  var scriptPriorityDirty:Bool = false;
   var currentEvent:Null<ScriptEvent> = null;
   var currentLuaFiles:Array<String> = [];
   var mainMenuState:Null<MainMenuState> = null;
@@ -184,7 +190,11 @@ class LuaScriptManager
         final error = readError();
         trace('[LuaScriptManager] Failed to load ${path}: ${error}');
         LuaWindowErrorManager.report('load-error', path, null, error);
-        if (previousGlobalHooks != null) releaseHookRefs(previousGlobalHooks);
+        if (previousGlobalHooks != null)
+        {
+          restoreGlobalHooks(previousGlobalHooks);
+          releaseHookRefs(previousGlobalHooks);
+        }
         if (envRef != LuaL.NOREF) LuaL.unref(state, Lua.REGISTRYINDEX, envRef);
         return false;
       }
@@ -200,7 +210,11 @@ class LuaScriptManager
         final error = readError();
         trace('[LuaScriptManager] Failed to run ${path}: ${error}');
         LuaWindowErrorManager.report('run-error', path, null, error);
-        if (previousGlobalHooks != null) releaseHookRefs(previousGlobalHooks);
+        if (previousGlobalHooks != null)
+        {
+          restoreGlobalHooks(previousGlobalHooks);
+          releaseHookRefs(previousGlobalHooks);
+        }
         if (envRef != LuaL.NOREF) LuaL.unref(state, Lua.REGISTRYINDEX, envRef);
         return false;
       }
@@ -210,7 +224,11 @@ class LuaScriptManager
       final error = Std.string(e);
       trace('[LuaScriptManager] Failed to load/run ${path}: ${error}');
       LuaWindowErrorManager.report('haxe-load-error', path, null, error);
-      if (previousGlobalHooks != null) releaseHookRefs(previousGlobalHooks);
+      if (previousGlobalHooks != null)
+      {
+        restoreGlobalHooks(previousGlobalHooks);
+        releaseHookRefs(previousGlobalHooks);
+      }
       if (envRef != LuaL.NOREF) LuaL.unref(state, Lua.REGISTRYINDEX, envRef);
       return false;
     }
@@ -220,6 +238,11 @@ class LuaScriptManager
       releaseGlobalScriptHooks(path);
       captureChangedGlobalHooks(path, previousGlobalHooks);
       releaseHookRefs(previousGlobalHooks);
+    }
+    else if (!isGlobalScript && envRef != LuaL.NOREF)
+    {
+      releaseIsolatedScriptHooks(path);
+      captureEnvironmentHooks(path, envRef);
     }
 
     if (!loadedScripts.contains(path)) loadedScripts.push(path);
@@ -251,7 +274,11 @@ class LuaScriptManager
     scriptGlobalModes.clear();
     scriptEnvRefs.clear();
     globalScriptHookRefs.clear();
+    isolatedScriptHookRefs.clear();
     hookPresence.clear();
+    pathPartsCache.clear();
+    scriptPriorities.clear();
+    scriptPriorityDirty = false;
     var loadedAny = false;
     var seen:Map<String, Bool> = [];
     for (scriptPath in scriptsToReload)
@@ -280,6 +307,12 @@ class LuaScriptManager
   public function callHook(name:String, args:Array<Dynamic>):Void
   {
     if (state == null || loadedScripts.length == 0) return;
+
+    if (scriptPriorityDirty)
+    {
+      loadedScripts.sort(function(a, b) return (scriptPriorities.get(b) ?? 0) - (scriptPriorities.get(a) ?? 0));
+      scriptPriorityDirty = false;
+    }
 
     activeManager = this;
     if (name == 'onUpdate') menusManager.update(args.length > 0 ? Std.parseFloat(Std.string(args[0])) : 0);
@@ -347,14 +380,8 @@ class LuaScriptManager
     for (scriptPath in loadedScripts)
     {
       if (scriptGlobalModes.get(scriptPath) == true) continue;
-      final envRef = scriptEnvRefs.get(scriptPath);
-      if (envRef == null) continue;
-
-      Lua.rawgeti(state, Lua.REGISTRYINDEX, envRef);
-      Lua.getfield(state, -1, name);
-      final found = Lua.type(state, -1) == Lua.TFUNCTION;
-      Lua.pop(state, 2);
-      if (found)
+      final hooks = isolatedScriptHookRefs.get(scriptPath);
+      if (hooks != null && hooks.exists(name))
       {
         hookPresence.set(name, true);
         return true;
@@ -458,19 +485,19 @@ class LuaScriptManager
     final hookKey = '${scriptPath}:${name}';
     if (disabledHooks.exists(hookKey)) return;
 
-    final envRef = scriptEnvRefs.get(scriptPath);
-    if (envRef == null) return;
+    final scriptHooks = isolatedScriptHookRefs.get(scriptPath);
+    if (scriptHooks == null) return;
 
-    Lua.rawgeti(state, Lua.REGISTRYINDEX, envRef);
-    Lua.getfield(state, -1, name);
+    final hookRef = scriptHooks.get(name);
+    if (hookRef == null) return;
+
+    Lua.rawgeti(state, Lua.REGISTRYINDEX, hookRef);
 
     if (Lua.type(state, -1) != Lua.TFUNCTION)
     {
-      Lua.pop(state, 2);
+      Lua.pop(state, 1);
       return;
     }
-
-    Lua.remove(state, -2);
 
     for (arg in args)
     {
@@ -596,7 +623,9 @@ class LuaScriptManager
     scriptGlobalModes.clear();
     scriptEnvRefs.clear();
     globalScriptHookRefs.clear();
+    isolatedScriptHookRefs.clear();
     hookPresence.clear();
+    pathPartsCache.clear();
     if (activeManager == this) activeManager = null;
   }
 
@@ -878,6 +907,23 @@ class LuaScriptManager
     return hooks;
   }
 
+  function restoreGlobalHooks(previousHooks:Map<String, Int>):Void
+  {
+    for (hookName in LUA_HOOK_NAMES)
+    {
+      final hookRef:Null<Int> = previousHooks.get(hookName);
+      if (hookRef == null)
+      {
+        Lua.pushnil(state);
+      }
+      else
+      {
+        Lua.rawgeti(state, Lua.REGISTRYINDEX, hookRef);
+      }
+      Lua.setglobal(state, hookName);
+    }
+  }
+
   function captureChangedGlobalHooks(scriptPath:String, previousHooks:Map<String, Int>):Void
   {
     var scriptHooks:Map<String, Int> = [];
@@ -922,11 +968,60 @@ class LuaScriptManager
     globalScriptHookRefs.remove(scriptPath);
   }
 
+  function captureEnvironmentHooks(scriptPath:String, envRef:Int):Void
+  {
+    var scriptHooks:Map<String, Int> = [];
+
+    Lua.rawgeti(state, Lua.REGISTRYINDEX, envRef);
+    for (hookName in LUA_HOOK_NAMES)
+    {
+      Lua.getfield(state, -1, hookName);
+      if (Lua.type(state, -1) == Lua.TFUNCTION)
+      {
+        scriptHooks.set(hookName, LuaL.ref(state, Lua.REGISTRYINDEX));
+      }
+      else
+      {
+        Lua.pop(state, 1);
+      }
+    }
+    Lua.pop(state, 1);
+
+    if (scriptHooks.keys().hasNext()) isolatedScriptHookRefs.set(scriptPath, scriptHooks);
+  }
+
+  function releaseIsolatedScriptHooks(scriptPath:String):Void
+  {
+    final scriptHooks = isolatedScriptHookRefs.get(scriptPath);
+    if (scriptHooks == null) return;
+
+    releaseHookRefs(scriptHooks);
+    isolatedScriptHookRefs.remove(scriptPath);
+  }
+
   function releaseHookRefs(hooks:Map<String, Int>):Void
   {
     for (hookRef in hooks)
     {
       LuaL.unref(state, Lua.REGISTRYINDEX, hookRef);
+    }
+  }
+
+  function setCurrentHookDisabled(hook:String, disabled:Bool):Void
+  {
+    if (currentLuaFiles.length == 0)
+    {
+      final key = 'global:${hook}';
+      if (disabled) disabledHooks.set(key, true);
+      else disabledHooks.remove(key);
+      return;
+    }
+
+    for (scriptPath in currentLuaFiles)
+    {
+      final key = '${scriptPath}:${hook}';
+      if (disabled) disabledHooks.set(key, true);
+      else disabledHooks.remove(key);
     }
   }
 
@@ -1090,6 +1185,10 @@ class LuaScriptManager
     Lua.register(state, 'debugPrint', cpp.Callable.fromStaticFunction(lua_debugPrint));
     Lua.register(state, 'luaTrace', cpp.Callable.fromStaticFunction(lua_debugPrint));
     Lua.register(state, 'reloadLuaScripts', cpp.Callable.fromStaticFunction(lua_reloadLuaScripts));
+    Lua.register(state, 'setLuaWindowTitle', cpp.Callable.fromStaticFunction(lua_setLuaWindowTitle));
+    Lua.register(state, 'getCurrentLuaScriptPath', cpp.Callable.fromStaticFunction(lua_getCurrentLuaScriptPath));
+    Lua.register(state, 'stopCurrentLuaScript', cpp.Callable.fromStaticFunction(lua_stopCurrentLuaScript));
+    Lua.register(state, 'setCurrentLuaScriptPriority', cpp.Callable.fromStaticFunction(lua_setCurrentLuaScriptPriority));
     Lua.register(state, 'getCurrentEvent', cpp.Callable.fromStaticFunction(lua_getCurrentEvent));
     Lua.register(state, 'getEventField', cpp.Callable.fromStaticFunction(lua_getEventField));
     Lua.register(state, 'setEventField', cpp.Callable.fromStaticFunction(lua_setEventField));
@@ -1097,6 +1196,10 @@ class LuaScriptManager
     Lua.register(state, 'stopEventPropagation', cpp.Callable.fromStaticFunction(lua_stopEventPropagation));
     Lua.register(state, 'getProperty', cpp.Callable.fromStaticFunction(lua_getProperty));
     Lua.register(state, 'setProperty', cpp.Callable.fromStaticFunction(lua_setProperty));
+    Lua.register(state, 'setProperties', cpp.Callable.fromStaticFunction(lua_setProperties));
+    Lua.register(state, 'getPropertyRef', cpp.Callable.fromStaticFunction(lua_getPropertyRef));
+    Lua.register(state, 'setPropertyRef', cpp.Callable.fromStaticFunction(lua_setPropertyRef));
+    Lua.register(state, 'objectExists', cpp.Callable.fromStaticFunction(lua_objectExists));
     Lua.register(state, 'getObjectProperty', cpp.Callable.fromStaticFunction(lua_getProperty));
     Lua.register(state, 'setObjectProperty', cpp.Callable.fromStaticFunction(lua_setProperty));
     Lua.register(state, 'callMethod', cpp.Callable.fromStaticFunction(lua_callMethod));
@@ -1137,6 +1240,8 @@ class LuaScriptManager
     Lua.register(state, 'getDifficulty', cpp.Callable.fromStaticFunction(lua_getDifficulty));
     Lua.register(state, 'getVariation', cpp.Callable.fromStaticFunction(lua_getVariation));
     Lua.register(state, 'getStageId', cpp.Callable.fromStaticFunction(lua_getStageId));
+    Lua.register(state, 'changeStage', cpp.Callable.fromStaticFunction(lua_changeStage));
+    Lua.register(state, 'changeCharacter', cpp.Callable.fromStaticFunction(lua_changeCharacter));
     Lua.register(state, 'getPlaybackRate', cpp.Callable.fromStaticFunction(lua_getPlaybackRate));
     Lua.register(state, 'setPlaybackRate', cpp.Callable.fromStaticFunction(lua_setPlaybackRate));
     Lua.register(state, 'getScrollSpeed', cpp.Callable.fromStaticFunction(lua_getScrollSpeed));
@@ -1152,10 +1257,17 @@ class LuaScriptManager
     Lua.register(state, 'setPracticeMode', cpp.Callable.fromStaticFunction(lua_setPracticeMode));
     Lua.register(state, 'getPreference', cpp.Callable.fromStaticFunction(lua_getPreference));
     Lua.register(state, 'setPreference', cpp.Callable.fromStaticFunction(lua_setPreference));
+    Lua.register(state, 'setCamZoom', cpp.Callable.fromStaticFunction(lua_setCamZoom));
+    Lua.register(state, 'debugInfo', cpp.Callable.fromStaticFunction(lua_debugInfo));
+    Lua.register(state, 'debugWarn', cpp.Callable.fromStaticFunction(lua_debugWarn));
+    Lua.register(state, 'debugError', cpp.Callable.fromStaticFunction(lua_debugError));
+    Lua.register(state, 'disableLuaHook', cpp.Callable.fromStaticFunction(lua_disableLuaHook));
+    Lua.register(state, 'enableLuaHook', cpp.Callable.fromStaticFunction(lua_enableLuaHook));
     Lua.register(state, 'defineLuaOption', cpp.Callable.fromStaticFunction(lua_defineLuaOption));
     Lua.register(state, 'getLuaOption', cpp.Callable.fromStaticFunction(lua_getLuaOption));
     Lua.register(state, 'setLuaOption', cpp.Callable.fromStaticFunction(lua_setLuaOption));
     Lua.register(state, 'hasLuaOption', cpp.Callable.fromStaticFunction(lua_hasLuaOption));
+    Lua.register(state, 'luaStageExists', cpp.Callable.fromStaticFunction(lua_stageExists));
     Lua.register(state, 'removeLuaOption', cpp.Callable.fromStaticFunction(lua_removeLuaOption));
     Lua.register(state, 'getLuaOptions', cpp.Callable.fromStaticFunction(lua_getLuaOptions));
     Lua.register(state, 'createLuaOptionPage', cpp.Callable.fromStaticFunction(lua_createLuaOptionPage));
@@ -1245,6 +1357,7 @@ class LuaScriptManager
     Lua.register(state, 'setShaderOnSprite', cpp.Callable.fromStaticFunction(lua_setShaderOnSprite));
     Lua.register(state, 'createShader', cpp.Callable.fromStaticFunction(lua_createShader));
     Lua.register(state, 'destroyShader', cpp.Callable.fromStaticFunction(lua_destroyShader));
+    Lua.register(state, 'luaShaderExists', cpp.Callable.fromStaticFunction(lua_shaderExists));
     Lua.register(state, 'setShaderFloat', cpp.Callable.fromStaticFunction(lua_setShaderFloat));
     Lua.register(state, 'setShaderFloatArray', cpp.Callable.fromStaticFunction(lua_setShaderFloatArray));
     Lua.register(state, 'setShaderInt', cpp.Callable.fromStaticFunction(lua_setShaderInt));
@@ -1256,6 +1369,8 @@ class LuaScriptManager
 
     Lua.register(state, 'tween', cpp.Callable.fromStaticFunction(lua_tween));
     Lua.register(state, 'cancelTween', cpp.Callable.fromStaticFunction(lua_cancelTween));
+    Lua.register(state, 'pauseTween', cpp.Callable.fromStaticFunction(lua_pauseTween));
+    Lua.register(state, 'resumeTween', cpp.Callable.fromStaticFunction(lua_resumeTween));
     Lua.register(state, 'runTimer', cpp.Callable.fromStaticFunction(lua_runTimer));
     Lua.register(state, 'cancelTimer', cpp.Callable.fromStaticFunction(lua_cancelTimer));
 
@@ -1462,8 +1577,28 @@ class LuaScriptManager
 
   static function lua_debugPrint(L:cpp.RawPointer<Lua_State>):Int
   {
+    return lua_debugLog(L, 'print');
+  }
+
+  static function lua_debugInfo(L:cpp.RawPointer<Lua_State>):Int
+  {
+    return lua_debugLog(L, 'info');
+  }
+
+  static function lua_debugWarn(L:cpp.RawPointer<Lua_State>):Int
+  {
+    return lua_debugLog(L, 'warn');
+  }
+
+  static function lua_debugError(L:cpp.RawPointer<Lua_State>):Int
+  {
+    return lua_debugLog(L, 'error');
+  }
+
+  static function lua_debugLog(L:cpp.RawPointer<Lua_State>, level:String):Int
+  {
     var message = readString(L, 1, '');
-    trace('[Lua] ${message}');
+    trace('[Lua:${level}] ${message}');
     return 0;
   }
 
@@ -1552,6 +1687,92 @@ class LuaScriptManager
     }
 
     return manager.pushReturn(manager.safeSetProperty(resolved.target, resolved.field, value));
+  }
+
+  static function lua_setProperties(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+
+    var targetPath = readString(L, 1, '');
+    var values = manager.readValue(L, 2);
+    var target = manager.resolvePath(targetPath).value;
+    if (target == null || values == null) return manager.pushReturn(false);
+
+    var ok = true;
+    for (field in Reflect.fields(values))
+    {
+      ok = manager.safeSetProperty(target, field, Reflect.field(values, field)) && ok;
+    }
+    return manager.pushReturn(ok);
+  }
+
+  static function lua_getPropertyRef(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+    return manager.pushReturn(manager.resolvePath(readString(L, 1, '')).value);
+  }
+
+  static function lua_setPropertyRef(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+
+    var resolved = manager.resolveParent(readString(L, 1, ''));
+    if (resolved.target == null || resolved.field == '') return manager.pushReturn(false);
+    return manager.pushReturn(manager.safeSetProperty(resolved.target, resolved.field, manager.readValue(L, 2)));
+  }
+
+  static function lua_disableLuaHook(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+    var hook = readString(L, 1, '');
+    if (hook == '') return manager.pushReturn(false);
+    manager.setCurrentHookDisabled(hook, true);
+    return manager.pushReturn(true);
+  }
+
+  static function lua_enableLuaHook(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+    var hook = readString(L, 1, '');
+    if (hook == '') return manager.pushReturn(false);
+    manager.setCurrentHookDisabled(hook, false);
+    return manager.pushReturn(true);
+  }
+
+  static function lua_setLuaWindowTitle(L:cpp.RawPointer<Lua_State>):Int
+  {
+    WindowUtil.setWindowTitle(readString(L, 1, 'LuaSlice'));
+    return 0;
+  }
+
+  static function lua_getCurrentLuaScriptPath(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+    return manager.pushReturn(manager.currentLuaFiles.length == 0 ? '' : manager.currentLuaFiles[0]);
+  }
+
+  static function lua_stopCurrentLuaScript(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null || manager.currentLuaFiles.length == 0) return manager == null ? 0 : manager.pushReturn(false);
+    for (hook in LUA_HOOK_NAMES) manager.setCurrentHookDisabled(hook, true);
+    return manager.pushReturn(true);
+  }
+
+  static function lua_setCurrentLuaScriptPriority(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null || manager.currentLuaFiles.length == 0) return manager == null ? 0 : manager.pushReturn(false);
+    var priority = readInt(L, 1, 0);
+    for (path in manager.currentLuaFiles) manager.scriptPriorities.set(path, priority);
+    manager.scriptPriorityDirty = true;
+    return manager.pushReturn(true);
   }
 
   static function lua_callMethod(L:cpp.RawPointer<Lua_State>):Int
@@ -1929,6 +2150,42 @@ class LuaScriptManager
     return current()?.pushReturn(PlayState.instance?.currentStageId ?? '') ?? 0;
   }
 
+  static function lua_changeStage(L:cpp.RawPointer<Lua_State>):Int
+  {
+    final manager = current();
+    final playState = PlayState.instance;
+    if (manager == null || playState == null) return 0;
+
+    final stageId:String = readString(L, 1, '');
+    final accepted:Bool = playState.requestLuaStageChange(stageId);
+    if (!accepted) manager.reportLuaWarning('api-warning', 'lua-api', 'changeStage', 'changeStage failed: Unknown stage "$stageId".');
+    return manager.pushReturn(accepted);
+  }
+
+  static function lua_changeCharacter(L:cpp.RawPointer<Lua_State>):Int
+  {
+    final manager = current();
+    final playState = PlayState.instance;
+    if (manager == null || playState == null) return 0;
+
+    final targetName:String = readString(L, 1, '').toLowerCase().trim();
+    final target:Int = switch (targetName)
+    {
+      case 'player': 0;
+      case 'opponent': 1;
+      case 'girlfriend' | 'gf': 2;
+      default: -1;
+    };
+    final characterId:String = readString(L, 2, '');
+    final accepted:Bool = playState.requestLuaCharacterChange(target, characterId);
+    if (!accepted)
+    {
+      manager.reportLuaWarning('api-warning', 'lua-api', 'changeCharacter',
+        'changeCharacter failed: Use "player", "opponent", or "girlfriend" and a valid character ID. Received "$targetName", "$characterId".');
+    }
+    return manager.pushReturn(accepted);
+  }
+
   static function lua_getPlaybackRate(L:cpp.RawPointer<Lua_State>):Int
   {
     return current()?.pushReturn(PlayState.instance?.playbackRate ?? 1.0) ?? 0;
@@ -2089,6 +2346,18 @@ class LuaScriptManager
     }
   }
 
+  static function lua_setCamZoom(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+
+    var camera = manager.resolveCamera(readString(L, 2, 'game'));
+    if (camera == null) return manager.pushReturn(false);
+
+    camera.zoom = readFloat(L, 1, camera.zoom);
+    return manager.pushReturn(true);
+  }
+
   static function lua_defineLuaOption(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
@@ -2115,6 +2384,13 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     return manager.pushReturn(manager.optionManager.hasOption(readString(L, 1, '')));
+  }
+
+  static function lua_stageExists(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+    return manager.pushReturn(StageRegistry.instance.hasEntry(readString(L, 1, '')));
   }
 
   static function lua_removeLuaOption(L:cpp.RawPointer<Lua_State>):Int
@@ -3045,6 +3321,13 @@ class LuaScriptManager
     return manager.pushReturn(manager.shaderManager.destroyShader(readString(L, 1, '')));
   }
 
+  static function lua_shaderExists(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+    return manager.pushReturn(manager.shaderManager.hasShader(readString(L, 1, '')));
+  }
+
   static function lua_setShaderFloat(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
@@ -3199,6 +3482,26 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     return manager.pushReturn(manager.cancelTween(readString(L, 1, '')));
+  }
+
+  static function lua_pauseTween(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+    var tween = manager.tweens.get(readString(L, 1, ''));
+    if (tween == null) return manager.pushReturn(false);
+    tween.active = false;
+    return manager.pushReturn(true);
+  }
+
+  static function lua_resumeTween(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+    var tween = manager.tweens.get(readString(L, 1, ''));
+    if (tween == null) return manager.pushReturn(false);
+    tween.active = true;
+    return manager.pushReturn(true);
   }
 
   static function lua_runTimer(L:cpp.RawPointer<Lua_State>):Int
@@ -3728,7 +4031,7 @@ class LuaScriptManager
   {
     if (path == '') return {target: null, field: '', value: null};
 
-    var parts = path.split('.');
+    var parts = cachedPathParts(path);
     var value:Dynamic = resolveRoot(parts.shift());
 
     for (part in parts)
@@ -3745,7 +4048,7 @@ class LuaScriptManager
     if (currentEvent == null) return {target: null, field: '', value: null};
     if (path == '') return {target: null, field: '', value: currentEvent};
 
-    var parts = path.split('.');
+    var parts = cachedPathParts(path);
     var value:Dynamic = currentEvent;
 
     for (part in parts)
@@ -3759,7 +4062,7 @@ class LuaScriptManager
 
   function resolveParent(path:String):{target:Dynamic, field:String}
   {
-    var parts = path.split('.');
+    var parts = cachedPathParts(path);
     if (parts.length == 0) return {target: null, field: ''};
 
     var field = parts.pop();
@@ -3778,7 +4081,7 @@ class LuaScriptManager
   {
     if (currentEvent == null) return {target: null, field: ''};
 
-    var parts = path.split('.');
+    var parts = cachedPathParts(path);
     if (parts.length == 0) return {target: null, field: ''};
 
     var field = parts.pop();
@@ -3791,6 +4094,17 @@ class LuaScriptManager
     }
 
     return {target: target, field: field};
+  }
+
+  function cachedPathParts(path:String):Array<String>
+  {
+    var cached = pathPartsCache.get(path);
+    if (cached == null)
+    {
+      cached = path == '' ? [] : path.split('.');
+      pathPartsCache.set(path, cached);
+    }
+    return cached.copy();
   }
 
   function resolveRoot(root:Null<String>):Dynamic

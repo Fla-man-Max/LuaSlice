@@ -1078,6 +1078,7 @@ class Strumline extends FlxSpriteGroup
    */
   public function playNoteSplash(direction:NoteDirection):Void
   {
+    if (Preferences.isLowQualityMax()) return;
     if (!showNotesplash) return;
     if (!noteStyle.isNoteSplashEnabled()) return;
 
@@ -1106,6 +1107,7 @@ class Strumline extends FlxSpriteGroup
    */
   public function playNoteHoldCover(holdNote:SustainTrail):Void
   {
+    if (Preferences.isLowQualityMax()) return;
     if (!showNotesplash) return;
     if (!noteStyle.isHoldNoteCoverEnabled()) return;
 

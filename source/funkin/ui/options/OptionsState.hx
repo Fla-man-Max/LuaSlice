@@ -82,6 +82,7 @@ class OptionsState extends MusicBeatState
 
     var options:OptionsMenu = optionsCodex.addPage(Options, new OptionsMenu());
     var preferences:PreferencesMenu = optionsCodex.addPage(Preferences, new PreferencesMenu());
+    var performance:PerformanceMenu = optionsCodex.addPage(Performance, new PerformanceMenu());
     var controls:ControlsMenu = optionsCodex.addPage(Controls, new ControlsMenu());
     #if FEATURE_LAG_ADJUSTMENT
     var offsets:OffsetMenu = optionsCodex.addPage(Offsets, new OffsetMenu());
@@ -94,13 +95,14 @@ class OptionsState extends MusicBeatState
 
     options.addSaveDataOptionsItem(saveData);
     options.addExitItem();
-    if (hideExitForThisState) options.removeLuaOptionsItem("EXIT");
+    if (hideExitForThisState) options.hideExitItem();
 
     if (options.hasMultipleOptions())
     {
       options.onExit.add(luaPauseExitTargetForThisState == null ? exitToMainMenu : exitFromLuaPause);
       controls.onExit.add(exitControls);
       preferences.onExit.add(optionsCodex.switchPage.bind(Options));
+      performance.onExit.add(optionsCodex.switchPage.bind(Options));
       #if FEATURE_LAG_ADJUSTMENT
       offsets.onExit.add(exitOffsets);
       #end
@@ -271,6 +273,7 @@ class OptionsMenu extends Page<OptionsMenuPageName>
     add(items = new TextMenuList());
 
     createItem("PREFERENCES", function() codex.switchPage(Preferences));
+    createItem("PERFORMANCE", function() codex.switchPage(Performance));
     #if mobile
     if (ControlsHandler.hasExternalInputDevice)
     #end
@@ -389,6 +392,20 @@ class OptionsMenu extends Page<OptionsMenuPageName>
     #end
   }
 
+  public function hideExitItem():Void
+  {
+    #if NO_FEATURE_TOUCH_CONTROLS
+    removeLuaOptionsItem("EXIT");
+    #else
+    if (backButton != null)
+    {
+      remove(backButton, true);
+      backButton.destroy();
+      backButton = null;
+    }
+    #end
+  }
+
   public function addLuaOptionsItem(name:String, callback:Void->Void):TextMenuItem
   {
     return createItem(name, callback);
@@ -479,6 +496,7 @@ enum abstract OptionsMenuPageName(String) to PageName
   var Colors = "colors";
   var Mods = "mods";
   var Preferences = "preferences";
+  var Performance = "performance";
   var Offsets = "offsets";
   var SaveData = "saveData";
 }

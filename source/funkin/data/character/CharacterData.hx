@@ -9,6 +9,7 @@ import funkin.play.character.ScriptedCharacter.ScriptedMultiSparrowCharacter;
 import funkin.play.character.ScriptedCharacter.ScriptedMultiAnimateAtlasCharacter;
 import funkin.play.character.ScriptedCharacter.ScriptedPackerCharacter;
 import funkin.play.character.ScriptedCharacter.ScriptedSparrowCharacter;
+import funkin.modding.PolymodErrorHandler;
 import funkin.play.character.AnimateAtlasCharacter;
 import funkin.play.character.BaseCharacter;
 import funkin.play.character.SparrowCharacter;
@@ -226,7 +227,7 @@ class CharacterDataParser
    * @param charId The character ID to fetch.
    * @return The character instance, or null if the character was not found.
    */
-  public static function fetchCharacter(charId:String, debug:Bool = false):Null<BaseCharacter>
+  public static function fetchCharacter(charId:String, debug:Bool = false, useScript:Bool = true):Null<BaseCharacter>
   {
     if (charId == null || charId == '' || !characterCache.exists(charId))
     {
@@ -238,7 +239,8 @@ class CharacterDataParser
     }
 
     var charData:Null<CharacterData> = characterCache.get(charId);
-    var charScriptClass:Null<String> = characterScriptedClass.get(charId);
+    var charScriptClass:Null<String> = useScript ? characterScriptedClass.get(charId) : null;
+    final scriptErrorSerial:Int = PolymodErrorHandler.scriptErrorSerial;
 
     var char:Null<BaseCharacter> = null;
 
@@ -293,6 +295,12 @@ class CharacterDataParser
 
     // Call onCreate only in the fetchCharacter() function, not at application initialization.
     ScriptEventDispatcher.callEvent(char, new ScriptEvent(CREATE));
+
+    if (charScriptClass != null && PolymodErrorHandler.scriptErrorSerial != scriptErrorSerial)
+    {
+      char.destroy();
+      return fetchCharacter(charId, debug, false);
+    }
 
     return char;
   }

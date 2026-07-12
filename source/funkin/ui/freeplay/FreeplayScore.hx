@@ -2,6 +2,7 @@ package funkin.ui.freeplay;
 
 import flixel.FlxSprite;
 import flixel.group.FlxSpriteGroup.FlxTypedSpriteGroup;
+import funkin.Preferences;
 
 @:nullSafety
 class FreeplayScore extends FlxTypedSpriteGroup<ScoreNum>
@@ -55,6 +56,13 @@ class FreeplayScore extends FlxTypedSpriteGroup<ScoreNum>
 
   public function updateScore(scoreNew:Int)
   {
+    if (Preferences.isLowQualityMax())
+    {
+      visible = false;
+      active = false;
+      return;
+    }
+
     scoreShit = scoreNew;
   }
 }

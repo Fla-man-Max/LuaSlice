@@ -7,187 +7,70 @@ I'm making it as simple, professional, FNF style. (non-AI)
 
 ---
 
-## Lua API Support
+## [0.0.5] - 2026-07-12
 
-### Script Types
+### Added
 
-- `.lua` scripts are isolated. They get private script environments.
-- `.luag` scripts are global. They share globals with other global Lua scripts.
-- Both script types can use the Lua API.
-- `.luag` is best for shared helpers and compatibility modules.
-- Lua support is enabled by default on native C++ builds, including normal `lime build windows` and `lime test windows`.
-- Use `-DNO_LUA` to build without Lua support.
+- Added a `Psych Engine (V1.0.4)` Chart Editor importer for notes, sustains, BPM changes, characters, stages, note types, embedded events, and companion `events.json` files.
+- Added a macOS GitHub Actions workflow that builds both the iOS Simulator app and an unsigned ARM64 IPA for physical iPhones. The Windows batch file starts the build and downloads both artifacts automatically.
+- Added a working Downscroll view to the Chart Editor, including notes, hold notes, events, grid navigation, playhead controls, measure markers, and the note preview.
+- Added `Change Stage`, which replaces the active stage and loads its JSON, scripts, shaders, character positions, and camera data.
+- Added `Change Character`, which replaces the Player, Opponent, or Girlfriend and loads matching `.lua`, `.luag`, `.hx`, and `.hxc` character scripts when the event runs.
+- Added Chart Editor icons for `Change Stage` and `Change Character` events.
+- Added optimized Lua helpers for namespaced sprite, camera, debug, property, save, shader, script, timer, song, and event usage.
+- Added batch property updates and cached property refs so scripts can avoid repeated string-path work in `onUpdate`.
+- Added lazy event helpers like `song.atBeat`, `song.atStep`, `event.on`, and `event.once` so scripts can use event-based logic instead of polling every frame.
+- Added a Performance tab in Options.
+- Added a song shader toggle for stage and character shaders.
+- Added Low Quality modes: `None`, `Minimal`, and `Max`.
+- Added a live Lua API registry with `LuaSlice.api.list`, `LuaSlice.api.find`, `LuaSlice.api.docs`, and `LuaSlice.api.writeDocs`.
+- Added Lua group/layer helpers so scripts can organize sprites and apply shared alpha, layer, property, and tween changes.
+- Added `LuaSlice Lua API.md` as a full Lua API reference beside the engine changelog.
+- Added safer namespaced helpers for window titles, characters, stages, options, tween pause/resume, camera tweens, beat ranges, script information/control, shader checks, and table-configured option pages.
 
-### Script Load Folders
+### Changed
 
-LuaSlice looks for scripts in these places:
+- Updated the main menu and Lua API version to `0.0.5`.
+- Moved FPS, Unlocked/Unlimited FPS, VSync, Debug Display, and Debug Display BG from Preferences into the Performance page.
+- Removed unused and unnecessary development assets and images to reduce the release size.
+- Successful builds now create a timestamped summary and print `Build Log located at: PATH` when they finish.
+- Optimized Chart Editor redraws by reusing render lists, avoiding unchanged HaxeUI updates, and skipping repeated event-icon and sorting work. (Paused around 800~ FPS, while song playing around 630~700.)
+- Updated the optional pause Options example to return to the song through `howExit` without hiding the Options `EXIT` item.
+- Optimized Lua hook dispatch so isolated `.lua` hooks are cached when scripts load, and unused hooks are skipped instead of being searched every call.
+- Updated `mod-example.zip` with examples for save, debug, property refs, event helpers, timers, and namespaced shader usage.
+- Low Quality `Minimal` now trims heavier Freeplay UI, disables song shaders, hides HUD icons, and culls fully off-camera stage sprites during gameplay.
+- Low Quality `Max` now hides the health bar, combo numbers, hold covers, extra Freeplay decorations, and the rare alternate pause route.
+- Updated `mod-example.zip` with clearer optimized API and Performance Options examples.
+- Low Quality `Max` now keeps the DJ background/backcard visible like `Minimal`.
+- Low Quality `Max` now keeps rating popups such as `Sick` and `Good`, while still hiding combo numbers.
+- Updated `mod-example.zip` with a group/layer/API docs example.
+- Updated `mod-example.zip` with an example covering the latest safe API helpers.
 
-- `mods/global.lua`
-- `mods/global.luag`
-- `mods/scripts/global.lua`
-- `mods/scripts/global.luag`
-- `mods/scripts/*.lua`
-- `mods/scripts/*.luag`
-- `mods/scripts/freeplay/*.lua`
-- `mods/scripts/freeplay/*.luag`
-- `mods/scripts/story/*.lua`
-- `mods/scripts/story/*.luag`
-- `mods/scripts/results/*.lua`
-- `mods/scripts/results/*.luag`
-- `mods/scripts/song-SongId.lua`
-- `mods/scripts/SongId.lua`
-- `mods/scripts/stage-StageId.lua`
-- `mods/scripts/StageId.lua`
-- `mods/scripts/stages/StageId.lua`
-- `mods/SongId/script.lua`
-- `mods/SongId/scripts/song.lua`
-- `mods/stages/StageId.lua`
-- `mods/<mod name>/global.lua`
-- `mods/<mod name>/global.luag`
-- `mods/<mod name>/script.lua`
-- `mods/<mod name>/script.luag`
-- `mods/<mod name>/scripts/global.lua`
-- `mods/<mod name>/scripts/global.luag`
-- `mods/<mod name>/scripts/song-SongId.lua`
-- `mods/<mod name>/scripts/SongId.lua`
-- `mods/<mod name>/scripts/stage-StageId.lua`
-- `mods/<mod name>/scripts/stages/StageId.lua`
-- `mods/<mod name>/songs/SongId/script.lua`
-- `mods/<mod name>/data/songs/SongId/script.lua`
-- `mods/<mod name>/stages/StageId.lua`
-- `mods/<mod name>/script/*.lua`
-- `mods/<mod name>/script/*.luag`
-- `mods/<mod name>/scripts/*.lua`
-- `mods/<mod name>/scripts/*.luag`
-- `mods/<mod name>/scripts/freeplay/*.lua`
-- `mods/<mod name>/scripts/freeplay/*.luag`
-- `mods/<mod name>/scripts/story/*.lua`
-- `mods/<mod name>/scripts/story/*.luag`
-- `mods/<mod name>/scripts/results/*.lua`
-- `mods/<mod name>/scripts/results/*.luag`
+### Fixed (From V0.0.5 and Before)
 
-Folder rule:
-
-- `scripts/lua` loads `.lua` only.
-- `scripts/luag` loads `.luag` only.
-- `scripts/menu` loads on the Main Menu only.
-- `scripts/options` loads in the Options menu only.
-- `scripts/pause` loads in PlayState and can configure the pause menu when it opens.
-- `scripts/freeplay` loads in Freeplay.
-- `scripts/story` loads in Story Menu.
-- `scripts/results` loads in Results.
-- F5 reloads PlayState Lua from normal gameplay folders, including modules, gameplay, player/opponent, songs, stages, characters, events, notekinds, shaders, dialogue, levels, pause, lua, and luag folders.
-- Other script folders can load both `.lua` and `.luag`.
-
-### Require Paths
-
-- `mods/?.lua`
-- `mods/?.luag`
-- `mods/?/init.lua`
-- `mods/?/init.luag`
-- `mods/scripts/?.lua`
-- `mods/scripts/?.luag`
-- `mods/scripts/?/init.lua`
-- `mods/scripts/?/init.luag`
-- `mods/<mod name>/?.lua`
-- `mods/<mod name>/?.luag`
-- `mods/<mod name>/?/init.lua`
-- `mods/<mod name>/?/init.luag`
-- `mods/<mod name>/script/?.lua`
-- `mods/<mod name>/script/?.luag`
-- `mods/<mod name>/scripts/?.lua`
-- `mods/<mod name>/scripts/?.luag`
-
-### Hot Reload
-
-- F5 reloads Lua scripts in PlayState.
-- `reloadLuaScripts()` safely requests the same reload from Lua.
-- Reload rescans mod folders, so added or removed `.lua` and `.luag` scripts update.
-- `onReload()` is called after scripts reload.
-- Script-created sprites, text, sounds, tweens, timers, menus, shaders, and objects are cleaned up before reload.
-
-### Simple Helpers
-
-These are small wrappers for common Lua work:
-
-- `addLuaMainMenu(id, position, target, assetPath, animName)` adds a main menu item.
-- `makeLuaMenuSimple(id, items, x, y, spacing)` creates a simple text menu.
-- `makeLuaImageMenuSimple(id, items, x, y, spacing)` creates a simple image menu.
-- `initLuaShader(name)` loads a shader by name and uses that name as the tag.
-- `initLuaShader(name, tag)` loads a shader by name and stores it under a custom tag.
-- `makeLuaShader(tag, path, vertexPath)` creates a shader from a fragment path/source and optional vertex path/source.
-- `setLuaShader(tag, target)` applies a shader to a Lua object or engine path.
-- `setShaderOnSprite(sprite, tag)` applies a shader to a sprite using sprite-first argument order.
-- `setLuaCameraShader(tag, camera)` applies a shader to a camera.
-- `getLuaSave(key, fallback)` and `setLuaSave(key, value)` store Lua data in the game save.
-
-Options still use the normal simple option API: `createLuaOptionPage`, `addLuaCheckbox`, `addLuaNumber`, and `addLuaEnum`.
-
-### Advanced Helpers
-
-- Pause menu items are added/edited with `configureLuaPauseMenu({ items = {...} })`.
-- Pause menu item targets: `resume`, `restartSong`, `changeDifficulty`, `practiceMode`, `exitToMenu`, `options`, `callback`, or a custom `.hx/.hxc` state class.
-- Pause menu targets can use per-item config, such as `options = { hideExit = true, howExit = "BackToSong" }` for the pause-opened Options screen.
-- `setLuaPauseOptions(howExit)` controls where pause-opened Options goes when backing out.
-- Freeplay hooks:
-  - `onFreeplayCreate()`
-  - `onFreeplayUpdate(elapsed)`
-  - `onFreeplayClose()`
-- Story Menu hooks:
-  - `onStoryCreate()`
-  - `onStoryUpdate(elapsed)`
-  - `onStoryClose()`
-- Results hooks:
-  - `onResultsCreate()`
-  - `onResultsUpdate(elapsed)`
-  - `onResultsClose()`
-- These screen hooks load from `scripts/freeplay`, `scripts/story`, and `scripts/results`.
-
-### Lua Error Reports
-
-- Lua errors write reports to `logs/lua`.
-- Error windows show script path, hook/API name, line number when Lua provides it, report path, and the error text.
-- Suggestions show in the popup when LuaSlice knows a likely fix.
-- If there is no useful suggestion, reports say `Suggestions: None`.
-- Per-frame hook errors show a warning when repeated errors could hurt FPS or memory.
-
-### Dev Logger
-
-- `-DFEATURE_LOGGER` enables LuaSlice's live Lua logger.
-- Example: `lime test windows -DFEATURE_LOGGER`.
-- Logger builds still include the Lua API by default unless `-DNO_LUA` is also passed.
-- Logger output includes loaded Lua script lists, Lua errors, and simple variable logs.
-- Logger builds output to `export/logger/<target>/bin`.
-- The normal Windows build keeps `FEATURE_LOGGER` disabled and outputs to `export/release/<target>/bin`.
-
-### Supported API Areas
-
-- Core helpers: `require`, JSON, text files, random numbers, keyboard input, mouse input.
-- PlayState/song: song position, beat, step, section, song id/name, difficulty, variation, stage id, playback rate, scroll speed, health, score, combo, tallies, accuracy, botplay, practice mode, countdown, restart, end song, vocals volume.
-- Events: create, reload, update, step, beat, section, destroy, countdown, song start/end, pause/resume, game over, note hit/miss, ghost miss, hold drop, note incoming, song events, retry, key up/down, focus, state/substate, dialogue.
-- Live event editing: current event access, event fields, event canceling, propagation control.
-- Notes: note payloads, strum time, direction, kind/noteData, raw note object access.
-- Strumlines: player/opponent strumlines, position, alpha, visible, receptor positions, receptor animations, note splashes, scroll speed.
-- Characters: boyfriend, dad, girlfriend, health icons, animations, raw fields and methods.
-- Stage: current stage, stage props, stage characters, camera zoom, raw stage access, PlayState object insertion, z-index refresh.
-- Sprites: static sprites, Sparrow sprites, solid sprites, cameras, position, scale, size, alpha, visibility, angle, color, velocity, acceleration, scroll factor, zIndex, screen centering, kill/revive, animations.
-- Text/HUD: FlxText creation, formatting, HUD camera, score text, health bar, combo popups, icons.
-- Cameras: flash, fade, shake, zoom, alpha, background color, visibility, position, follow point, camera bop, reset, tween zoom, tween position, cancel camera tweens.
-- Audio: tagged sounds, music controls, vocals, volume controls, raw `FlxG.sound` access.
-- Tweens/timers: tagged tweens, X/Y/alpha/angle aliases, canceling, timers, completion hooks.
-- Custom options: `LuaOptionManager` makes Lua options easier, cleaner, and less complex.
-- Custom menus: `LuaMenusManager` can make Lua menus, insert real main menu entries, configure pause menu items, and open base menus or custom `.hx/.hxc` state classes.
-- Shaders: `LuaShaderManager` makes shaders easier to load, apply, and un-apply from Lua.
-- Lua save data: persistent Lua values through `getLuaSave` and `setLuaSave`.
-- Menu hooks: Freeplay, Story Menu, and Results scripts can run create/update/close hooks.
-- Lua logger: `-DFEATURE_LOGGER` enables cleaner live Lua logging for scripts, errors, and simple variable logs.
-- Raw bridge: `getProperty`, `setProperty`, `callMethod`, static access, arrays, stored objects, object creation/destruction.
-
-### Current Limits
-- HTML5 does not use hxlua. | Never.
-- `-DNO_LUA` disables Lua support for builds that need it.
-
----
+- Fixed Android Unlimited FPS appearing inconsistently and only changing LuaSlice's software cap without requesting the display's highest supported refresh mode.
+- Replaced the mobile Save Data Options `EXIT` list item with the normal touch back button.
+- Fixed Nene's A-Bot visualizer being hidden by Low Quality off-screen culling and made Char Select reconnect its music analyzer reliably.
+- Reworked Player and Opponent Preview bounds for regular, pixel, spritesheet, and atlas characters. Idle and active animations are measured once, cached, and added to a stable envelope that preserves animation offsets without rescanning every frame.
+- Fixed `Change Stage` support for Erect stages by fully unloading the old stage, creating a fresh scripted stage, clearing stale shaders, and rerunning the new stage's `.hxc` setup and character positioning.
+- Fixed broken stage or character scripts repeatedly opening error windows. Invalid scripts are skipped and scripted characters/stages fall back to their data implementation when possible.
+- Fixed failed global `.luag` files leaving partially registered hooks active.
+- Fixed stage and character changes not resetting correctly after restarting or reloading Lua with F5.
+- Fixed Nene's A-Bot support objects and visualizer not attaching or initializing when `Change Character` replaces Girlfriend mid-song.
+- Fixed pausing after repeated character changes crashing when pause music could not allocate or load.
+- Fixed Chart Editor Playtest's `Enable Song Scripts` only controlling `.hxc`; it now also controls song-scoped `.luag` scripts without adding `.lua` to the toggle.
+- Fixed saved Chart Editor Downscroll reopening with an upscroll waveform and note overview.
+- Fixed shader cleanup failing Windows compilation because of Haxe null-safety checks.
+- Fixed oversized and unreliable mobile Main Menu touch boxes by matching touches against the rendered menu artwork on Android and iOS.
+- Fixed Android Preferences touch checks after scrolling and stabilized Unlimited FPS visibility by caching the device's maximum supported refresh rate.
+- Fixed Downscroll cursor placement snapping one note-snap level too early.
+- Fixed multi-note mouse dragging reusing the previous drag offset.
+- Fixed Lua shader application still being allowed in PlayState when song shaders are disabled by Performance settings.
+- Fixed Freeplay becoming stuck after Low Quality hid objects before the Freeplay intro finished setting up input.
+- Fixed the Performance tab becoming hard to navigate when Low Quality disabled the Shaders row.
+- Fixed Low Quality `Max` still allowing note splashes.
+- Fixed Low Quality `Max` Freeplay album art, album titles, stars, highscore digits, and clear percent being able to reappear after later Freeplay updates.
+- Fixed Low Quality `Max` Character Select still showing the crowd and nametag while keeping the character/GF visualizer visible.
 
 ## [0.0.4] - 2026-06-27
 
@@ -362,6 +245,3 @@ Options still use the normal simple option API: `createLuaOptionPage`, `addLuaCh
 - Started LuaSlice as a V-Slice `v0.8.5` engine fork.
 - Added the first LuaSlice source/package cleanup work.
 - Added the first Lua API planning notes.
-
-
-
