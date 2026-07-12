@@ -1,6 +1,8 @@
 # LuaSlice
 I added Lua Support to V-slice. I don't know what to add mor-
 
+By the way, The Engine is called: "LuaSlice". Not: "Lua-Slice", "P-slice", "Psych Engine". That's all.
+
 Join mine Discord Server!
 - [LuaSlice Engine](https://discord.gg/sCr5rpPwBn)
 
