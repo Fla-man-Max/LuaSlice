@@ -1,7 +1,7 @@
 ---
 name: Other
 about: What else?
-title: Other Thing Title
+title: 'Other:'
 labels: ''
 assignees: ''
 

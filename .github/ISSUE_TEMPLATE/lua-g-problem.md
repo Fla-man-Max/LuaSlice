@@ -1,21 +1,21 @@
 ---
-name: Lua Error/Bug/Crash
-about: If you got an .lua script error report it here.
-title: ".lua script error/bug/crash"
+name: Lua/g Problem
+about: If you got an .lua/,luag script problem report it here.
+title: 'Lua/g Problem:'
 labels: ''
 assignees: ''
 
 ---
 
-**Describe the Lua Error/Bug/Crash**
-A clear and concise description of what's the Lua Error/Bug/Crash.
+**Describe the Lua/Luag Problem**
+A clear and concise description of what's the Lua/Luag Problem.
 
-**How did you get the script Error/Bug/Crash?**
+**How did you get the script Problem?**
 Steps to reproduce:
 1. Go to '...'
 2. Add '....'
 3. Save as '....'
-4. Open game. BOOM Error/Bug/Crash
+4. Open game. BOOM Problem
 
 **Expected behavior**
 A clear and concise description of what you expected to happen.

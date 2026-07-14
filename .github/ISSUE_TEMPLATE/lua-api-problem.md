@@ -1,27 +1,30 @@
 ---
-name: Name Your Bug.
-about: Create a report to help us improve LuaSlice!
-title: Name Your Bug. DO NOT keep this title. Make a clear name. no but(s)
+name: Lua API Problem
+about: Reporting a Lua API problem
+title: 'API Problem:'
 labels: ''
 assignees: ''
 
 ---
 
-**Describe the bug with words.**
-A clear and concise description of what the bug is. If you can do this. IF not then skip this.
+**Describe the Problem**
+A clear and concise description of what's the Problem.
 
-**To Reproduce**
-Steps to reproduce the behavior:
+**How did you get the Problem?**
+Steps to reproduce:
 1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+2. Add '....'
+3. Save as '....'
+4. Open game. BOOM
 
 **Expected behavior**
 A clear and concise description of what you expected to happen.
 
 **Screenshots**
 If applicable, add screenshots to help explain your problem. PLEASE
+
+**Logs**
+If acceptable, add .log/s from logs/lua/ to help explain your problem. PLEASE!!!
 
 **Desktop (please complete the following information):**
  - OS: [e.g. Windows]

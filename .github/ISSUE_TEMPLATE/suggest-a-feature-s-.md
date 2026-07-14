@@ -1,5 +1,5 @@
 ---
-name: Suggest a Feature(s). (That is good)
+name: Suggest a Feature(s)
 about: Suggest an idea for LuaSlice. not a stupid one.
 title: So? whats the Suggested Feature(s)?
 labels: ''
@@ -16,7 +16,7 @@ A clear and concise description of what you want to happen.
 **Describe alternatives you've considered**
 A clear and concise description of any alternative solutions or features you've considered.
 
-##Why should the owner add your suggestion?##
+**Why should the owner add your suggestion?**
 Write a Clear answer to this question. If none then skip.
 
 **Additional context?**
