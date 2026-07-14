@@ -1,7 +1,7 @@
 ---
 name: Suggest a Feature(s)
 about: Suggest an idea for LuaSlice. not a stupid one.
-title: So? whats the Suggested Feature(s)?
+title: 'Suggested Feature(s):'
 labels: ''
 assignees: ''
 
