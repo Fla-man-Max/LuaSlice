@@ -11,6 +11,7 @@ import haxe.ui.components.Button;
 import haxe.ui.components.Label;
 import haxe.ui.containers.dialogs.Dialog.DialogButton;
 import haxe.ui.containers.dialogs.Dialog.DialogEvent;
+import haxe.ui.containers.dialogs.Dialogs.FileDialogExtensionInfo;
 import haxe.ui.containers.dialogs.Dialogs.SelectedFileInfo;
 import haxe.ui.containers.Box;
 import haxe.ui.core.Component;
@@ -21,6 +22,11 @@ import haxe.ui.core.Component;
 @:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorUploadVocalsDialog extends ChartEditorBaseDialog
 {
+  static final AUDIO_FILTER:Array<FileDialogExtensionInfo> = [
+    {label: 'Ogg Vorbis Audio (.ogg)', extension: 'ogg'},
+    {label: 'MP3 Audio (.mp3)', extension: 'mp3'}
+  ];
+
   var dropHandlers:Array<DialogDropTarget> = [];
 
   var vocalContainer:Component;
@@ -109,7 +115,7 @@ class ChartEditorUploadVocalsDialog extends ChartEditorBaseDialog
 
       vocalsEntry.onClick = function(_event)
       {
-        FileUtil.browseForBinaryFile('Open $charName Vocals', [{label: 'Audio File (.ogg)', extension: 'ogg'}], function(selectedFile)
+        FileUtil.browseForBinaryFile('Open $charName Vocals', AUDIO_FILTER, function(selectedFile)
         {
           if (selectedFile != null && selectedFile.bytes != null)
           {

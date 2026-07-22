@@ -108,9 +108,11 @@ import haxe.ui.components.Label;
 import haxe.ui.components.Slider;
 import haxe.ui.containers.dialogs.CollapsibleDialog;
 import haxe.ui.containers.menus.Menu;
+import haxe.ui.containers.menus.Menu.MenuEvents;
 import haxe.ui.containers.menus.MenuBar;
 import haxe.ui.containers.menus.MenuCheckBox;
 import haxe.ui.containers.menus.MenuItem;
+import haxe.ui.core.Component;
 import haxe.ui.core.Screen;
 import haxe.ui.events.DragEvent;
 import haxe.ui.events.MouseEvent;
@@ -392,7 +394,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
         member.time = scrollPositionInMs / Constants.MS_PER_SEC;
         member.duration = (Conductor.instance.stepLengthMs * 16) / Constants.MS_PER_SEC;
         member.flipY = isViewDownscroll;
-        member.y = isViewDownscroll ? FlxG.height - PLAYBAR_HEIGHT - member.height : GRID_INITIAL_Y_POS;
+        member.y = getWaveformY(member);
       }
     }
 
@@ -659,9 +661,11 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     if (notePreview != null) notePreview.flipY = value;
     for (waveform in audioWaveforms.members)
     {
-      if (waveform != null) waveform.flipY = value;
+      if (waveform == null) continue;
+      waveform.flipY = value;
+      waveform.y = getWaveformY(waveform);
     }
-    // Characters have probably changed too.
+    waveformsDirty = true;
     healthIconsDirty = true;
 
     return isViewDownscroll;
@@ -829,6 +833,8 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
    * A timer used to auto-save the chart after a period of inactivity.
    */
   var autoSaveTimer:Null<FlxTimer> = null;
+  var autoSaveMinutes:Int = 10;
+  var doubleClickDeleteEnabled:Bool = true;
 
   // Scrolling
 
@@ -993,6 +999,8 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
   #if mobile
   var lastClickedNote:SongNoteData = null;
   var lastNoteClickTime:Float = 0;
+  var lastClickedEvent:SongEventData = null;
+  var lastEventClickTime:Float = 0;
   #end
 
   /**
@@ -1063,8 +1071,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
 
     if (value)
     {
-      // Start the auto-save timer.
-      autoSaveTimer = new FlxTimer().start(Constants.AUTOSAVE_TIMER_DELAY_SEC, (_) -> autoSave());
+      restartAutoSaveTimer();
     }
     else
     {
@@ -1080,6 +1087,17 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     saveDataDirty = value;
     applyWindowTitle();
     return saveDataDirty;
+  }
+
+  function restartAutoSaveTimer():Void
+  {
+    if (autoSaveTimer != null)
+    {
+      autoSaveTimer.cancel();
+      autoSaveTimer.destroy();
+    }
+
+    autoSaveTimer = new FlxTimer().start(autoSaveMinutes * Constants.SECS_PER_MIN, (_) -> autoSave());
   }
 
   var shouldShowBackupAvailableDialog(get, set):Bool;
@@ -1926,10 +1944,11 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
    */
   var menubarItemSaveChartAs:MenuItem;
 
-  /**
-   * The `File -> Preferences` menu item.
-   */
-  var menubarItemPreferences:MenuItem;
+  var menubarPreferences:Menu;
+  var menubarPreferenceDoubleClickDelete:MenuCheckBox;
+  var menubarPreferenceDoubleClickDeleteRow:Component;
+  var menubarPreferenceDoubleClickDeleteSeparator:Component;
+  var menubarPreferenceAutoSaveMinutes:NumberStepper;
 
   /**
    * The `File -> Exit` menu item.
@@ -2619,6 +2638,11 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     hitsoundVolumePlayer = save.chartEditorHitsoundVolumePlayer.value;
     hitsoundVolumeOpponent = save.chartEditorHitsoundVolumeOpponent.value;
     shouldPlayWelcomeMusic = save.chartEditorThemeMusic.value;
+    doubleClickDeleteEnabled = save.chartEditorDoubleClickDelete.value;
+    autoSaveMinutes = Std.int(FlxMath.bound(save.chartEditorAutoSaveMinutes.value, 6, 29));
+
+    menubarPreferenceDoubleClickDelete.selected = doubleClickDeleteEnabled;
+    menubarPreferenceAutoSaveMinutes.pos = autoSaveMinutes;
 
     menubarItemVolumeInstrumental.value = Std.int(save.chartEditorInstVolume.value * 100);
     menubarItemVolumeVocalsPlayer.value = Std.int(save.chartEditorPlayerVoiceVolume.value * 100);
@@ -2651,6 +2675,8 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     save.chartEditorHitsoundVolumePlayer.value = hitsoundVolumePlayer;
     save.chartEditorHitsoundVolumeOpponent.value = hitsoundVolumeOpponent;
     save.chartEditorThemeMusic.value = shouldPlayWelcomeMusic;
+    save.chartEditorDoubleClickDelete.value = doubleClickDeleteEnabled;
+    save.chartEditorAutoSaveMinutes.value = autoSaveMinutes;
 
     save.chartEditorInstVolume.value = menubarItemVolumeInstrumental.value / 100.0;
     save.chartEditorPlayerVoiceVolume.value = menubarItemVolumeVocalsPlayer.value / 100.0;
@@ -3302,6 +3328,43 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     };
     menubarItemSaveChartAs.onClick = _ ->
       this.exportAllSongData(false, null, path -> this.success('Saved Chart', 'Chart saved successfully to ${path}.'));
+    #if mobile
+    var menubarPreferencesItem:MenuItem = menubar.findComponent('menubarPreferencesItem', MenuItem);
+    if (menubarPreferencesItem != null)
+    {
+      menubarPreferencesItem.onClick = _ ->
+      {
+        var parentMenu:Menu = cast menubarPreferencesItem.parentComponent;
+        if (parentMenu == null) return;
+        var menuEvents:MenuEvents = @:privateAccess cast parentMenu._internalEvents;
+        @:privateAccess menuEvents.showSubMenu(menubarPreferences, menubarPreferencesItem);
+      };
+    }
+    #else
+    menubarPreferenceDoubleClickDeleteRow.hidden = true;
+    menubarPreferenceDoubleClickDeleteSeparator.hidden = true;
+    #end
+    menubarPreferenceDoubleClickDelete.onChange = _ ->
+    {
+      doubleClickDeleteEnabled = menubarPreferenceDoubleClickDelete.selected;
+      #if mobile
+      lastClickedNote = null;
+      lastClickedEvent = null;
+      #end
+      Save.instance.chartEditorDoubleClickDelete.value = doubleClickDeleteEnabled;
+      Save.instance.flush();
+    };
+    menubarPreferenceAutoSaveMinutes.onChange = _ ->
+    {
+      var newMinutes:Int = Std.int(FlxMath.bound(menubarPreferenceAutoSaveMinutes.pos, 6, 29));
+      menubarPreferenceAutoSaveMinutes.pos = newMinutes;
+      if (autoSaveMinutes == newMinutes) return;
+
+      autoSaveMinutes = newMinutes;
+      Save.instance.chartEditorAutoSaveMinutes.value = autoSaveMinutes;
+      Save.instance.flush();
+      if (saveDataDirty) restartAutoSaveTimer();
+    };
     menubarItemExit.onClick = _ -> quitChartEditor(true);
 
     // Edit
@@ -4097,8 +4160,12 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
         else
         {
           // This event was deleted.
-          // Kill the event sprite and recycle it.
-          eventSprite.kill();
+          if (hoveredEventTooltip == eventSprite)
+          {
+            hoveredEventTooltip.hideTooltip();
+            hoveredEventTooltip = null;
+          }
+          eventSprite.eventData = null;
           renderOrderDirty = true;
         }
       }
@@ -5420,7 +5487,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
             {
               #if mobile
               var isDoubleClick:Bool = false;
-              if (lastClickedNote == highlightedNote.noteData && (haxe.Timer.stamp() - lastNoteClickTime) < 0.5) {
+              if (doubleClickDeleteEnabled && lastClickedNote == highlightedNote.noteData && (haxe.Timer.stamp() - lastNoteClickTime) < 0.5) {
                 isDoubleClick = true;
               }
               lastClickedNote = highlightedNote.noteData;
@@ -5447,6 +5514,31 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
             }
             else if (highlightedEvent != null && highlightedEvent.eventData != null)
             {
+              #if mobile
+              var isDoubleClick:Bool = false;
+              if (doubleClickDeleteEnabled && lastClickedEvent == highlightedEvent.eventData && (haxe.Timer.stamp() - lastEventClickTime) < 0.5)
+              {
+                isDoubleClick = true;
+              }
+              lastClickedEvent = highlightedEvent.eventData;
+              lastEventClickTime = haxe.Timer.stamp();
+
+              if (isDoubleClick)
+              {
+                var eventToDelete:SongEventData = highlightedEvent.eventData;
+                lastClickedEvent = null;
+                lastEventClickTime = 0;
+                dragTargetEvent = null;
+                if (hoveredEventTooltip == highlightedEvent)
+                {
+                  hoveredEventTooltip.hideTooltip();
+                  hoveredEventTooltip = null;
+                }
+                performCommand(new RemoveEventsCommand([eventToDelete]));
+                return;
+              }
+              #end
+
               if (isEventSelected(highlightedEvent.eventData))
               {
                 // Clicked a selected event, start dragging.
@@ -6139,17 +6231,33 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     {
       // Base X position to the right of the grid.
       healthIconBF.x = (gridTiledSprite == null) ? (0) : (gridTiledSprite.x + gridTiledSprite.width);
-      var yOffset = 30 - (healthIconBF.height / 2);
-      healthIconBF.y = (gridTiledSprite == null) ? (0) : (GRID_INITIAL_Y_POS - NOTE_SELECT_BUTTON_HEIGHT + 8) + yOffset;
+      healthIconBF.y = (gridTiledSprite == null) ? (0) : isViewDownscroll ? FlxG.height - PLAYBAR_HEIGHT - 8 - healthIconBF.height : GRID_INITIAL_Y_POS
+        + 6 - healthIconBF.height / 2;
     }
 
     // Visibly center the Dad health icon.
     if (healthIconDad != null)
     {
       healthIconDad.x = (gridTiledSprite == null) ? (0) : (measureTicks.x - healthIconDad.width);
-      var yOffset = 30 - (healthIconDad.height / 2);
-      healthIconDad.y = (gridTiledSprite == null) ? (0) : (GRID_INITIAL_Y_POS - NOTE_SELECT_BUTTON_HEIGHT + 8) + yOffset;
+      healthIconDad.y = (gridTiledSprite == null) ? (0) : isViewDownscroll ? FlxG.height - PLAYBAR_HEIGHT - 8 - healthIconDad.height : GRID_INITIAL_Y_POS
+        + 6 - healthIconDad.height / 2;
     }
+  }
+
+  function getWaveformY(waveform:WaveformSprite):Float
+  {
+    if (!isViewDownscroll) return GRID_INITIAL_Y_POS;
+
+    var icon:Null<HealthIcon> = switch (waveform.iconId)
+    {
+      case BF: healthIconBF;
+      case DAD: healthIconDad;
+      default: null;
+    };
+    if (icon == null) return FlxG.height - PLAYBAR_HEIGHT - waveform.height;
+
+    var iconY:Float = FlxG.height - PLAYBAR_HEIGHT - 8 - icon.height;
+    return iconY + icon.height / 2 + 6 - waveform.height;
   }
 
   /**
@@ -6157,16 +6265,20 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
    */
   function handleWaveforms()
   {
-    if (!waveformsDirty) return;
-
     for (waveform in audioWaveforms.members)
     {
-      waveform.x = switch (waveform.iconId)
+      if (waveform == null) continue;
+
+      var targetX:Float = switch (waveform.iconId)
       {
         case BF: healthIconBF != null ? healthIconBF.x : 840 + FullScreenScaleMode.gameCutoutSize.x * 0.5;
         case DAD: healthIconDad != null ? healthIconDad.x : 360 + FullScreenScaleMode.gameCutoutSize.x * 0.5;
         default: 0;
-      }
+      };
+      var targetY:Float = getWaveformY(waveform);
+      if (waveform.x != targetX) waveform.x = targetX;
+      if (waveform.y != targetY) waveform.y = targetY;
+      if (waveform.flipY != isViewDownscroll) waveform.flipY = isViewDownscroll;
     }
 
     waveformsDirty = false;

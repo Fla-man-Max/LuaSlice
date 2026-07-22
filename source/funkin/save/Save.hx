@@ -194,6 +194,8 @@ class Save implements ConsoleClass
       optionsChartEditor: {
         // Reasonable defaults.
         previousFiles: [],
+        doubleClickDelete: true,
+        autoSaveMinutes: 10,
         noteQuant: 3,
         chartEditorLiveInputStyle: ChartEditorLiveInputStyle.None,
         theme: ChartEditorTheme.Light,
@@ -291,6 +293,12 @@ class Save implements ConsoleClass
 
   @:saveProperty(data.optionsChartEditor.hasBackup, false)
   public var chartEditorHasBackup:SaveProperty<Bool>;
+
+  @:saveProperty(data.optionsChartEditor.doubleClickDelete, true)
+  public var chartEditorDoubleClickDelete:SaveProperty<Bool>;
+
+  @:saveProperty(data.optionsChartEditor.autoSaveMinutes, 10)
+  public var chartEditorAutoSaveMinutes:SaveProperty<Int>;
 
   @:saveProperty(data.optionsChartEditor.noteQuant, 3)
   public var chartEditorNoteQuant:SaveProperty<Int>;
@@ -1454,6 +1462,18 @@ typedef SaveDataChartEditorOptions =
    * @default `[]`
    */
   var ?previousFiles:Array<String>;
+
+  /**
+   * Whether double-clicking a note or event deletes it on mobile.
+   * @default `true`
+   */
+  var ?doubleClickDelete:Bool;
+
+  /**
+   * Number of inactive minutes before the Chart Editor auto-saves.
+   * @default `10`
+   */
+  var ?autoSaveMinutes:Int;
 
   /**
    * Note snapping level in the Chart Editor.

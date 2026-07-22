@@ -21,7 +21,7 @@ class Constants
    * Change this if you're making an engine.
    */
   public static final TITLE:String = "LuaSlice";
-  public static final LUASLICE_VERSION:String = "v0.0.6";
+  public static final LUASLICE_VERSION:String = "v0.0.6.5";
 
   /**
    * The current version number of the game.

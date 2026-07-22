@@ -3,6 +3,25 @@
 Important LuaSlice engine updates are tracked here.
 I'm making it as simple, professional, FNF style. (non-AI!!)
 
+## [0.0.6.5] - 2026-07-22 | Small Bugfix Update
+
+### Added
+
+- Added `.mp3` support when loading Chart Editor instrumentals and vocals, including the Psych Engine import flow.
+- Added a Chart Editor Preferences submenu with an auto-save interval from 6 to 29 minutes.
+- Added an enabled-by-default mobile preference for double-tap deletion of notes and events.
+
+### Changed
+
+- Updated the main menu and Lua API version to `0.0.6.5`.
+
+### Fixed
+
+- Fixed vocal lookup used by the Chart Editor and song loading failing to find valid unsuffixed Player, Opponent, and legacy vocal files when a variation-specific file was unavailable.
+- Fixed Chart Editor Downscroll waveform and Player/Opponent icon alignment, keeping the icons above the playbar and each waveform connected to its matching icon.
+- Fixed deleted Chart Editor events leaving stale sprite and tooltip references that could crash the game.
+- Fixed the Chart Editor Preferences submenu requiring mouse hover on mobile; tapping it now opens the submenu.
+
 ## [0.0.6] - 2026-07-22 | planned from 2026-06-18 :sob:
 
 ### Added
@@ -22,7 +41,6 @@ I'm making it as simple, professional, FNF style. (non-AI!!)
 - Added number, whole-number, on/off, X/Y, and color controls for Shader event properties.
 - Added `Health Drain` with persistent per-second Player/Opponent draining, amount `0` to stop, optional score changes, and a `Die?` toggle (visible when Player is selected) so health can drain without killing the player when disabled.
 - Added target compatibility filtering for `Shader` events. Shaders can declare supported target types, camera targets, and character targets (or restrictions like `//@no-hud`), automatically hiding unsupported choices in the Chart Editor dropdowns.
-- Added double-tap/double-click note deletion for mobile devices in the Chart Editor.
 - Added a mobile-only hot-reload button in the top-right corner of the Main Menu with a cyan tint and 60% resting opacity to trigger a state reload (F5).
 - Added softcoded Lua state and substate opening for scripted and built-in state classes.
 - Added object shader targets to the Haxe and Lua APIs, including `DropShadowShader` support for named stage objects.

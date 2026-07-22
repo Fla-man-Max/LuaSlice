@@ -16,7 +16,17 @@
     <menu-item id="menubarItemSaveChart" text="Save Chart" shortcutText="Ctrl+S" />
     <menu-item id="menubarItemSaveChartAs" text="Save Chart As..." shortcutText="Ctrl+Shift+S" />
     <menu-separator />
-    <menu-item id="menubarItemPreferences" text="Preferences" disabled="true" />
+    <menu id="menubarPreferences" text="Preferences">
+      <vbox id="menubarPreferenceDoubleClickDeleteRow" width="100%">
+        <menu-checkbox width="100%" id="menubarPreferenceDoubleClickDelete" text="Enable Double Click Delete" selected="true" />
+      </vbox>
+      <menu-separator id="menubarPreferenceDoubleClickDeleteSeparator" />
+      <hbox width="100%" style="padding: 5px;" verticalAlign="center">
+        <label text="Auto-save Time" styleName="menuLabel" width="100%" />
+        <number-stepper id="menubarPreferenceAutoSaveMinutes" min="6" max="29" step="1" pos="10" width="72" />
+        <label text="min" styleName="menuLabel" />
+      </hbox>
+    </menu>
     <menu-separator />
     <menu-item id="menubarItemExit" text="Exit" shortcutText="Ctrl+Q" />
   </menu>

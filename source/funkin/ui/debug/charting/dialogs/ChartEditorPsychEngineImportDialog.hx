@@ -277,13 +277,13 @@ class ChartEditorPsychEngineImportDialog extends ChartEditorBaseDialog
     step = Instrumental;
     clearUploads();
     stepTitle.text = 'Instrumental';
-    stepDescription.text = 'Upload Inst.ogg.';
+    stepDescription.text = 'Upload Inst.ogg or Inst.mp3.';
     dialogAdd.hidden = true;
     dialogSkip.hidden = true;
     dialogContinue.hidden = true;
 
-    final entry = new ChartEditorPsychImportEntry('inst', selectPrompt('Inst.ogg'));
-    entry.onClick = _ -> FileUtil.browseForBinaryFile('Select Inst.ogg', audioFilter(), selected -> loadInstrumental(selected));
+    final entry = new ChartEditorPsychImportEntry('inst', selectPrompt('Inst.ogg or Inst.mp3'));
+    entry.onClick = _ -> FileUtil.browseForBinaryFile('Select Instrumental', audioFilter(), selected -> loadInstrumental(selected));
     uploadContainer.addComponent(entry);
     addBinaryDropHandler(entry, loadInstrumentalPath);
   }
@@ -335,7 +335,7 @@ class ChartEditorPsychEngineImportDialog extends ChartEditorBaseDialog
     final entry = new ChartEditorPsychImportEntry(characterId, selectPrompt(title));
     entry.onClick = _ -> FileUtil.browseForBinaryFile('Select $title', audioFilter(), selected ->
     {
-      if (selected?.bytes != null) loadVocalBytes(entry, selected.name ?? '$title.ogg', selected.bytes, characterId, player);
+      if (selected?.bytes != null) loadVocalBytes(entry, selected.name ?? title, selected.bytes, characterId, player);
     });
     uploadContainer.addComponent(entry);
     addBinaryDropHandler(entry, path -> loadVocalPath(entry, path, characterId, player));
@@ -440,7 +440,10 @@ class ChartEditorPsychEngineImportDialog extends ChartEditorBaseDialog
 
   function audioFilter():Array<FileDialogExtensionInfo>
   {
-    return [{label: 'Audio File (.ogg)', extension: 'ogg'}];
+    return [
+      {label: 'Ogg Vorbis Audio (.ogg)', extension: 'ogg'},
+      {label: 'MP3 Audio (.mp3)', extension: 'mp3'}
+    ];
   }
 
   static function selectPrompt(name:String):String

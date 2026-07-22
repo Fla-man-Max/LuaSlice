@@ -33,6 +33,7 @@ import haxe.ui.components.Button;
 import haxe.ui.components.DropDown;
 import haxe.ui.components.Label;
 import haxe.ui.components.NumberStepper;
+import haxe.ui.containers.dialogs.Dialogs.FileDialogExtensionInfo;
 import haxe.ui.components.Slider;
 import haxe.ui.components.TextField;
 import haxe.ui.containers.Box;
@@ -56,6 +57,11 @@ using Lambda;
 @:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorDialogHandler
 {
+  static final AUDIO_FILTER:Array<FileDialogExtensionInfo> = [
+    {label: 'Ogg Vorbis Audio (.ogg)', extension: 'ogg'},
+    {label: 'MP3 Audio (.mp3)', extension: 'mp3'}
+  ];
+
   // Paths to HaxeUI layout files for each dialog.
   static final CHART_EDITOR_DIALOG_UPLOAD_INST_LAYOUT:String = Paths.ui('chart-editor/dialogs/upload-inst');
   static final CHART_EDITOR_DIALOG_SONG_METADATA_LAYOUT:String = Paths.ui('chart-editor/dialogs/song-metadata');
@@ -540,7 +546,7 @@ class ChartEditorDialogHandler
 
     instrumentalBox.onClick = function(_)
     {
-      FileUtil.browseForBinaryFile('Open Instrumental', [{label: 'Audio File (.ogg)', extension: 'ogg'}], function(selectedFile:SelectedFileInfo)
+      FileUtil.browseForBinaryFile('Open Instrumental', AUDIO_FILTER, function(selectedFile:SelectedFileInfo)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
