@@ -246,9 +246,12 @@ class TitleState extends MusicBeatState
   }
 
   var transitioning:Bool = false;
+  var acceptInputDelay:Float = 0;
 
   override function update(elapsed:Float):Void
   {
+    if (acceptInputDelay > 0) acceptInputDelay = Math.max(0, acceptInputDelay - elapsed);
+
     #if (desktop || android)
     // Pressing BACK on the title screen should close the game.
     // This lets you exit without leaving fullscreen mode.
@@ -281,13 +284,7 @@ class TitleState extends MusicBeatState
       if (gamepad.justPressed.START || gamepad.justPressed.ACCEPT) pressedEnter = true;
     }
 
-    // If you spam Enter, we should skip the transition.
-    if (pressedEnter && transitioning && skippedIntro)
-    {
-      moveToMainMenu();
-    }
-
-    if (pressedEnter && !transitioning && skippedIntro)
+    if (pressedEnter && acceptInputDelay <= 0 && !transitioning && skippedIntro)
     {
       if (FlxG.sound.music != null) FlxG.sound.music.onComplete = null;
       if (titleText != null && titleText.animation != null) titleText.animation.play('press');
@@ -548,6 +545,7 @@ class TitleState extends MusicBeatState
 
       if (credGroup != null) remove(credGroup);
       skippedIntro = true;
+      acceptInputDelay = 0.5;
     }
   }
 }

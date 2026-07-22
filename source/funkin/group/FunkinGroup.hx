@@ -1,5 +1,7 @@
 package funkin.group;
 
+// 10+30+20+3+4 by that0neidiotgb
+
 import flixel.util.FlxColor;
 import flixel.FlxG;
 import flixel.FlxSprite;

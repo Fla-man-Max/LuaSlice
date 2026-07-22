@@ -393,7 +393,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
         if (member == null) continue;
         member.time = scrollPositionInMs / Constants.MS_PER_SEC;
         member.duration = (Conductor.instance.stepLengthMs * 16) / Constants.MS_PER_SEC;
-        member.flipY = isViewDownscroll;
+        member.reversed = isViewDownscroll;
         member.y = getWaveformY(member);
       }
     }
@@ -662,7 +662,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     for (waveform in audioWaveforms.members)
     {
       if (waveform == null) continue;
-      waveform.flipY = value;
+      waveform.reversed = value;
       waveform.y = getWaveformY(waveform);
     }
     waveformsDirty = true;
@@ -2678,10 +2678,12 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     save.chartEditorDoubleClickDelete.value = doubleClickDeleteEnabled;
     save.chartEditorAutoSaveMinutes.value = autoSaveMinutes;
 
-    save.chartEditorInstVolume.value = menubarItemVolumeInstrumental.value / 100.0;
-    save.chartEditorPlayerVoiceVolume.value = menubarItemVolumeVocalsPlayer.value / 100.0;
-    save.chartEditorOpponentVoiceVolume.value = menubarItemVolumeVocalsOpponent.value / 100.0;
-    save.chartEditorPlaybackSpeed.value = menubarItemPlaybackSpeed.value / 100.0;
+    if (menubarItemVolumeInstrumental != null) save.chartEditorInstVolume.value = menubarItemVolumeInstrumental.value / 100.0;
+    if (menubarItemVolumeVocalsPlayer != null) save.chartEditorPlayerVoiceVolume.value = menubarItemVolumeVocalsPlayer.value / 100.0;
+    if (menubarItemVolumeVocalsOpponent != null) save.chartEditorOpponentVoiceVolume.value = menubarItemVolumeVocalsOpponent.value / 100.0;
+    if (menubarItemPlaybackSpeed != null) save.chartEditorPlaybackSpeed.value = menubarItemPlaybackSpeed.value / 100.0;
+
+    save.flush();
   }
 
   public function populateOpenRecentMenu():Void
@@ -6256,8 +6258,28 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     };
     if (icon == null) return FlxG.height - PLAYBAR_HEIGHT - waveform.height;
 
-    var iconY:Float = FlxG.height - PLAYBAR_HEIGHT - 8 - icon.height;
-    return iconY + icon.height / 2 + 6 - waveform.height;
+    final iconBottom:Float = FlxG.height - PLAYBAR_HEIGHT - 8;
+    final restingIconHeight:Float = icon.bopTween == null ? icon.height : HealthIcon.HEALTH_ICON_SIZE * icon.size.y;
+    return iconBottom - restingIconHeight / 2 + 6 - waveform.height;
+  }
+
+  function getWaveformX(waveform:WaveformSprite):Float
+  {
+    return switch (waveform.iconId)
+    {
+      case BF: gridTiledSprite != null ? gridTiledSprite.x + gridTiledSprite.width : 840 + FullScreenScaleMode.gameCutoutSize.x * 0.5;
+      case DAD:
+        if (healthIconDad == null)
+        {
+          360 + FullScreenScaleMode.gameCutoutSize.x * 0.5;
+        }
+        else
+        {
+          final restingIconWidth:Float = healthIconDad.bopTween == null ? healthIconDad.width : HealthIcon.HEALTH_ICON_SIZE * healthIconDad.size.x;
+          measureTicks.x - restingIconWidth;
+        }
+      default: 0;
+    };
   }
 
   /**
@@ -6269,16 +6291,11 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     {
       if (waveform == null) continue;
 
-      var targetX:Float = switch (waveform.iconId)
-      {
-        case BF: healthIconBF != null ? healthIconBF.x : 840 + FullScreenScaleMode.gameCutoutSize.x * 0.5;
-        case DAD: healthIconDad != null ? healthIconDad.x : 360 + FullScreenScaleMode.gameCutoutSize.x * 0.5;
-        default: 0;
-      };
+      var targetX:Float = getWaveformX(waveform);
       var targetY:Float = getWaveformY(waveform);
       if (waveform.x != targetX) waveform.x = targetX;
       if (waveform.y != targetY) waveform.y = targetY;
-      if (waveform.flipY != isViewDownscroll) waveform.flipY = isViewDownscroll;
+      if (waveform.reversed != isViewDownscroll) waveform.reversed = isViewDownscroll;
     }
 
     waveformsDirty = false;
@@ -7705,6 +7722,8 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
 
   override function destroy():Void
   {
+    if (menubarItemVolumeInstrumental != null) writePreferences(Save.instance.chartEditorHasBackup.value);
+
     cleanupAutoSave();
 
     if (bgMusicTimer != null)

@@ -3,7 +3,7 @@
 Important LuaSlice engine updates are tracked here.
 I'm making it as simple, professional, FNF style. (non-AI!!)
 
-## [0.0.6.5] - 2026-07-22 | Small Bugfix Update
+## [0.0.6.5] - 2026-07-23 | Small Bugfix Update
 
 ### Added
 
@@ -17,6 +17,9 @@ I'm making it as simple, professional, FNF style. (non-AI!!)
 
 ### Fixed
 
+- Fixed Chart Editor preferences such as theme, metronome, hitsound, audio, playback, Downscroll, and note settings not always being flushed when leaving or reloading the editor.
+- Fixed Downscroll waveforms rendering in the wrong direction and bouncing with animated Player/Opponent icons.
+- Fixed a Title Screen input bug reported by `that0neidiotgb` and `characterfilemissing` where rapid clicks could skip past the logo and GF screen.
 - Fixed vocal lookup used by the Chart Editor and song loading failing to find valid unsuffixed Player, Opponent, and legacy vocal files when a variation-specific file was unavailable.
 - Fixed Chart Editor Downscroll waveform and Player/Opponent icon alignment, keeping the icons above the playbar and each waveform connected to its matching icon.
 - Fixed deleted Chart Editor events leaving stale sprite and tooltip references that could crash the game.

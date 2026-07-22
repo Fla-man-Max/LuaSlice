@@ -33,6 +33,17 @@ class WaveformSprite extends MeshRender
    */
   public var forceUpdate:Bool;
 
+  public var reversed(default, set):Bool = false;
+
+  function set_reversed(value:Bool):Bool
+  {
+    if (reversed == value) return value;
+
+    reversed = value;
+    isWaveformDirty = true;
+    return reversed;
+  }
+
   /**
    * The data to render the waveform with.
    */
@@ -251,12 +262,13 @@ class WaveformSprite extends MeshRender
       var prevVertexBottomIndex:Int = -1;
       for (i in startIndex...endIndex)
       {
-        var pixelPos:Int = Std.int((i - startIndex) * pixelsPerIndex);
+        var pixelPos:Int = getRenderedPixelPosition(Std.int((i - startIndex) * pixelsPerIndex));
 
         var isBeforeClipRect:Bool = (clipRect != null) && ((orientation == HORIZONTAL) ? pixelPos < clipRect.x : pixelPos < clipRect.y);
 
         if (isBeforeClipRect)
         {
+          if (reversed) break;
           continue;
         }
 
@@ -265,6 +277,7 @@ class WaveformSprite extends MeshRender
 
         if (isAfterClipRect)
         {
+          if (reversed) continue;
           break;
         };
 
@@ -338,17 +351,22 @@ class WaveformSprite extends MeshRender
       var waveformLengthPixels:Int = orientation == HORIZONTAL ? Std.int(this.width) : Std.int(this.height);
       for (i in 0...waveformLengthPixels)
       {
-        var pixelPos:Int = i;
+        var pixelPos:Int = getRenderedPixelPosition(i);
 
         var isBeforeClipRect:Bool = (clipRect != null) && ((orientation == HORIZONTAL) ? pixelPos < clipRect.x : pixelPos < clipRect.y);
 
-        if (isBeforeClipRect) continue;
+        if (isBeforeClipRect)
+        {
+          if (reversed) break;
+          continue;
+        }
 
         var isAfterClipRect:Bool = (clipRect != null)
           && ((orientation == HORIZONTAL) ? pixelPos > (clipRect.x + clipRect.width) : pixelPos > (clipRect.y + clipRect.height));
 
         if (isAfterClipRect)
         {
+          if (reversed) continue;
           break;
         };
 
@@ -411,6 +429,14 @@ class WaveformSprite extends MeshRender
         prevVertexBottomIndex = vertexBottomIndex;
       }
     }
+  }
+
+  inline function getRenderedPixelPosition(pixelPos:Int):Int
+  {
+    if (!reversed) return pixelPos;
+
+    final waveformLength:Int = Std.int(orientation == HORIZONTAL ? width : height);
+    return Std.int(Math.max(0, waveformLength - 1 - pixelPos));
   }
 
   function buildClippedVertex(x:Int, y:Int, topLeftVertexIndex:Int, topRightVertexIndex:Int, bottomLeftVertexIndex:Int, bottomRightVertexIndex:Int):Int
