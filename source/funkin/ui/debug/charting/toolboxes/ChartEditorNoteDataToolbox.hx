@@ -124,7 +124,7 @@ class ChartEditorNoteDataToolbox extends ChartEditorBaseToolbox
       var customKind:Null<String> = event?.target?.text;
       chartEditorState.noteKindToPlace = customKind;
 
-      if (toolboxNotesNoteKind.value.id != '~CUSTOM~') return;
+      if (toolboxNotesNoteKind.value?.id != '~CUSTOM~') return;
 
       if (!_initializing && chartEditorState.currentNoteSelection.length > 0)
       {
@@ -154,7 +154,7 @@ class ChartEditorNoteDataToolbox extends ChartEditorBaseToolbox
 
     toolboxNotesCustomKind.value = chartEditorState.noteKindToPlace;
     toolboxNotesNoteKind.value = ChartEditorDropdowns.lookupNoteKind(chartEditorState.noteKindToPlace);
-    if (toolboxNotesNoteKind.value.id == '~CUSTOM~' && chartEditorState.noteKindToPlace != null)
+    if (toolboxNotesNoteKind.value?.id == '~CUSTOM~' && chartEditorState.noteKindToPlace != null)
     {
       showCustom();
     }

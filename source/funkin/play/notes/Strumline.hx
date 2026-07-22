@@ -926,7 +926,7 @@ class Strumline extends FlxSpriteGroup
   {
     this.notes.clear();
 
-    this.noteData = data.copy();
+    this.noteData = data;
     this.nextNoteIndex = 0;
 
     // Sort the notes by strumtime.

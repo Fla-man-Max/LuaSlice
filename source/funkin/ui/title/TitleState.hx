@@ -334,7 +334,6 @@ class TitleState extends MusicBeatState
     }
     #end
 
-    funkin.FunkinMemory.purgeCache();
     FlxG.switchState(() -> new MainMenuState());
   }
 

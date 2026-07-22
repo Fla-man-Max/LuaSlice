@@ -531,6 +531,27 @@ class ChartEditorImportExportHandler
     }
     else
     {
+      #if android
+      final chartsDirectory = Path.join([Sys.getCwd(), 'Charts']);
+      FileUtil.createDirIfNotExists(chartsDirectory);
+      var chartName = state.currentSongId == '' ? 'new-chart' : Path.withoutDirectory(state.currentSongId.replace('\\', '/'));
+      chartName = FileUtil.INVALID_CHARS.replace(chartName, '_');
+      if (chartName == '') chartName = 'new-chart';
+      final mobilePath = Path.join([chartsDirectory, '${chartName}.${Constants.EXT_CHART}']);
+      try
+      {
+        FileUtil.saveFilesAsZIPToPath(zipEntries, mobilePath, Force);
+        state.currentWorkingFilePath = mobilePath;
+        state.saveDataDirty = false;
+        state.applyWindowTitle();
+        if (onSaveCb != null) onSaveCb(mobilePath);
+      }
+      catch (error)
+      {
+        state.failure('Failed to Save Chart', 'Could not save to ${mobilePath}: ${error}');
+        if (onCancelCb != null) onCancelCb();
+      }
+      #else
       // Prompt and save.
       var onSave:Array<String>->Void = function(paths:Array<String>)
       {
@@ -563,6 +584,7 @@ class ChartEditorImportExportHandler
       catch (e)
       {
       }
+      #end
     }
   }
 }

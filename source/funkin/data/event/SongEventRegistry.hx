@@ -171,6 +171,23 @@ class SongEventRegistry
     return result;
   }
 
+  public static function queryNextEvent(events:Array<SongEventData>, currentTime:Float):Null<SongEventData>
+  {
+    while (nextEventIndex < events.length)
+    {
+      final event = events[nextEventIndex];
+      if (event.activated)
+      {
+        nextEventIndex++;
+        continue;
+      }
+      if (event.time > currentTime) return null;
+      nextEventIndex++;
+      return event;
+    }
+    return null;
+  }
+
   /**
    * The currentTime has jumped far ahead or back.
    * If we moved back in time, we need to reset all the events in that space.
@@ -178,12 +195,15 @@ class SongEventRegistry
    */
   public static function handleSkippedEvents(events:Array<SongEventData>, currentTime:Float):Void
   {
-    for (event in events)
+    nextEventIndex = events.length;
+    for (i in 0...events.length)
     {
+      final event = events[i];
       // Deactivate future events.
       if (event.time > currentTime)
       {
         event.activated = false;
+        if (nextEventIndex == events.length) nextEventIndex = i;
       }
 
       // Skip past events.

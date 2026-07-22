@@ -177,6 +177,7 @@ class Save implements ConsoleClass
         // Reasonable defaults.
         screenTimeout: false,
         controlsScheme: FunkinHitboxControlSchemes.Arrows,
+        touchPointers: true,
         noAds: false
       },
       #end
@@ -771,6 +772,7 @@ class Save implements ConsoleClass
       case Gamepad(_):
         getPlayer(playerId).gamepad = controls;
     }
+    Save.system.flush();
   }
 
   public function isCharacterUnlocked(characterId:String):Bool
@@ -837,11 +839,13 @@ class Save implements ConsoleClass
             trace('[SAVE] No legacy save data found.');
             var gameSave:Save = new Save();
             FlxG.save.mergeData(gameSave.data, true);
+            gameSave.data = cast FlxG.save.data;
             return gameSave;
           case Some(legacySaveData):
             trace('[SAVE] Found legacy save data, converting...');
             var gameSave = SaveDataMigrator.migrateFromLegacy(legacySaveData);
             FlxG.save.mergeData(gameSave.data, true);
+            gameSave.data = cast FlxG.save.data;
             return gameSave;
         }
       case ERROR(_): // DEPRECATED: Unused
@@ -854,6 +858,7 @@ class Save implements ConsoleClass
         trace('[SAVE] Loaded existing save data in slot ${slot}.');
         var gameSave = SaveDataMigrator.migrate(FlxG.save.data);
         FlxG.save.mergeData(gameSave.data, true);
+        gameSave.data = cast FlxG.save.data;
         return gameSave;
     }
   }
@@ -1315,6 +1320,8 @@ typedef SaveDataMobileOptions =
    * @default `Arrows`
    */
   var controlsScheme:String;
+
+  var touchPointers:Bool;
 
   /**
    * If bought, the game will not show any ads.

@@ -59,9 +59,13 @@ class NewObjDialog extends Dialog
         {
           var bitToLoad = stageEditorState.addBitmap(bitmap, bitmapName);
           spr.loadGraphic(stageEditorState.bitmaps[bitToLoad]);
+          spr.sourceAssetPath = bitToLoad;
         }
         else
+        {
           spr.loadGraphic(AssetDataHandler.getDefaultGraphic());
+          spr.sourceAssetPath = '#FFFFFF';
+        }
 
         spr.name = field.text;
         spr.screenCenter();

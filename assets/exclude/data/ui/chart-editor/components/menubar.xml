@@ -1,11 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<menubar id="menubar" width="100%" paddingLeft="256">
+<menubar id="menubar" width="100%">
   <style>
     .menu {
     // The width of the individual menu items
     width: 160px;
     }
   </style>
+  <spacer width="100%" />
   <menu text="File">
     <menu-item id="menubarItemNewChart" text="New Chart" shortcutText="Ctrl+N" />
     <menu-separator />
@@ -71,10 +72,8 @@
     <vbox width="100%">
     <menu-checkbox width="100%" id="menubarItemDownscroll" text="Downscroll" />
     </vbox>
-    <menu text="Theme">
-      <menu-option-box id="menuBarItemThemeLight" text="Light" group="menubarItemThemeGroup" />
-      <menu-option-box id="menuBarItemThemeDark" text="Dark" group="menubarItemThemeGroup" />
-    </menu>
+    <menu-option-box id="menuBarItemThemeLight" text="Light Theme" group="menubarItemThemeGroup" />
+    <menu-option-box id="menuBarItemThemeDark" text="Dark Theme" group="menubarItemThemeGroup" />
     <menu-separator />
     <vbox width="100%">
     <menu-checkbox width="100%" id="menubarItemViewIndicators" text="Note Kind Indicator" tooltip="Show an indicator if a note is of a non-default kind." />

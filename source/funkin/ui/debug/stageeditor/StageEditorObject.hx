@@ -2,8 +2,10 @@ package funkin.ui.debug.stageeditor;
 
 #if FEATURE_STAGE_EDITOR
 import funkin.data.animation.AnimationData;
+import funkin.data.stage.StageData.TextureAtlasData;
 import funkin.graphics.FunkinSprite;
 import funkin.graphics.shaders.InverseDotsShader;
+import funkin.util.assets.FlxAnimationUtil;
 
 /**
  * Contains all the Logic needed for Stage Editor. Only for Stage Editor, as in the gameplay StageProps and Boppers will be used.
@@ -23,6 +25,9 @@ class StageEditorObject extends FunkinSprite
   public var startingAnimation:String = "";
 
   public var animDatas:Map<String, AnimationData> = [];
+  public var sourceAssetPath:String = '';
+  public var animType:String = 'sparrow';
+  public var atlasSettings:Null<TextureAtlasData> = null;
 
   override public function new()
   {
@@ -105,28 +110,34 @@ class StageEditorObject extends FunkinSprite
   }
 
   public function addAnim(name:String, prefix:String, offsets:Array<Float>, indices:Array<Int>, frameRate:Int = 24, looped:Bool = true, flipX:Bool = false,
-      flipY:Bool = false)
+      flipY:Bool = false, atlasAnimType:String = 'framelabel')
   {
     offsets ??= [0, 0];
     indices ??= [];
     animDatas.remove(name);
 
-    if (indices.length > 0) animation.addByIndices(name, prefix, indices, "", frameRate, looped, flipX, flipY);
+    final animData:AnimationData = {
+      name: name,
+      prefix: prefix,
+      offsets: offsets,
+      looped: looped,
+      frameRate: frameRate,
+      flipX: flipX,
+      flipY: flipY,
+      frameIndices: indices,
+      animType: atlasAnimType
+    };
+
+    if (animType == 'animateatlas')
+      FlxAnimationUtil.addTextureAtlasAnimation(this, animData);
+    else if (indices.length > 0)
+      animation.addByIndices(name, prefix, indices, "", frameRate, looped, flipX, flipY);
     else
       animation.addByPrefix(name, prefix, frameRate, looped, flipX, flipY);
 
     if (animation.getNameList().contains(name)) // sometimes the animation doesnt add
     {
-      animDatas.set(name, {
-        name: name,
-        prefix: prefix,
-        offsets: offsets,
-        looped: looped,
-        frameRate: frameRate,
-        flipX: flipX,
-        flipY: flipY,
-        frameIndices: indices
-      });
+      animDatas.set(name, animData);
     }
   }
 }

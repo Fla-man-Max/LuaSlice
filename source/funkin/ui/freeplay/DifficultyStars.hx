@@ -3,6 +3,7 @@ package funkin.ui.freeplay;
 import flixel.group.FlxSpriteGroup;
 import funkin.graphics.FunkinSprite;
 import funkin.graphics.shaders.HSVShader;
+import funkin.Preferences;
 
 @:nullSafety
 class DifficultyStars extends FlxSpriteGroup
@@ -31,12 +32,20 @@ class DifficultyStars extends FlxSpriteGroup
     hsvShader = new HSVShader();
 
     flames = new FreeplayFlames(0, 0);
-
-    stars = FunkinSprite.createTextureAtlas(0, 0, "freeplay/freeplayStars");
-    stars.anim.play("diff stars");
+    final lowQualityMax = Preferences.isLowQualityMax();
+    stars = lowQualityMax ? new FunkinSprite().makeSolidColor(1, 1, 0x00000000) : FunkinSprite.createTextureAtlas(0, 0, "freeplay/freeplayStars");
 
     add(flames);
     add(stars);
+
+    if (lowQualityMax)
+    {
+      visible = false;
+      active = false;
+      return;
+    }
+
+    stars.anim.play("diff stars");
 
     stars.shader = hsvShader;
 
@@ -47,6 +56,8 @@ class DifficultyStars extends FlxSpriteGroup
   override function update(elapsed:Float):Void
   {
     super.update(elapsed);
+
+    if (Preferences.isLowQualityMax() || stars.anim.curAnim == null) return;
 
     // "loops" the current animation
     // for clarity, the animation file looks like
@@ -97,6 +108,8 @@ class DifficultyStars extends FlxSpriteGroup
   function set_curDifficulty(value:Int):Int
   {
     curDifficulty = value;
+
+    if (Preferences.isLowQualityMax()) return curDifficulty;
 
     if (curDifficulty == 15)
     {

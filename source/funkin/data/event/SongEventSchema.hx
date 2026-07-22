@@ -102,7 +102,7 @@ abstract SongEventSchema(SongEventSchemaRaw)
 
     switch (field.type)
     {
-      case SongEventFieldType.STRING:
+      case SongEventFieldType.STRING | SongEventFieldType.COLOR:
         return Std.string(value);
       case SongEventFieldType.INTEGER:
         var returnValue:String = Std.string(value);
@@ -264,6 +264,11 @@ enum abstract SongEventFieldType(String) from String to String
    * The STRING type will display as a text field.
    */
   public var STRING = "string";
+
+  /**
+   * The COLOR type will display as a color-wheel dropdown.
+   */
+  public var COLOR = "color";
 
   /**
    * The INTEGER type will display as a text field that only accepts numbers.

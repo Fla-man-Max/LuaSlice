@@ -21,6 +21,17 @@ class ConversationRegistry extends BaseRegistry<Conversation, ConversationData, 
   {
     super('CONVERSATION', 'dialogue/conversations', CONVERSATION_DATA_VERSION_RULE);
   }
+
+  public function createFreshEntry(id:String):Null<Conversation>
+  {
+    if (!hasEntry(id)) return null;
+    #if mobile
+    return createEntry(id);
+    #else
+    final scriptedClass = getScriptedEntryClassName(id);
+    return scriptedClass == null ? createEntry(id) : createScriptedEntry(scriptedClass);
+    #end
+  }
 }
 
 typedef ConversationEntryParams =

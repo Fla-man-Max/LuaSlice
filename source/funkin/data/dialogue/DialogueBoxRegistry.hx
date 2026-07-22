@@ -22,6 +22,17 @@ class DialogueBoxRegistry extends BaseRegistry<DialogueBox, DialogueBoxData, Dia
   {
     super('DIALOGUEBOX', 'dialogue/boxes', DIALOGUEBOX_DATA_VERSION_RULE);
   }
+
+  public function createFreshEntry(id:String):Null<DialogueBox>
+  {
+    if (!hasEntry(id)) return null;
+    #if mobile
+    return createEntry(id);
+    #else
+    final scriptedClass = getScriptedEntryClassName(id);
+    return scriptedClass == null ? createEntry(id) : createScriptedEntry(scriptedClass);
+    #end
+  }
 }
 
 typedef DialogueBoxEntryParams = Dynamic;

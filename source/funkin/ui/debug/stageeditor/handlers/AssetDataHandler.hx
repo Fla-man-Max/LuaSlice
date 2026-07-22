@@ -42,7 +42,8 @@ class AssetDataHandler
       scroll: [obj.scrollFactor.x, obj.scrollFactor.y],
       animations: [for (n in obj.animation.getNameList()) if (obj.animDatas.exists(n)) obj.animDatas[n]],
       startingAnimation: obj.startingAnimation,
-      animType: "sparrow", // automatically making sparrow atlases yeah
+      animType: obj.animType,
+      atlasSettings: obj.atlasSettings,
       angle: obj.angle,
       flipX: obj.flipX,
       flipY: obj.flipY,
@@ -55,6 +56,12 @@ class AssetDataHandler
     {
       outputData.bitmap = obj.pixels.clone();
       outputData.animData = obj.generateXML();
+      return outputData;
+    }
+
+    if (obj.animType == 'animateatlas' && obj.sourceAssetPath != '')
+    {
+      outputData.assetPath = obj.sourceAssetPath;
       return outputData;
     }
 
@@ -85,8 +92,27 @@ class AssetDataHandler
     var animations = data.animations ?? [];
     var startingAnimation = data.startingAnimation ?? "";
     var animData = data.animData ?? "";
+    var loadedAnimateAtlas = false;
 
-    if (data.bitmap != null)
+    object.animType = data.animType ?? 'sparrow';
+    object.atlasSettings = data.atlasSettings;
+    object.sourceAssetPath = assetPath;
+
+    if (object.animType == 'animateatlas' && !assetPath.startsWith('#'))
+    {
+      try
+      {
+        object.loadTextureAtlas(assetPath, state.stageFolder, cast data.atlasSettings);
+        loadedAnimateAtlas = object.frames != null && object.frames.numFrames > 0;
+      }
+      catch (error)
+      {
+        state.notifyChange('Texture Atlas Error', 'Could not load ${assetPath}: ${error}', true);
+      }
+    }
+
+    if (loadedAnimateAtlas) {}
+    else if (data.bitmap != null)
     {
       if (animations.length > 0)
       {
@@ -143,7 +169,7 @@ class AssetDataHandler
     for (anim in animations)
     {
       object.addAnim(anim.name, anim.prefix, anim.offsets ?? [0, 0], anim.frameIndices ?? [], anim.frameRate ?? 24, anim.looped ?? false, anim.flipX ?? false,
-        anim.flipY ?? false);
+        anim.flipY ?? false, anim.animType ?? 'framelabel');
     }
 
     if (object.animation.getNameList().contains(startingAnimation)) object.startingAnimation = startingAnimation;

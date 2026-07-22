@@ -635,6 +635,7 @@ class Project extends HXProject
     // Tell Lime where to look for the game's source code.
     // If for some reason we have multiple source directories, we can add more entries here.
     this.sources.push(SOURCE_DIR);
+    this.sources.push(Path.join([SOURCE_DIR, "lua"]));
 
     // Templates stuff
     this.templatePaths.push(TEMPLATES_DIR);
@@ -856,7 +857,6 @@ class Project extends HXProject
     UNLOCK_EVERYTHING.apply(this, true);
 
     // Should be true only on web builds.
-    // Enabling embedding and preloading is required to preload assets properly.
     EMBED_ASSETS.apply(this, isWeb());
     PRELOAD_ALL.apply(this, !isWeb());
 
@@ -916,11 +916,9 @@ class Project extends HXProject
     FEATURE_NEWGROUNDS_AUTOLOGIN.apply(this, FEATURE_NEWGROUNDS.isEnabled(this) && isWeb());
     FEATURE_NEWGROUNDS_EVENTS.apply(this, FEATURE_NEWGROUNDS.isEnabled(this));
 
-    // Should be true except on web and mobile builds.
-    // Debug editors aren't built to work on web or mobile right now.
     FEATURE_DEBUG_MENU.apply(this, !(isWeb() || isMobile()));
     FEATURE_ANIMATION_EDITOR.apply(this, !(isWeb() || isMobile()));
-    FEATURE_CHART_EDITOR.apply(this, !(isWeb() || isMobile()));
+    FEATURE_CHART_EDITOR.apply(this, !isWeb());
     FEATURE_STAGE_EDITOR.apply(this, !(isWeb() || isMobile()));
     FEATURE_HAXEUI.apply(this, FEATURE_ANIMATION_EDITOR.isEnabled(this)
       || FEATURE_CHART_EDITOR.isEnabled(this)
@@ -945,7 +943,7 @@ class Project extends HXProject
     FEATURE_TOUCH_CONTROLS.apply(this, isMobile());
 
     // Should be true only on mobile release builds. Remember you can add the flag manually for testing.
-    FEATURE_MOBILE_ADVERTISEMENTS.apply(this, (isMobile() && isRelease() && !isIOSSimulator()) && envConfig != null);
+    FEATURE_MOBILE_ADVERTISEMENTS.apply(this, (isMobile() && isRelease() && !isIOSSimulator()) && hasEnvironmentValue('ADMOB_APP_ID'));
     FEATURE_MOBILE_IAP.apply(this, (isMobile() && isRelease() && !isIOSSimulator()) && envConfig != null);
     FEATURE_MOBILE_IAR.apply(this, isMobile() && isRelease() && !isIOSSimulator());
     FEATURE_MOBILE_WEBVIEW.apply(this, isMobile() && FEATURE_NEWGROUNDS.isEnabled(this));
@@ -960,9 +958,7 @@ class Project extends HXProject
     // It's kept off for desktop due to the low ASTC support on desktop GPUs (which seem to be only among Intergrated Graphics).
     FEATURE_COMPRESSED_TEXTURES.apply(this, isMobile() && isRelease() && !isIOSSimulator());
 
-    // Turns the debug display off if you are on a non debug mobile build
-    // Desktop (Native and Web) always has it | Used for mobile debugging purposes
-    FEATURE_DEBUG_DISPLAY.apply(this, !isMobile() || FEATURE_DEBUG_FUNCTIONS.isEnabled(this));
+    FEATURE_DEBUG_DISPLAY.apply(this, true);
 
     // hxlua only supports native C++ targets. HTML5 must use HScript instead.
     FEATURE_LUA_SCRIPTS.apply(this, isCPP() && !isWeb());
@@ -1193,6 +1189,7 @@ class Project extends HXProject
 
   function configureAndroid()
   {
+    config.set('android.activity.android:launchMode', 'singleTask');
     javaPaths.push(Path.join([SOURCE_DIR, 'funkin/external/android/java']));
 
     if (isRelease())
@@ -1543,8 +1540,8 @@ class Project extends HXProject
     addAsset("LICENSE.md", "LICENSE.md", "art", shouldEmbedArt);
     addAsset("changelogs/CHANGELOG - FNF.md", "CHANGELOG - FNF.md", "art", shouldEmbedArt);
     addAsset("changelogs/CHANGELOG - ENGINE.md", "CHANGELOG - ENGINE.md", "art", shouldEmbedArt);
-    addAsset("changelogs/LuaSlice Lua API.md", "LuaSlice Lua API.md", "art", shouldEmbedArt);
     addAsset("example_mods/mod-example.zip", "mods/mod-example.zip", "art", shouldEmbedArt);
+    addAsset("changelogs/LuaSlice Lua API.md", "LuaSlice Lua API.md", "art", shouldEmbedArt);
 
     if (shouldEmbed)
     {
@@ -1707,6 +1704,13 @@ class Project extends HXProject
   public function isWeb():Bool
   {
     return this.platformType == PlatformType.WEB;
+  }
+
+  function hasEnvironmentValue(name:String):Bool
+  {
+    if (envConfig == null) return false;
+    final value = Std.string(envConfig.get(name));
+    return value != null && value != '' && value != 'null';
   }
 
   public function isMobile():Bool

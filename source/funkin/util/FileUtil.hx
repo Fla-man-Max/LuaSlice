@@ -3,6 +3,7 @@ package funkin.util;
 import haxe.zip.Entry;
 import lime.utils.Bytes;
 import lime.ui.FileDialog;
+import lime.ui.FileDialogFilter;
 import openfl.Lib;
 import openfl.net.FileFilter;
 import haxe.io.Path;
@@ -14,6 +15,9 @@ import haxe.ui.containers.dialogs.Dialog.DialogButton;
 import haxe.ui.containers.dialogs.Dialogs;
 import haxe.ui.containers.dialogs.Dialogs.SelectedFileInfo;
 import haxe.ui.containers.dialogs.Dialogs.FileDialogExtensionInfo;
+#end
+#if android
+import funkin.external.android.MobileFileUtil;
 #end
 
 using StringTools;
@@ -103,6 +107,28 @@ class FileUtil
   public static function browseForBinaryFile(dialogTitle:String, ?typeFilter:Array<FileDialogExtensionInfo>, onSelect:(SelectedFileInfo) -> Void,
       ?onCancel:() -> Void)
   {
+    #if android
+    MobileFileUtil.openFileDialog(dialogTitle, function(originalPath:String):Void
+    {
+      final localPath = originalPath.startsWith('content://') ? MobileFileUtil.copyUriToCache(originalPath) : originalPath;
+      if (localPath == null)
+      {
+        if (onCancel != null) onCancel();
+        return;
+      }
+
+      try
+      {
+        final name = originalPath.startsWith('content://') ? MobileFileUtil.getDisplayName(originalPath) : Path.withoutDirectory(originalPath);
+        onSelect({name: name, fullPath: originalPath, bytes: sys.io.File.getBytes(localPath), isBinary: true});
+      }
+      catch (error)
+      {
+        trace('Failed to read selected file: ${error}');
+        if (onCancel != null) onCancel();
+      }
+    }, onCancel);
+    #else
     var onComplete = function(button, selectedFiles)
     {
       if (button == DialogButton.OK && selectedFiles.length > 0)
@@ -122,6 +148,7 @@ class FileUtil
       extensions: typeFilter ?? new Array<FileDialogExtensionInfo>(),
       title: dialogTitle,
     });
+    #end
   }
 
   /**
@@ -136,6 +163,29 @@ class FileUtil
   public static function browseForTextFile(dialogTitle:String, ?typeFilter:Array<FileDialogExtensionInfo>, onSelect:(SelectedFileInfo) -> Void,
       ?onCancel:() -> Void):Void
   {
+    #if android
+    MobileFileUtil.openFileDialog(dialogTitle, function(originalPath:String):Void
+    {
+      final localPath = originalPath.startsWith('content://') ? MobileFileUtil.copyUriToCache(originalPath) : originalPath;
+      if (localPath == null)
+      {
+        if (onCancel != null) onCancel();
+        return;
+      }
+
+      try
+      {
+        final bytes = sys.io.File.getBytes(localPath);
+        final name = originalPath.startsWith('content://') ? MobileFileUtil.getDisplayName(originalPath) : Path.withoutDirectory(originalPath);
+        onSelect({name: name, fullPath: originalPath, text: bytes.toString(), bytes: bytes, isBinary: false});
+      }
+      catch (error)
+      {
+        trace('Failed to read selected file: ${error}');
+        if (onCancel != null) onCancel();
+      }
+    }, onCancel);
+    #else
     var onComplete = function(button, selectedFiles)
     {
       if (button == DialogButton.OK && selectedFiles.length > 0)
@@ -155,6 +205,7 @@ class FileUtil
       extensions: typeFilter ?? new Array<FileDialogExtensionInfo>(),
       title: dialogTitle,
     });
+    #end
   }
   #end
 
@@ -177,7 +228,7 @@ class FileUtil
 
     return false;
     #else
-    FileDialog.openDirectory(Lib.current.stage.window, function(filepaths:Array<String>):Void
+    FileDialog.openDirectory(Lib.current.stage.window, dialogTitle, function(filepaths:Array<String>):Void
     {
       if (filepaths.length > 0)
       {
@@ -218,7 +269,7 @@ class FileUtil
 
     return false;
     #else
-    FileDialog.openFile(Lib.current.stage.window, function(filepaths:Array<String>, filter):Void
+    FileDialog.openFile(Lib.current.stage.window, dialogTitle, function(filepaths:Array<String>, filter):Void
     {
       if (filepaths.length > 0)
       {
@@ -259,8 +310,13 @@ class FileUtil
     }
 
     return false;
+    #elseif android
+    return MobileFileUtil.saveFileDialog(dialogTitle, defaultPath == null ? null : Path.withoutDirectory(defaultPath), function(filepath:String):Void
+    {
+      if (onSelect != null) onSelect(filepath);
+    }, onCancel);
     #else
-    FileDialog.saveFile(Lib.current.stage.window, function(filepath:String, filter):Void
+    FileDialog.saveFile(Lib.current.stage.window, dialogTitle, function(filepath:String, filter):Void
     {
       if (filepath != null)
       {
@@ -299,8 +355,19 @@ class FileUtil
     }
 
     return false;
+    #elseif android
+    return MobileFileUtil.saveFileDialog(dialogTitle, defaultFileName, function(filepath:String):Void
+    {
+      if (data != null && !writeAndroidUri(filepath, data))
+      {
+        if (onCancel != null) onCancel();
+        return;
+      }
+
+      if (onSave != null) onSave(filepath);
+    }, onCancel);
     #else
-    FileDialog.saveFile(Lib.current.stage.window, function(filepath:String, filter):Void
+    FileDialog.saveFile(Lib.current.stage.window, dialogTitle, function(filepath:String, filter):Void
     {
       if (filepath != null)
       {
@@ -629,6 +696,13 @@ class FileUtil
   public static function writeBytesToPath(path:String, data:Bytes, mode:FileWriteMode = Skip):Void
   {
     #if sys
+    #if android
+    if (path.startsWith('content://'))
+    {
+      if (!writeAndroidUri(path, data)) throw 'Could not write to selected Android document.';
+      return;
+    }
+    #end
     if (directoryExists(path))
     {
       throw 'Target path is a directory, not a file: "$path"';
@@ -665,6 +739,28 @@ class FileUtil
     throw 'Direct file writing by path is not supported on this platform.';
     #end
   }
+
+  #if android
+  static function writeAndroidUri(uri:String, data:Bytes):Bool
+  {
+    final directory = Path.join([Sys.getCwd(), '.mobile-file-cache']);
+    createDirIfNotExists(directory);
+    final temporaryPath = Path.join([directory, 'export-${haxe.Timer.stamp()}.tmp']);
+    try
+    {
+      sys.io.File.saveBytes(temporaryPath, data);
+      final result = MobileFileUtil.copyFileToUri(temporaryPath, uri);
+      if (sys.FileSystem.exists(temporaryPath)) sys.FileSystem.deleteFile(temporaryPath);
+      return result;
+    }
+    catch (error)
+    {
+      if (sys.FileSystem.exists(temporaryPath)) sys.FileSystem.deleteFile(temporaryPath);
+      trace('Failed to write Android document: ${error}');
+      return false;
+    }
+  }
+  #end
 
   /**
    * Write string file contents directly to the end of a file at the given path.

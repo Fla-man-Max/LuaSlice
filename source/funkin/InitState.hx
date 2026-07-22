@@ -99,6 +99,11 @@ class InitState extends FlxState
       // Setup window events (like callbacks for onWindowClose) and fullscreen keybind setup
       WindowUtil.initWindowEvents();
 
+      lime.app.Application.current.onExit.add(function(_)
+      {
+        funkin.save.Save.system.flush();
+      });
+
       #if FEATURE_DEBUG_TRACY
       funkin.util.WindowUtil.initTracy();
       #end
@@ -380,7 +385,11 @@ class InitState extends FlxState
     FlxG.switchState(() -> new funkin.ui.debug.WaveformTestState());
     #elseif CHARTING
     // -DCHARTING
+    #if mobile
+    startGameNormally();
+    #else
     FlxG.switchState(() -> new funkin.ui.debug.charting.ChartEditorState());
+    #end
     #elseif STAGING
     // -DSTAGING
     FlxG.switchState(() -> new funkin.ui.debug.stageeditor.StageEditorState());
@@ -437,7 +446,7 @@ class InitState extends FlxState
 
     if (params.chart.shouldLoadChart)
     {
-      #if FEATURE_CHART_EDITOR
+      #if (FEATURE_CHART_EDITOR && !mobile)
       FlxG.switchState(() -> new ChartEditorState({
         fnfcTargetPath: params.chart.chartPath,
       }));

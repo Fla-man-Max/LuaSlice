@@ -1,6 +1,7 @@
 package funkin.play;
 
 import funkin.play.event.SongEvent;
+import funkin.play.event.LuaSliceSongEventRuntime;
 import funkin.play.PauseSubState.PauseMode;
 import flixel.addons.transition.FlxTransitionableState;
 import flixel.addons.transition.Transition;
@@ -35,6 +36,7 @@ import funkin.graphics.FunkinCamera;
 import funkin.graphics.FunkinSprite;
 import funkin.Highscore.Tallies;
 import funkin.input.PreciseInputManager;
+import funkin.luasliceMemory.MemoryCleanup;
 import funkin.modding.events.ScriptEvent;
 import funkin.api.newgrounds.Events;
 import funkin.modding.events.ScriptEventDispatcher;
@@ -60,7 +62,7 @@ import funkin.play.song.Song;
 import funkin.play.stage.Stage;
 import funkin.save.Save;
 #if FEATURE_LUA_SCRIPTS
-import funkin.scripting.LuaScriptManager;
+import LuaScriptManager;
 import sys.FileSystem;
 #end
 #if FEATURE_CHART_EDITOR
@@ -510,6 +512,7 @@ class PlayState extends MusicBeatSubState
    * The `update()` function regularly shifts these out to trigger events.
    */
   var songEvents:Array<SongEventData> = [];
+  public var songEventRuntime:Null<LuaSliceSongEventRuntime> = null;
 
   /**
    * If true, the player is allowed to pause the game.
@@ -539,6 +542,7 @@ class PlayState extends MusicBeatSubState
    * This is used only when a critical error occurs and the game absolutely cannot continue.
    */
   var criticalFailure:Bool = false;
+  var cleanupPerformed:Bool = false;
 
   /**
    * False as long as the countdown has not finished yet.
@@ -554,6 +558,8 @@ class PlayState extends MusicBeatSubState
    * Track any camera tweens we've paused for a Pause substate, so we can unpause them when we return.
    */
   var cameraTweensPausedBySubState:List<FlxTween> = new List<FlxTween>();
+  var eventCamerasPausedBySubState:List<FlxCamera> = new List<FlxCamera>();
+  var songEventsPausedBySubState:Bool = false;
 
   /**
    * Track any sounds we've paused for a Pause substate, so we can unpause them when we return.
@@ -668,6 +674,8 @@ class PlayState extends MusicBeatSubState
   public var comboPopUps:PopUpStuff;
 
   var lowQualityCulledSprites:Array<FlxSprite> = [];
+  var lowQualityCulledActive:Array<Bool> = [];
+  var lowQualityCullTimer:Float = 0;
 
   public var isSongEnd:Bool = false;
 
@@ -835,6 +843,7 @@ class PlayState extends MusicBeatSubState
     camSubtitles = new FunkinCamera('playStateCamSubtitles');
     camPause = new FunkinCamera('playStateCamPause');
     camTransition = new FunkinCamera('playStateCamTransition');
+    songEventRuntime = new LuaSliceSongEventRuntime();
 
     var currentChart = currentSong.getDifficulty(currentDifficulty, currentVariation);
     if (currentChart != null)
@@ -1098,14 +1107,10 @@ class PlayState extends MusicBeatSubState
     if (criticalFailure) return;
 
     super.update(elapsed);
-    updateLowQualityCulling();
+    if (cleanupPerformed) return;
+    updateLowQualityCulling(elapsed);
 
     #if FEATURE_LUA_SCRIPTS
-    if (FlxG.keys.justPressed.F5)
-    {
-      reloadLuaScriptsFromDisk();
-    }
-
     luaScriptManager?.callHook('onUpdate', [elapsed]);
 
     if (pendingLuaReload)
@@ -1128,6 +1133,7 @@ class PlayState extends MusicBeatSubState
       if (!assertChartExists()) return;
 
       prevScrollTargets = [];
+      resetSongEventRuntime(false);
 
       var retryEvent = new SongRetryEvent(currentDifficulty);
 
@@ -1415,6 +1421,7 @@ class PlayState extends MusicBeatSubState
 
     // Moving notes into position is now done by Strumline.update().
     if (!isInCutscene) processNotes(elapsed);
+    songEventRuntime?.updatePersistentEffects(elapsed);
 
     #if mobile
     if ((VideoCutscene.isPlaying() || isInCutscene) && !pauseButton.visible) pauseButton.visible = true;
@@ -1556,40 +1563,26 @@ class PlayState extends MusicBeatSubState
 
   function processSongEvents():Void
   {
-    // Query and activate song events.
-    // TODO: Check that these work appropriately even when songPosition is less than 0, to play events during countdown.
-    if (songEvents.length > 0)
+    while (songEvents.length > 0)
     {
-      var songEventsToActivate:Array<SongEventData> = SongEventRegistry.queryEvents(songEvents, Conductor.instance.songPosition);
+      final event = SongEventRegistry.queryNextEvent(songEvents, Conductor.instance.songPosition);
+      if (event == null) break;
 
-      if (songEventsToActivate.length > 0)
+      var eventAge:Float = Conductor.instance.songPosition - event.time;
+      if (eventAge > 1000)
       {
-        trace('Found ${songEventsToActivate.length} event(s) to activate.');
-        for (event in songEventsToActivate)
+        var eventHandler:Null<SongEvent> = SongEventRegistry.getEvent(event.eventKind);
+        if (eventHandler == null || !eventHandler.processOldEvents)
         {
-          // If an event is trying to play, but it's over 1 second old, skip it.
-          var eventAge:Float = Conductor.instance.songPosition - event.time;
-          if (eventAge > 1000)
-          {
-            // Setting `event.processOldEvents = true` allows events to be handled even if they are old.
-            var eventHandler:Null<SongEvent> = SongEventRegistry.getEvent(event.eventKind);
-            if (eventHandler == null || !eventHandler.processOldEvents)
-            {
-              event.activated = true;
-              continue;
-            }
-          };
-
-          var eventEvent:SongEventScriptEvent = new SongEventScriptEvent(event);
-          dispatchEvent(eventEvent);
-
-          // Calling event.cancelEvent() skips the event. Neat!
-          if (!eventEvent.eventCanceled && !shouldSubstatePause)
-          {
-            SongEventRegistry.handleEvent(event);
-          }
+          event.activated = true;
+          continue;
         }
       }
+
+      var eventEvent:SongEventScriptEvent = new SongEventScriptEvent(event);
+      dispatchEvent(eventEvent);
+
+      if (!eventEvent.eventCanceled && !shouldSubstatePause) SongEventRegistry.handleEvent(event);
     }
   }
 
@@ -1597,6 +1590,7 @@ class PlayState extends MusicBeatSubState
   {
     #if FEATURE_LUA_SCRIPTS
     luaScriptManager?.callEvent(event);
+    songEventRuntime?.callLuaEvent(event);
     #end
 
     // ORDER: Module, Song, Events, Notes, Stage, Conversation, Characters
@@ -1699,6 +1693,18 @@ class PlayState extends MusicBeatSubState
           cameraTweensPausedBySubState.add(tween);
         }
       }
+
+      if (Std.isOfType(subState, PauseSubState))
+      {
+        songEventRuntime?.pauseTimedEffects();
+        songEventsPausedBySubState = true;
+        for (camera in [camGame, camHUD, camCutscene])
+        {
+          if (camera == null || !camera.active) continue;
+          camera.active = false;
+          eventCamerasPausedBySubState.add(camera);
+        }
+      }
     }
 
     super.openSubState(subState);
@@ -1718,6 +1724,15 @@ class PlayState extends MusicBeatSubState
       dispatchEvent(event);
 
       if (event.eventCanceled) return;
+
+      if (songEventsPausedBySubState)
+      {
+        songEventRuntime?.resumeTimedEffects();
+        songEventsPausedBySubState = false;
+        for (camera in eventCamerasPausedBySubState)
+          camera.active = true;
+        eventCamerasPausedBySubState.clear();
+      }
 
       // Pause any sounds that are playing and keep track of them.
       // Vocals are also paused here but are not included as they are handled separately.
@@ -2028,13 +2043,8 @@ class PlayState extends MusicBeatSubState
 
   public override function destroy():Void
   {
-    #if FEATURE_LUA_SCRIPTS
-    luaScriptManager?.callHook('onDestroy', []);
-    luaScriptManager?.destroy();
-    luaScriptManager = null;
-    #end
-
     performCleanup();
+    MemoryCleanup.requestFullCleanup();
 
     #if mobile
     // Syncing allowScreenTimeout with Preferences option.
@@ -2114,6 +2124,7 @@ class PlayState extends MusicBeatSubState
 
   public function reloadLuaScriptsFromDisk():Bool
   {
+    resetSongEventRuntime(false);
     restoreChartStageAndCharacters(false);
     luaScriptManager?.callHook('onDestroy', []);
     luaScriptManager?.destroy();
@@ -2121,8 +2132,16 @@ class PlayState extends MusicBeatSubState
     initLuaScripts();
     luaScriptManager?.callHook('onCreate', []);
     luaScriptManager?.callHook('onReload', []);
+    songEventRuntime?.preloadChartEvents(songEvents);
     trace('[LuaScriptManager] F5 (hot-reload) reloaded ${luaScriptManager == null ? 0 : luaScriptManager.getLoadedScriptCount()} Lua script(s).');
     return luaScriptManager != null;
+  }
+
+  function resetSongEventRuntime(preload:Bool):Void
+  {
+    songEventRuntime?.resetEffects();
+    songEventRuntime = new LuaSliceSongEventRuntime();
+    if (preload) songEventRuntime.preloadChartEvents(songEvents);
   }
 
   public function applyLuaPauseMenuHooks(pauseSubState:PauseSubState):Void
@@ -2298,7 +2317,13 @@ class PlayState extends MusicBeatSubState
     var parts = normalized.split('/');
     var folderName = parts.length > 0 ? parts[parts.length - 1].toLowerCase() : '';
 
-    if (folderName == 'menu' || folderName == 'options' || folderName == 'stages' || folderName == 'characters') return true;
+    if (folderName == 'menu'
+      || folderName == 'options'
+      || folderName == 'freeplay'
+      || folderName == 'story'
+      || folderName == 'results'
+      || folderName == 'stages'
+      || folderName == 'characters') return true;
     if (folderName == 'luag') return extension == '.lua';
     if (folderName == 'lua') return extension == '.luag';
     return false;
@@ -2497,6 +2522,7 @@ class PlayState extends MusicBeatSubState
     final dadId:String = dad?.characterId ?? '';
 
     clearStageVisualEffects(boyfriend, girlfriend, dad);
+    clearLowQualityCulling(false);
 
     for (character in [boyfriend, girlfriend, dad])
     {
@@ -2635,18 +2661,18 @@ class PlayState extends MusicBeatSubState
     }
   }
 
-  function updateLowQualityCulling():Void
+  function updateLowQualityCulling(elapsed:Float):Void
   {
     if (!Preferences.isLowQualityMinimal())
     {
-      for (sprite in lowQualityCulledSprites)
-      {
-        if (sprite != null) sprite.visible = true;
-      }
-      lowQualityCulledSprites = [];
+      clearLowQualityCulling(true);
       return;
     }
     if (currentStage == null || camGame == null) return;
+
+    lowQualityCullTimer -= elapsed;
+    if (lowQualityCullTimer > 0) return;
+    lowQualityCullTimer = Preferences.isLowQualityMax() ? 0.1 : 0.2;
 
     currentStage.forEach(function(sprite:FlxSprite)
     {
@@ -2660,14 +2686,40 @@ class PlayState extends MusicBeatSubState
       if (!isVisibleNow && !wasCulled)
       {
         sprite.visible = false;
+        lowQualityCulledActive.push(sprite.active);
+        sprite.active = false;
         lowQualityCulledSprites.push(sprite);
       }
       else if (isVisibleNow && wasCulled)
       {
+        var index = lowQualityCulledSprites.indexOf(sprite);
         sprite.visible = true;
-        lowQualityCulledSprites.remove(sprite);
+        sprite.active = index >= 0 ? lowQualityCulledActive[index] : true;
+        if (index >= 0)
+        {
+          lowQualityCulledSprites.splice(index, 1);
+          lowQualityCulledActive.splice(index, 1);
+        }
       }
     });
+  }
+
+  function clearLowQualityCulling(restoreSprites:Bool):Void
+  {
+    if (restoreSprites)
+    {
+      for (index in 0...lowQualityCulledSprites.length)
+      {
+        var sprite = lowQualityCulledSprites[index];
+        if (sprite == null || !sprite.exists) continue;
+        sprite.visible = true;
+        sprite.active = lowQualityCulledActive[index] ?? true;
+      }
+    }
+
+    lowQualityCulledSprites = [];
+    lowQualityCulledActive = [];
+    lowQualityCullTimer = 0;
   }
 
   public function changeCharacter(char:Int, id:String, reloadLua:Bool = false):Bool
@@ -3169,6 +3221,7 @@ class PlayState extends MusicBeatSubState
 
     songEvents = builtEventData;
     SongEventRegistry.resetEvents(songEvents);
+    songEventRuntime?.preloadChartEvents(songEvents);
 
     // Reset the notes on each strumline.
     var playerNoteData:Array<SongNoteData> = [];
@@ -3234,15 +3287,32 @@ class PlayState extends MusicBeatSubState
      * Displays a dialogue cutscene with the given ID.
      * This is used by song scripts to display dialogue.
      */
-  public function startConversation(conversationId:String):Void
+  public function startConversation(conversationId:String, ?eventCompleteCallback:Void->Void):Void
   {
+    if (Preferences.isLowQualityMinimal())
+    {
+      isInCutscene = false;
+      if (startingSong && !isInCountdown) startCountdown();
+      if (eventCompleteCallback != null) eventCompleteCallback();
+      return;
+    }
+
     isInCutscene = true;
 
-    currentConversation = ConversationRegistry.instance.fetchEntry(conversationId);
-    if (currentConversation == null) return;
+    currentConversation = ConversationRegistry.instance.createFreshEntry(conversationId);
+    if (currentConversation == null)
+    {
+      isInCutscene = false;
+      if (eventCompleteCallback != null) eventCompleteCallback();
+      return;
+    }
     if (!currentConversation.alive) currentConversation.revive();
 
-    currentConversation.completeCallback = onConversationComplete;
+    currentConversation.completeCallback = function()
+    {
+      onConversationComplete();
+      if (eventCompleteCallback != null) eventCompleteCallback();
+    };
     currentConversation.cameras = [camCutscene];
     currentConversation.zIndex = 1000;
     add(currentConversation);
@@ -3261,9 +3331,11 @@ class PlayState extends MusicBeatSubState
 
     if (currentConversation != null)
     {
-      currentConversation.kill();
-      remove(currentConversation);
+      final completedConversation = currentConversation;
       currentConversation = null;
+      completedConversation.kill();
+      remove(completedConversation);
+      completedConversation.destroy();
     }
 
     if (startingSong && !isInCountdown)
@@ -3334,6 +3406,7 @@ class PlayState extends MusicBeatSubState
     }
 
     FlxG.sound.music.play();
+    MemoryCleanup.requestGameplayOptimization();
 
     #if FEATURE_DISCORD_RPC
     // Updating Discord Rich Presence (with Time Left)
@@ -4379,6 +4452,25 @@ class PlayState extends MusicBeatSubState
      */
   function performCleanup():Void
   {
+    if (cleanupPerformed) return;
+    cleanupPerformed = true;
+
+    var songAudioPaths:Array<String> = [];
+    final chart = currentChart;
+    if (!overrideMusic && chart != null)
+    {
+      songAudioPaths.push(chart.getInstPath(currentInstrumental));
+      songAudioPaths = songAudioPaths.concat(chart.buildVoiceList());
+    }
+
+    songEventRuntime?.destroy();
+    songEventRuntime = null;
+    #if FEATURE_LUA_SCRIPTS
+    luaScriptManager?.callHook('onDestroy', []);
+    luaScriptManager?.destroy();
+    luaScriptManager = null;
+    #end
+
     // If the camera is being tweened, stop it.
     cancelAllCameraTweens();
 
@@ -4389,12 +4481,16 @@ class PlayState extends MusicBeatSubState
     {
       remove(currentConversation);
       currentConversation.kill();
+      currentConversation.destroy();
+      currentConversation = null;
     }
 
     if (currentChart != null)
     {
       // TODO: Uncache the song.
     }
+    songEvents = [];
+    SongEventRegistry.resetEvents(songEvents);
 
     // Prevent vwoosh timer from running outside PlayState (e.g Chart Editor)
     vwooshTimer.cancel();
@@ -4406,18 +4502,25 @@ class PlayState extends MusicBeatSubState
       if (vocals != null)
       {
         vocals.pause();
-        remove(vocals);
+        remove(vocals, true);
       }
     }
     else
     {
-      // Stop and destroy the music.
-      if (FlxG.sound.music != null) FlxG.sound.music.pause();
+      @:nullSafety(Off)
+      if (FlxG.sound.music != null)
+      {
+        FlxG.sound.music.stop();
+        FlxG.sound.music.destroy();
+        FlxG.sound.music = null;
+      }
       if (vocals != null)
       {
+        remove(vocals, true);
         vocals.destroy();
-        remove(vocals);
+        vocals = null;
       }
+      MemoryCleanup.releaseSounds(songAudioPaths);
     }
 
     forEachPausedSound((s) -> s.destroy());
@@ -4430,8 +4533,10 @@ class PlayState extends MusicBeatSubState
     // Remove reference to stage and remove sprites from it to save memory.
     if (currentStage != null)
     {
+      clearLowQualityCulling(false);
       remove(currentStage);
       currentStage.kill();
+      currentStage.destroy();
       currentStage = null;
     }
 

@@ -131,6 +131,7 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
     trace('[DIALOGUE BOX] Loading spritesheet ${_data.assetPath} for ${id}');
 
     var tex:FlxFramesCollection = Paths.getSparrowAtlas(_data.assetPath);
+    if (tex == null) tex = Paths.getSparrowAtlas(_data.assetPath, 'week6');
     if (tex == null)
     {
       trace('Could not load Sparrow sprite: ${_data.assetPath}');
@@ -289,7 +290,9 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
       FlxColor.fromString(_data.text.shadowColor ?? '#00000000'), false);
     textDisplay.borderSize = _data.text.shadowWidth ?? 2;
     // TODO: Add an option to configure this.
-    textDisplay.sounds = [FunkinSound.load(Paths.sound('pixelText'), 0.6)];
+    var typingSound = FunkinSound.load(Paths.sound('pixelText'), 0.6);
+    if (typingSound == null) typingSound = FunkinSound.load(Paths.sound('pixelText', 'week6'), 0.6);
+    textDisplay.sounds = typingSound == null ? null : [typingSound];
 
     textDisplay.completeCallback = onTypingComplete;
 

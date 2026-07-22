@@ -1,11 +1,137 @@
 # LuaSlice Engine Changelog
 
-All important LuaSlice engine changes are tracked here.
-I'm making it as simple, professional, FNF style. (non-AI)
+Important LuaSlice engine updates are tracked here.
+I'm making it as simple, professional, FNF style. (non-AI!!)
 
-# Scroll down to see Versions
+## [0.0.6] - 2026-07-22 | planned from 2026-06-18 :sob:
 
----
+### Added
+
+- Added `Preload Resource` for images, sounds, music, characters, stages, stage objects, shaders, and dialogue data.
+- Added `Play Audio` with actions for playing, resuming, changing volume, pausing, and stopping tagged audio.
+- Added `Shader` support for applying and removing `.hxc` and `.frag` shaders, including multiple properties in one event.
+- Added reusable Overlay and Blackout events with colors, gradients, images, animated atlases, cameras, blend modes, opacity, and fading.
+- Added `Play Dialogue`, HUD Fade, Camera Flash, Camera Shake, and Stage Object Control as normal Chart Editor events.
+- Added `Play Countdown`, which shows and plays the normal countdown without restarting or resyncing the song.
+- Added `Return to Original Speed` to the Scroll Speed event.
+- Added an approximate Overlay and Blackout preview to the Chart Editor event toolbox.
+- Added a layered HUD Fade preview for the strumline, notes, health bar, and icons.
+- Added dedicated Chart Editor icons for Play Audio, Shader, Blackout, Stage Object Control, and HUD Fade.
+- Added `Create Solid Block` below Find Object in the Stage Editor. The block can be edited through Object Properties.
+- Added native mobile Chart Editor support, accessible from `Options > Chart Editor`.
+- Added number, whole-number, on/off, X/Y, and color controls for Shader event properties.
+- Added `Health Drain` with persistent per-second Player/Opponent draining, amount `0` to stop, optional score changes, and a `Die?` toggle (visible when Player is selected) so health can drain without killing the player when disabled.
+- Added target compatibility filtering for `Shader` events. Shaders can declare supported target types, camera targets, and character targets (or restrictions like `//@no-hud`), automatically hiding unsupported choices in the Chart Editor dropdowns.
+- Added double-tap/double-click note deletion for mobile devices in the Chart Editor.
+- Added a mobile-only hot-reload button in the top-right corner of the Main Menu with a cyan tint and 60% resting opacity to trigger a state reload (F5).
+- Added softcoded Lua state and substate opening for scripted and built-in state classes.
+- Added object shader targets to the Haxe and Lua APIs, including `DropShadowShader` support for named stage objects.
+- Added a Difficulty toolbox action for deleting a non-default variation and every difficulty inside it.
+- Added a secret when there's an error with a script.
+- Added Lua helpers for reading GC memory usage and temporarily hiding or restoring the built-in debug display.
+
+### Changed
+
+- Removed the `Pause Gameplay` option from `Play Dialogue` event settings.
+- Reworked gameplay memory cleanup to release finished song audio and CPU-side copies of large textures without destroying live Flixel graphics.
+- Updated the main menu and Lua API version to `0.0.6`.
+- `Play Dialogue` now lists real conversation JSON entries, preloads its music and visuals, and releases them after the dialogue closes.
+- `Shader` now lists both `.hxc` classes and `.frag` files, reads their uniforms, provides BF, Dad, and GF targets, and can ignore fully transparent sprite pixels.
+- File-based events now use explicit paths, starting at `assets/` by default.
+- F5 and song retries now clear event-created audio, shaders, overlays, dialogue, tweens, and timers before restoring the song.
+- Centered the Chart Editor menu buttons.
+- Renamed the HUD Fade `Receptors` label to `Strumline`.
+- Changed HUD Fade duration to use beats so chart timing is easier to control.
+- Replaced hex color text fields in the new Chart Editor events with color-wheel pickers.
+- Changed event blend modes from text fields to a list of supported modes.
+- Moved the layered HUD Fade preview assets into the shared Chart Editor HUD folder.
+- Score text now fades with the health bar instead of using a separate HUD Fade target.
+- Split Play Audio into an audio folder path and audio filename while keeping tagged controls.
+- Reordered Chart Editor events so the most commonly used camera, speed, resource, shader, character, and stage events appear first.
+- Shift-clicking a placed event now selects it and opens its Event Data toolbox, including events missing from a stale dropdown.
+- Shader property controls now use one clean slider with an integer value display. Values move by 1 normally and by 5 while Shift is held.
+- Debug builds now identify both LuaSlice and FNF before the branch, commit, modified state, and prototype label.
+- Overlay image events now preload their PNG and animated XML/TXT atlas data before gameplay.
+- Reworked Psych Engine imports into a step-by-step flow for up to eight difficulty charts, optional events, and required instrumental, Player Vocals, and Opponent Vocals files. Android uses its native document picker for every step.
+- Startup now keeps only commonly reused textures and sounds permanently cached instead of loading nearly every UI texture into memory.
+- Reworked state caching so song assets survive loading while unused assets are retired before Flixel's state cleanup and released as soon as the old state is destroyed.
+- Low Quality Minimal now avoids loading hidden Freeplay capsule details and disables off-screen stage sprites at a low update rate.
+- Low Quality Max now skips heavy album, difficulty-star, flame, score-number, note-splash, hold-cover, and combo-number assets instead of loading and hiding them.
+- Optimized Philly Streets and Philly Streets Erect by skipping disabled rain-shader updates, sharing mist calculations, sorting added mist layers once, and reducing Erect mist layers under Low Quality.
+- On mobile, the Chart Editor now opens only from its Options entry.
+- Low Quality Minimal and Max now skip video and dialogue cutscenes, while None keeps the normal cutscene flow.
+- Reorganized the Lua implementation into focused files under `source/lua` so its APIs, menus, options, shaders, logging, and script discovery are easier to maintain.
+- Replaced the mobile Upgrade menu item with the Merch item.
+- Updated the LuaSlice logo and the platform build icons.
+- Added a Discord item after Options on the Main Menu using the supplied Discord atlas and invite link.
+- Locked `Remove Existing Shaders` on for this release because I can't get it to work, I'm sorry! 
+
+### Fixed
+
+- Fixed the Discord Main Menu item leaving menu navigation disabled after opening the invite link.
+- Fixed F5 rebuilding the hidden PlayState while Game Over owned the player character, which shifted the death sprite and left a duplicate idle frame behind it.
+- Fixed the volume-key plugin crashing during reload frames where player controls were temporarily unavailable.
+- Fixed F5 triggering both the global asset reload and Lua hot reload in PlayState, which destroyed the song audio and caused a null-reference crash in the same frame.
+- Fixed Shader event slider persistence and real-time number display updates so values remain correct across editor sessions.
+- Fixed Shader slider dragging rebuilding note displays and HaxeUI layouts unnecessarily.
+- Added null safety across `SoundGroup` operations to prevent crashes while switching states or cleaning up PlayState audio.
+- Fixed shared Animate Atlas textures being destroyed while another live character or stage still referenced them, preventing compatible mod characters from crashing during rendering.
+- Reworked the Psych Engine 1.0.4 importer around its real `psych_v1` format, including player/opponent lanes, GF camera sections, BPM sections, animation targets, note types, embedded events, and companion `events.json` files.
+- Fixed Psych charts with an empty stage field by applying Psych Engine's normal song-to-stage fallback.
+- Added a clear import error when `events.json` is selected instead of a Psych song chart.
+- Fixed selecting HUD Fade crashing when stale event fields were still stored by the Chart Editor toolbox.
+- Fixed HUD Fade opacity removing its preview image. Each HUD target now previews independently while the background remains visible.
+- Fixed HUD Fade Sine and Quad easing previews not updating after Linear.
+- Fixed F5 or asset reload crashing while a Play Dialogue conversation was active.
+- Fixed Play Dialogue not opening during Chart Editor playtests.
+- Fixed Play Dialogue, conversation music, and tagged audio volume fades crashing because `FlxSound.volume` could not be reflected by `FlxTween`.
+- Fixed Overlay preview opacity hiding the preview and color-picker changes not refreshing it correctly.
+- Fixed Overlay color-wheel values not reaching the in-game solid and gradient colors.
+- Fixed HUD Fade target opacity changes not refreshing the layered preview.
+- Fixed Blackout leaving uncovered screen space when used on a zoomed camera and removed its unnecessary Chart Editor preview.
+- Fixed Chart Editor color pickers updating the preview without saving the new color into the event data.
+- Fixed Play Dialogue portraits, dialogue boxes, and typing sounds failing when a Week 6 conversation runs in another song.
+- Fixed Play Dialogue music not resolving from the Week 6 asset library.
+- Fixed gradient overlays rendering as a few large bands instead of a smooth gradient.
+- Fixed shader cleanup skipping some characters, sprites, or cameras after restarting a song or reloading with F5.
+- Fixed normal Android release builds enabling advertisements when `.env` only contained signing information.
+- Fixed existing Chart Editor event icons not refreshing after their event type changed.
+- Prevented missing event resources, Lua files, audio tags, shaders, targets, dialogue, stage objects, and animations from crashing gameplay.
+- Prevented repeated tagged audio, shader, overlay, tween, and timer resources from leaking after retries or leaving PlayState.
+- Fixed Blackout's `Keep HUD Visible` option so the blackout renders on the game camera.
+- Fixed shader fade-out starting from the wrong value when no fade-in ran first.
+- Fixed Stage Editor local image loading by decoding the selected image directly instead of copying an incomplete preview frame.
+- Added Stage Editor support for loading and preserving Animate Atlas spritemaps and their atlas settings.
+- Fixed missing stage images hard-crashing the Stage Editor; affected objects now use a visible placeholder and report the missing path.
+- Fixed Psych Engine imports so the song chart is selected first and the optional `events.json` file is selected second. Difficulty-suffixed and unsuffixed chart names are supported.
+- Fixed Android Chart Editor chart, instrumental, vocals, metadata, and import boxes not opening the document picker. Imported, opened, and new `.fnfc` charts now save under the top-level `Charts` folder beside `mods`.
+- Fixed mobile Chart Editor theme selection not applying reliably by placing Light and Dark directly in the touch-accessible View menu.
+- Fixed HUD Fade Player/Opponent targeting for icons, strumlines, note heads, sustain trails, hold covers, and incoming notes.
+- Fixed HUD Fade side previews reusing a stale cached frame after changing target or opacity.
+- Fixed overlapping Both, Player, and Opponent HUD fades fighting over the same stored target.
+- Fixed Shift-clicking a placed event crashing when its event type was not already present in the Event Data dropdown.
+- Fixed Shader event tooltips listing controls that do not apply to the selected target or property type.
+- Fixed disabling `Ignore Transparent Pixels` still preserving fully transparent pixels instead of processing the complete sprite texture.
+- Fixed HUD Fade values remaining on note heads, sustains, hold covers, strumlines, icons, or the health bar after retrying or pressing F5.
+- Fixed Health Drain applying only one health change instead of remaining active until another Health Drain event changes or stops it.
+- Fixed helper-based fragment shaders such as `rain.frag` failing to compile through the normal runtime shader path.
+- Fixed simultaneous Shader properties cancelling each other's tweens when they shared one shader tag.
+- Fixed song-cache cleanup trying to unload a missing `songs` asset library.
+- Fixed Low Quality changing the saved Shaders option instead of temporarily overriding it during gameplay.
+- Fixed Low Quality Max disabling the hidden Freeplay difficulty controls and preventing difficulty changes.
+- Fixed stage changes retaining references to culled sprites from the destroyed stage.
+- Restored the original A-Bot visualizer after automatic audio-source switching stopped VIZ bars from working.
+- Restored the original cached instrumental and vocal loading path so completed songs reliably leave gameplay again.
+- Reverted the recent Character Select icon tint changes to the original behavior.
+- Stabilized Character Select analyzer reconnects and limited its updates to 30 Hz without changing its visible behavior.
+- Fixed failed or interrupted week cutscenes leaving video, dialogue, conductor, music, or black-screen objects alive.
+- Fixed cache retirement destroying source atlases still used by combined Chart Editor note and event-icon frame collections.
+- Fixed repeated Freeplay, Story Mode, and Options visits retaining a Freeplay rank camera, faded Story backgrounds, and the previous Options state.
+- Fixed Philly Streets rain filters replacing unrelated camera filters, remaining registered after the stage closed, or returning when song shaders were disabled.
+- Fixed Shader events leaving native character, object, stage, and camera shaders active. Removed shaders are restored safely after retry, reset, or F5.
+- Fixed LuaSlice camera shaders replacing unrelated existing camera filters instead of preserving and restoring them.
+- Fixed variation headers not becoming active before `Remove Variation`, which incorrectly tried to remove the Default variation.
+- Fixed delayed memory cleanup destroying Freeplay album artwork that was still in use.
 
 ## [0.0.5] - 2026-07-12
 

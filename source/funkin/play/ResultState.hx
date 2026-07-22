@@ -30,7 +30,7 @@ import funkin.play.scoring.Scoring;
 import funkin.play.song.Song;
 import funkin.save.Save.SaveScoreData;
 #if FEATURE_LUA_SCRIPTS
-import funkin.scripting.LuaScriptManager;
+import LuaScriptManager;
 #end
 import funkin.ui.freeplay.charselect.PlayableCharacter;
 import funkin.ui.freeplay.FreeplayState;
@@ -52,7 +52,6 @@ import funkin.mobile.util.AdMobUtil;
 import funkin.mobile.util.InAppReviewUtil;
 #end
 #end
-import funkin.util.DeviceUtil;
 
 /**
  * The state for the results screen after a song or week is finished.
@@ -1050,17 +1049,6 @@ class ResultState extends MusicBeatSubState
           }
           else
           {
-            FlxG.signals.preStateSwitch.addOnce(function()
-            {
-              #if ios
-              trace(DeviceUtil.iPhoneNumber);
-              if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
-              else
-                funkin.FunkinMemory.purgeCache();
-              #else
-              funkin.FunkinMemory.purgeCache(true);
-              #end
-            });
             FlxG.switchState(() -> targetState);
           }
         }
@@ -1081,17 +1069,6 @@ class ResultState extends MusicBeatSubState
       }
       else
       {
-        FlxG.signals.preStateSwitch.addOnce(function()
-        {
-          #if ios
-          trace(DeviceUtil.iPhoneNumber);
-          if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
-          else
-            funkin.FunkinMemory.purgeCache();
-          #else
-          funkin.FunkinMemory.purgeCache(true);
-          #end
-        });
         FlxG.switchState(() -> targetState);
       }
     }

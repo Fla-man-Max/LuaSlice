@@ -109,7 +109,7 @@ class SoundGroup extends FlxTypedGroup<FunkinSound>
   {
     forEachAlive(function(sound:FunkinSound)
     {
-      sound.pause();
+      if (sound != null) sound.pause();
     });
   }
 
@@ -120,6 +120,7 @@ class SoundGroup extends FlxTypedGroup<FunkinSound>
   {
     forEachAlive(function(sound:FunkinSound)
     {
+      if (sound == null) return;
       if (sound.length < startTime)
       {
         // trace('Queuing sound (${sound.toString()} past its length! Skipping...)');
@@ -136,7 +137,7 @@ class SoundGroup extends FlxTypedGroup<FunkinSound>
   {
     forEachAlive(function(sound:FunkinSound)
     {
-      sound.resume();
+      if (sound != null) sound.resume();
     });
   }
 
@@ -148,7 +149,7 @@ class SoundGroup extends FlxTypedGroup<FunkinSound>
   {
     forEachAlive(function(sound:FunkinSound)
     {
-      sound.fadeIn(duration, from, to, onComplete);
+      if (sound != null) sound.fadeIn(duration, from, to, onComplete);
     });
   }
 
@@ -160,7 +161,7 @@ class SoundGroup extends FlxTypedGroup<FunkinSound>
   {
     forEachAlive(function(sound:FunkinSound)
     {
-      sound.fadeOut(duration, to, onComplete);
+      if (sound != null) sound.fadeOut(duration, to, onComplete);
     });
   }
 
@@ -173,7 +174,7 @@ class SoundGroup extends FlxTypedGroup<FunkinSound>
     {
       forEachAlive(function(sound:FunkinSound)
       {
-        sound.stop();
+        if (sound != null) sound.stop();
       });
     }
   }
@@ -210,8 +211,7 @@ class SoundGroup extends FlxTypedGroup<FunkinSound>
   {
     forEachAlive(function(snd:FunkinSound)
     {
-      // account for different offsets per sound?
-      snd.time = time;
+      if (snd != null) snd.time = time;
     });
 
     return time;
@@ -246,7 +246,7 @@ class SoundGroup extends FlxTypedGroup<FunkinSound>
   {
     forEachAlive(function(snd:FunkinSound)
     {
-      snd.volume = volume;
+      if (snd != null) snd.volume = volume;
     });
 
     return volume;
@@ -263,7 +263,7 @@ class SoundGroup extends FlxTypedGroup<FunkinSound>
   {
     forEachAlive(function(snd:FunkinSound)
     {
-      snd.muted = muted;
+      if (snd != null) snd.muted = muted;
     });
 
     return muted;
@@ -284,7 +284,7 @@ class SoundGroup extends FlxTypedGroup<FunkinSound>
     trace('Setting audio pitch to ' + val);
     forEachAlive(function(snd:FunkinSound)
     {
-      snd.pitch = val;
+      if (snd != null) snd.pitch = val;
     });
     #end
     return val;

@@ -23,6 +23,8 @@ class ScriptedMultiSparrowFreeplayDJ extends MultiSparrowFreeplayDJ implements p
  */
 class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
 {
+  var usedAtlases:Array<FlxAtlasFrames> = [];
+
   public function new(x:Float, y:Float, characterId:String)
   {
     super(x, y, characterId);
@@ -53,6 +55,7 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
     else
     {
       texture.parent.destroyOnNoUse = false;
+      usedAtlases.push(texture);
     }
 
     for (asset in assetList)
@@ -64,11 +67,22 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
         log('Concatenating multi-sparrow atlas: ${asset}');
         subTexture.parent.destroyOnNoUse = false;
         FunkinMemory.cacheTexture(Paths.image(asset));
+        if (!usedAtlases.contains(subTexture)) usedAtlases.push(subTexture);
       }
       texture.addAtlas(subTexture);
     }
 
     this.frames = texture;
+  }
+
+  public override function destroy():Void
+  {
+    for (atlas in usedAtlases)
+    {
+      if (atlas.parent != null) atlas.parent.destroyOnNoUse = true;
+    }
+    usedAtlases.resize(0);
+    super.destroy();
   }
 
   public function loadAnimations():Void

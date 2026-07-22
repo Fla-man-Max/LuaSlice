@@ -1,4 +1,4 @@
-package funkin.scripting;
+package;
 
 #if (FEATURE_LOGGER && cpp && windows)
 @:cppInclude("windows.h")

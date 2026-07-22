@@ -14,6 +14,7 @@
         </hbox>
         <hbox>
             <button allowFocus="false" id="difficultyToolboxRemoveDifficulty" text="Remove Difficulty" tooltip="Delete the selected difficulty." />
+            <button allowFocus="false" id="difficultyToolboxRemoveVariation" text="Remove Variation" tooltip="Delete the selected variation and every difficulty inside it." />
         </hbox>
         <rule />
         <hbox>

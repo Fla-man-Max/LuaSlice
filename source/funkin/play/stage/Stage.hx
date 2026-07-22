@@ -17,6 +17,7 @@ import funkin.play.character.BaseCharacter;
 import funkin.data.IRegistryEntry;
 import funkin.data.stage.StageData;
 import funkin.data.stage.StageData.StageDataCharacter;
+import funkin.data.stage.StageData.StageDataProp;
 import funkin.data.stage.StageRegistry;
 import funkin.util.SortUtil;
 import funkin.util.assets.FlxAnimationUtil;
@@ -169,6 +170,8 @@ class Stage extends FlxSpriteGroup implements IPlayStateScriptedClass implements
 
     for (dataProp in _data.props)
     {
+      if (!shouldBuildStageProp(dataProp)) continue;
+
       log('Placing prop ${dataProp.name} (${dataProp.assetPath})');
 
       var isSolidColor = dataProp.assetPath.startsWith('#');
@@ -664,9 +667,15 @@ class Stage extends FlxSpriteGroup implements IPlayStateScriptedClass implements
     var result:Array<String> = [];
     for (dataProp in _data.props)
     {
+      if (!shouldBuildStageProp(dataProp)) continue;
       result.push(Paths.image(dataProp.assetPath));
     }
     return result;
+  }
+
+  public function shouldBuildStageProp(dataProp:StageDataProp):Bool
+  {
+    return true;
   }
 
   /**

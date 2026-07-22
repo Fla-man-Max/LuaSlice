@@ -98,6 +98,7 @@ class StageEditorState extends UIState
   var menubarItemDelete:MenuItem; // delete
   var menubarItemNewObj:MenuItem; // new
   var menubarItemFindObj:MenuItem; // find
+  var menubarItemCreateSolidBlock:MenuItem;
   var menubarItemSelectNone:MenuItem; // access none
   var menubarItemMoveStep:Menu; // move step submenu
 
@@ -1054,6 +1055,7 @@ class StageEditorState extends UIState
     menubarItemDelete.onClick = function(_) onMenuItemClick("delete object");
     menubarItemNewObj.onClick = function(_) onMenuItemClick("new object");
     menubarItemFindObj.onClick = function(_) onMenuItemClick("find object");
+    menubarItemCreateSolidBlock.onClick = function(_) onMenuItemClick("create solid block");
     menubarItemSelectNone.onClick = function(_) onMenuItemClick("select none");
     menubarButtonText.onClick = function(_) onMenuItemClick("test stage");
     menubarItemUserGuide.onClick = function(_) onMenuItemClick("user guide");
@@ -1403,6 +1405,33 @@ class StageEditorState extends UIState
         findObjDialog.hideDialog(DialogButton.CANCEL);
         findObjDialog = new FindObjDialog(this, selectedSprite == null ? "" : selectedSprite.name);
         findObjDialog.showDialog(false);
+
+      case "create solid block":
+        findObjDialog.hideDialog(DialogButton.CANCEL);
+        var blockName = 'SolidBlock';
+        var blockIndex = 1;
+        final objectNames = spriteArray.map(function(object) return object.name);
+        while (objectNames.contains(blockName))
+        {
+          blockIndex++;
+          blockName = 'SolidBlock${blockIndex}';
+        }
+
+        final block = new StageEditorObject();
+        block.name = blockName;
+        block.sourceAssetPath = '#FFFFFF';
+        block.makeSolidColor(100, 100, flixel.util.FlxColor.WHITE);
+        block.screenCenter();
+        block.zIndex = spriteArray.length == 0 ? 0 : spriteArray[spriteArray.length - 1].zIndex + 1;
+        selectedSprite = block;
+        add(block);
+        updateArray();
+        this.createAndPushAction(OBJECT_CREATED);
+        saved = false;
+        menubarItemWindowObjectProps.selected = true;
+        toggleDialog(StageEditorDialogType.OBJECT_PROPERTIES, true);
+        updateDialog(StageEditorDialogType.OBJECT_PROPERTIES);
+        notifyChange('Solid Block Created', 'Use Object Properties to change its tint, size, and opacity.');
 
       case "select none":
         if (menubarItemSelectNone.disabled == false)

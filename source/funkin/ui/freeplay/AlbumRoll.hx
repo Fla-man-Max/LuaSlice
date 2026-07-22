@@ -48,14 +48,24 @@ class AlbumRoll extends FlxSpriteGroup
   {
     super();
 
-    newAlbumArt = FunkinSprite.createTextureAtlas((FlxG.width + -360) - FullScreenScaleMode.gameNotchSize.x, 220, "freeplay/albumRoll/freeplayAlbum");
-    newAlbumArt.visible = false;
-
-    difficultyStars = new DifficultyStars((FlxG.width - 330) - FullScreenScaleMode.gameNotchSize.x, 209);
-    difficultyStars.visible = false;
+    final lowQualityMax = Preferences.isLowQualityMax();
+    newAlbumArt = lowQualityMax ? new FunkinSprite().makeSolidColor(1, 1, 0x00000000) : FunkinSprite.createTextureAtlas((FlxG.width + -360)
+      - FullScreenScaleMode.gameNotchSize.x, 220, "freeplay/albumRoll/freeplayAlbum");
+    difficultyStars = new DifficultyStars(lowQualityMax ? 0 : (FlxG.width - 330) - FullScreenScaleMode.gameNotchSize.x, lowQualityMax ? 0 : 209);
 
     add(newAlbumArt);
     add(difficultyStars);
+
+    if (lowQualityMax)
+    {
+      visible = false;
+      active = false;
+      return;
+    }
+
+    newAlbumArt.visible = false;
+
+    difficultyStars.visible = false;
 
     buildAlbumTitle("freeplay/albumRoll/volume1-text");
     if (albumTitle != null) albumTitle.visible = false;
@@ -290,7 +300,7 @@ class AlbumRoll extends FlxSpriteGroup
 
   override function destroy():Void
   {
-    newAlbumArt.replaceSymbolGraphic(ALBUM_ART_SYMBOL, null);
+    if (!Preferences.isLowQualityMax()) newAlbumArt.replaceSymbolGraphic(ALBUM_ART_SYMBOL, null);
 
     super.destroy();
   }

@@ -7,6 +7,7 @@ import funkin.external.android.DisplayUtil;
 #if mobile
 import funkin.mobile.ui.FunkinHitbox;
 import funkin.mobile.util.InAppPurchasesUtil;
+import funkin.util.plugins.TouchPointerPlugin;
 #end
 import funkin.save.Save;
 import funkin.util.WindowUtil;
@@ -159,16 +160,15 @@ class Preferences
 
   static function get_songShaders():Bool
   {
-    if (isLowQualityMinimal()) return false;
     return Save?.instance?.options?.songShaders ?? true;
   }
 
   static function set_songShaders(value:Bool):Bool
   {
     var save:Save = Save.instance;
-    save.options.songShaders = isLowQualityMinimal() ? false : value;
+    save.options.songShaders = value;
     Save.system.flush();
-    return save.options.songShaders;
+    return value;
   }
 
   /**
@@ -197,7 +197,6 @@ class Preferences
 
     var save:Save = Save.instance;
     save.options.lowQualityMode = cleanValue;
-    if (cleanValue != 'None') save.options.songShaders = false;
     Save.system.flush();
     return cleanValue;
   }
@@ -216,6 +215,24 @@ class Preferences
   {
     return songShaders && !isLowQualityMinimal();
   }
+
+  #if mobile
+  public static var touchPointers(get, set):Bool;
+
+  static function get_touchPointers():Bool
+  {
+    return Save?.instance?.mobileOptions?.touchPointers ?? true;
+  }
+
+  static function set_touchPointers(value:Bool):Bool
+  {
+    var save:Save = Save.instance;
+    save.mobileOptions.touchPointers = value;
+    TouchPointerPlugin.enabled = value;
+    Save.system.flush();
+    return value;
+  }
+  #end
 
   /**
    * If enabled, an FPS and memory counter will be displayed even if this is not a debug build.
@@ -618,6 +635,7 @@ class Preferences
     #if mobile
     // Apply the allowScreenTimeout setting.
     lime.system.System.allowScreenTimeout = Preferences.screenTimeout;
+    TouchPointerPlugin.enabled = Preferences.touchPointers;
     #end
   }
 

@@ -52,6 +52,7 @@ class TouchPointerPlugin extends FlxTypedSpriteGroup<TouchPointer>
     pointerCamera.bgColor.alpha = 0;
     instance = new TouchPointerPlugin();
     instance.cameras = [pointerCamera];
+    instance.exists = instance.visible = instance.active = instance.alive = enabled;
 
     FlxG.cameras.add(pointerCamera, false);
     FlxG.plugins.drawOnTop = true;

@@ -5,6 +5,10 @@ import flixel.FlxG;
 import flixel.FlxBasic;
 import funkin.ui.MusicBeatState;
 import funkin.ui.MusicBeatSubState;
+#if FEATURE_LUA_SCRIPTS
+import funkin.play.PlayState;
+import funkin.play.GameOverSubState;
+#end
 #if android
 import funkin.external.android.CallbackUtil;
 #end
@@ -40,7 +44,7 @@ class ReloadAssetsDebugPlugin extends FlxBasic
     if (FlxG.keys.justPressed.F5)
     #end
     {
-      reload();
+      reload(true);
     }
   }
 
@@ -59,9 +63,17 @@ class ReloadAssetsDebugPlugin extends FlxBasic
   var path:String = "";
 
   @:noCompletion
-  function reload():Void
+  function reload(luaHotReload:Bool = false):Void
   {
     var state:Dynamic = FlxG.state;
+    #if FEATURE_LUA_SCRIPTS
+    if (luaHotReload && state is PlayState && !(cast state : PlayState).isGameOverState && GameOverSubState.instance == null)
+    {
+      (cast state : PlayState).reloadLuaScriptsFromDisk();
+      return;
+    }
+    #end
+
     var isScripted:Bool = state is ScriptedMusicBeatState;
     if (isScripted)
     {
@@ -95,7 +107,7 @@ class ReloadAssetsDebugPlugin extends FlxBasic
   {
     if (requestCode == CallbackUtil.DATA_FOLDER_CLOSED)
     {
-      reload();
+      reload(false);
     }
   }
   #end

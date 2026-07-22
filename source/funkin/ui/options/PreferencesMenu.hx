@@ -139,6 +139,12 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
       Preferences.hapticsIntensityMultiplier = value;
     }, null, Preferences.hapticsIntensityMultiplier, 0.1, 5, 0.1, 1);
     #end
+    #if mobile
+    createPrefItemCheckbox('Touch Pointers', 'Show the Kevin and Michael touch-pointer graphics.', function(value:Bool):Void
+    {
+      Preferences.touchPointers = value;
+    }, Preferences.touchPointers);
+    #end
     createPrefItemCheckbox('Flashing Lights', 'When disabled, flashing effects are dampened. Useful for people with photosensitive epilepsy.',
       function(value:Bool):Void
       {

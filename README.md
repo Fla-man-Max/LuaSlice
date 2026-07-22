@@ -1,15 +1,19 @@
 # LuaSlice
-I added Lua Support to V-slice. I don't know what to add mor-
+LuaSlice is a fork of Friday Night Funkin' V-Slice that adds built-in Lua modding support and small tweaks to the engine itself. It is made for people who want to create gameplay scripts, events, menus, options and other mod features without having to write everything in Haxe.
 
-By the way, The Engine is called: "LuaSlice". Not: "Lua-Slice", "P-slice", "Psych Engine". That's all.
+LuaSlice supports isolated `.lua` scripts and shared `.luag` scripts. It also includes F5 hot reloading, Lua error reports, persistent save data, custom Chart Editor events, and Lua hooks for gameplay and menus. Existing `.hx` and `.hxc` modding still works, so Lua can be used by itself or alongside Haxe scripts.
 
-Join mine Discord Server!
+The engine is based on V-Slice 0.8.5 and is still being worked on. Lua compatibility is the main focus, along with making mod creation easier on Windows and Android. And maybe other builds....
+
+Join the LuaSlice Discord server:
 - [LuaSlice Engine](https://discord.gg/sCr5rpPwBn)
 
-You can download the LuaSlice Versions Here:
+Download LuaSlice or view its source code here:
 - [Versions](https://github.com/Fla-man-Max/LuaSlice/releases)
 - [Source Code](https://github.com/Fla-man-Max/LuaSlice)
 - [Gamebanana](https://gamebanana.com/tools/23050)
+
+---
 
 # LuaSlice Lua API
 
@@ -83,6 +87,24 @@ LuaSlice supports isolated `.lua` scripts and global `.luag` scripts. Lua is ena
 - `reloadLuaScripts()` requests the same reload from Lua.
 - `onReload()` runs after reload.
 - Lua-created sprites, text, sounds, tweens, timers, menus, shaders, and registered objects are cleaned before reload.
+
+## LuaSlice Chart Events
+- `PreloadResource`
+- `ChangeCharacter` with optional `preload`
+- `ChangeStage` with optional `preload`
+- `PlayAudio` with `play`, `resume`, `volume`, `pause`, and `stop` actions
+- `Shader` with apply/remove actions for `.hxc` and `.frag` shaders, including number, whole-number, on/off, X/Y, color, and optional transparent-pixel protection for sprite targets
+- `Overlay` and `Blackout`
+- `HealthDrain` with Player/Opponent targeting and optional score changes
+- `HUDFade` with Both, Player, and Opponent targeting for icons, notes, and strumlines
+- `PlayDialogue`
+- `PlayCountdown`
+- `HUDFade`
+- `CameraFlash` and `CameraShake`
+- `StageObjectControl`
+- `ScrollSpeed` with optional `returnToOriginal`
+
+These are normal Chart Editor events. File fields use explicit paths and start at `assets/` by default. Shader entries include `.hxc` classes, `.frag` files, and the built-in `DropShadowShader`. Character targets use BF, Dad, or GF choices, named stage objects use the Object target, and fragment shaders on sprite targets can ignore fully transparent pixels. Play Dialogue lists available conversation JSON files, preloads their music, speakers, and dialogue boxes, then releases them when the conversation closes. F5 and song retries remove active event effects before the song is restored.
 
 ## Script Folder Rules
 - `scripts/lua` loads `.lua` only.
@@ -201,6 +223,7 @@ Named layers:
 - `shader.apply(target, tag)`
 - `shader.remove(target)`
 - `shader.exists(tag)`
+- `shader.setColor(tag, property, color)`
 - `initLuaShader(name, tag?)`
 - `makeLuaShader(tag, pathOrSource?, vertexPathOrSource?)`
 - `setLuaShader(tag, target)`
@@ -209,6 +232,9 @@ Named layers:
 - `setLuaCameraShader(tag, camera?)`
 - `removeLuaCameraShader(camera?)`
 - `setLuaShaderFloatSimple(tag, name, value)`
+- `setShaderColor(tag, property, color)`
+
+Named stage objects can be targeted with `object:<name>`, for example `setShaderOnSprite("object:streetLamp", "rim")`. `DropShadowShader` supports `color`, `angle`, `distance`, `strength`, `threshold`, `antialiasAmt`, `baseHue`, `baseSaturation`, `baseBrightness`, `baseContrast`, and `maskThreshold`.
 
 ### Save
 - `save.get(key, fallback?)`
@@ -282,6 +308,8 @@ The config accepts `name`, `position`, and an `items` array containing `checkbox
 - `writeTextFile`
 - `randomFloat`
 - `randomInt`
+- `openLuaState(target, args?)`
+- `openLuaSubState(target, args?)`
 
 ### Event Control
 - `getCurrentEvent`
@@ -371,6 +399,9 @@ The config accepts `name`, `position`, and an `items` array containing `checkbox
 - `getScreenWidth`
 - `getScreenHeight`
 - `setFullscreen`
+- `getMemoryUsageMB`
+- `getDebugDisplayVisible`
+- `setDebugDisplayVisible`
 
 ### Sprites And Text
 - `addSprite`
@@ -452,6 +483,7 @@ Pause item targets include `resume`, `restartSong`, `changeDifficulty`, `practic
 - `setShaderFloatArray`
 - `setShaderInt`
 - `setShaderBool`
+- `setShaderColor`
 - `applyShader`
 - `clearShader`
 - `applyCameraShader`

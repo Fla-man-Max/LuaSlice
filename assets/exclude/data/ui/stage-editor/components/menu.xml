@@ -30,6 +30,7 @@
     <menu-separator />
     <menu-item id="menubarItemNewObj" text="New Object" />
     <menu-item id="menubarItemFindObj" text="Find Object" shortcutText="Ctrl + F" />
+    <menu-item id="menubarItemCreateSolidBlock" text="Create Solid Block" />
     <menu-item id="menubarItemSelectNone" text="Select None" shortcutText="Ctrl + D" />
   </menu>
   <menu text="View" id="menubarMenuView">

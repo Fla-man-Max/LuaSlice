@@ -6,6 +6,7 @@ import flixel.tweens.FlxTween;
 import flixel.util.FlxTimer;
 import funkin.audio.FunkinSound;
 import funkin.Conductor;
+import funkin.Preferences;
 import funkin.graphics.framebuffer.BitmapDataUtil;
 import funkin.graphics.framebuffer.FixedBitmapData;
 import funkin.graphics.shaders.OverlayBlend;
@@ -22,6 +23,7 @@ class PhillyStreetsStage extends Stage
 {
   var rainShader:RuntimeRainShader = new RuntimeRainShader();
   var rainShaderFilter:ShaderFilter;
+  var rainEnabled:Bool = false;
   var blurFilter:BlurFilter = new BlurFilter(6, 6);
 
   // as song goes on, these are used to make the rain more intense throught the song
@@ -110,6 +112,7 @@ class PhillyStreetsStage extends Stage
 
   override function onCreate(event:ScriptEvent):Void
   {
+    rainEnabled = Preferences.allowSongShaders();
     super.onCreate(event);
 
     // rainSndAmbience = FunkinSound.load(Paths.sound("rainAmbience", "weekend1"), true, false, true);
@@ -123,7 +126,7 @@ class PhillyStreetsStage extends Stage
     // rainShader.puddleMap = Assets.getBitmapData(Paths.image("phillyStreets/puddle"));
     rainShader.scale = FlxG.height / 200; // adjust this value so that the rain looks nice
 
-    FlxG.console.registerObject("rainShader", rainShader);
+    if (rainEnabled) FlxG.console.registerObject("rainShader", rainShader);
     if (PlayState.instance != null)
     {
       switch (PlayState.instance.currentSong.id)
@@ -147,7 +150,7 @@ class PhillyStreetsStage extends Stage
     // rainShader.lightMap = frameBufferMan.getFrameBuffer("lightmap");
 
     rainShaderFilter = new ShaderFilter(rainShader);
-    FlxG.camera.filters = [rainShaderFilter];
+    applyRainFilter();
     // FlxG.camera.setFilters([new openfl.filters.BlurFilter(16,16)]);
 
     resetCar(true, true);
@@ -158,18 +161,29 @@ class PhillyStreetsStage extends Stage
   {
     super.buildStage();
 
-    scrollingSky = new FlxTiledSprite(Paths.image('phillyStreets/phillySkybox'), 2922, 718, true, false);
-    scrollingSky.setPosition(-650, -375);
-    scrollingSky.scrollFactor.set(0.1, 0.1);
-    scrollingSky.zIndex = 10;
-    scrollingSky.scale.set(0.65, 0.65);
-
-    add(scrollingSky);
+    if (!Preferences.isLowQualityMax())
+    {
+      scrollingSky = new FlxTiledSprite(Paths.image('phillyStreets/phillySkybox'), 2922, 718, true, false);
+      scrollingSky.setPosition(-650, -375);
+      scrollingSky.scrollFactor.set(0.1, 0.1);
+      scrollingSky.zIndex = 10;
+      scrollingSky.scale.set(0.65, 0.65);
+      add(scrollingSky);
+    }
     refresh(); // Apply z-index.
+  }
+
+  override function shouldBuildStageProp(dataProp)
+  {
+    if (Preferences.isLowQualityMinimal() && StringTools.endsWith(dataProp.name, "_lightmap")) return false;
+    if (Preferences.isLowQualityMax() && dataProp.name == "phillySmog") return false;
+    return true;
   }
 
   override function onDestroy(event:ScriptEvent)
   {
+    removeRainFilter();
+    if (rainEnabled) FlxG.console.removeObject(rainShader);
     super.onDestroy();
 
     var cars = getNamedProp('phillyCars');
@@ -180,6 +194,21 @@ class PhillyStreetsStage extends Stage
     // Fully stop ambiance.
     // if (rainSndAmbience != null) rainSndAmbience.stop();
     // if (carSndAmbience != null) carSndAmbience.stop();
+  }
+
+  function applyRainFilter():Void
+  {
+    if (!rainEnabled || rainShaderFilter == null || FlxG.camera == null) return;
+    var filters = FlxG.camera.filters == null ? [] : FlxG.camera.filters.copy();
+    if (!filters.contains(rainShaderFilter)) filters.push(rainShaderFilter);
+    FlxG.camera.filters = filters;
+  }
+
+  function removeRainFilter():Void
+  {
+    if (rainShaderFilter == null || FlxG.camera == null || FlxG.camera.filters == null) return;
+    var filters = FlxG.camera.filters.copy();
+    if (filters.remove(rainShaderFilter)) FlxG.camera.filters = filters;
   }
 
   /**
@@ -373,7 +402,7 @@ class PhillyStreetsStage extends Stage
   {
     super.onUpdate(event);
 
-    if (FlxG.sound.music != null)
+    if (rainEnabled && FlxG.sound.music != null)
     {
       var remappedIntensityValue:Float = FlxMath.remapToRange(Conductor.instance.songPosition, 0, FlxG.sound.music.length, rainShaderStartIntensity,
         rainShaderEndIntensity);
@@ -381,14 +410,14 @@ class PhillyStreetsStage extends Stage
       rainShader.updateViewInfo(FlxG.width, FlxG.height, FlxG.camera);
       rainShader.update(event.elapsed);
     }
-    else
+    else if (rainEnabled)
     {
       rainShader.intensity = rainShaderStartIntensity;
       rainShader.updateViewInfo(FlxG.width, FlxG.height, FlxG.camera);
       rainShader.update(event.elapsed);
     }
 
-    if (scrollingSky != null) scrollingSky.scrollX -= FlxG.elapsed * 22;
+    if (scrollingSky != null) scrollingSky.scrollX -= event.elapsed * 22;
 
     // if (rainSndAmbience != null) {
     // 	rainSndAmbience.volume = Math.min(0.3, remappedIntensityValue * 2);
@@ -499,7 +528,7 @@ class PhillyStreetsStage extends Stage
   {
     super.onGameOver(event);
     // Make it so the rain shader doesn't show over the game over screen
-    FlxG.camera.filters = [];
+    removeRainFilter();
   }
 
   override function onSongRetry(event:ScriptEvent):Void
@@ -510,7 +539,7 @@ class PhillyStreetsStage extends Stage
 
     resetCar(true, true);
     resetStageValues();
-    FlxG.camera.filters = [rainShaderFilter];
+    applyRainFilter();
   }
 
   override function addProp(prop:StageProp, ?name:String = null)
@@ -522,7 +551,7 @@ class PhillyStreetsStage extends Stage
       prop.alpha = 0.6;
       // frameBufferMan.moveSpriteTo("lightmap", prop);
     }
-    else if (name == "puddle")
+    else if (name == "puddle" && rainEnabled)
     {
       rainShader.puddleY = prop.y + 80;
       rainShader.puddleScaleY = 0.3;

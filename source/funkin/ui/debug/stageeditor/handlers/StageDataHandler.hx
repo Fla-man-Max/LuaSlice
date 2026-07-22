@@ -47,6 +47,7 @@ class StageDataHandler
         animations: data.animations,
         startingAnimation: data.startingAnimation,
         animType: data.animType,
+        atlasSettings: data.atlasSettings,
         flipX: data.flipX,
         flipY: data.flipY,
         angle: data.angle,
@@ -298,7 +299,12 @@ class StageDataHandler
     for (objData in data.props ?? [])
     {
       var spr = new StageEditorObject();
-      if (!objData.assetPath.startsWith("#")) state.bitmaps.set(objData.assetPath, Assets.getBitmapData(Paths.image(objData.assetPath)));
+      if (!objData.assetPath.startsWith("#") && objData.animType != 'animateatlas')
+      {
+        final imagePath = Paths.image(objData.assetPath);
+        if (Assets.exists(imagePath)) state.bitmaps.set(objData.assetPath, Assets.getBitmapData(imagePath));
+        else state.notifyChange('Missing Stage Image', 'Could not load ${objData.assetPath}. The object will use a placeholder.', true);
+      }
 
       var usePacker:Bool = objData.animType == "packer";
       var animPath:String = Paths.file("images/" + objData.assetPath + (usePacker ? ".txt" : ".xml"));
@@ -321,7 +327,9 @@ class StageDataHandler
         flipX: objData.flipX,
         flipY: objData.flipY,
         startingAnimation: objData.startingAnimation,
-        animData: animText
+        animData: animText,
+        animType: objData.animType,
+        atlasSettings: objData.atlasSettings
       });
 
       state.add(spr);

@@ -1,6 +1,8 @@
 package funkin.ui.debug;
 
+import flixel.FlxG;
 import flixel.util.FlxStringUtil;
+import funkin.Preferences;
 import funkin.ui.debug.stats.FunkinStatsGraph;
 import funkin.util.MemoryUtil;
 import openfl.display.Shape;
@@ -210,7 +212,7 @@ class FunkinDebugDisplay extends Sprite
     updateTaskMemGraph();
 
     final info:Array<String> = [];
-    info.push('FPS: $fps');
+    info.push(getFPSLine());
     info.push('AVG FPS: ${Math.floor(fpsGraph.average())}');
     info.push('1% LOW FPS: ${Math.floor(fpsGraph.lowest())}');
     fpsGraph.textDisplay.text = info.join('\n');
@@ -232,7 +234,7 @@ class FunkinDebugDisplay extends Sprite
     {
       final info:Array<String> = [];
 
-      info.push('FPS: $fps');
+      info.push(getFPSLine());
 
       if (MemoryUtil.supportsGCMem())
       {
@@ -252,6 +254,22 @@ class FunkinDebugDisplay extends Sprite
   {
     fpsGraph.maxValue = fpsPeak;
     fpsGraph.update(fps);
+  }
+
+  function getFPSLine():String
+  {
+    #if mobile
+    var refreshRate:Int = 0;
+    if (FlxG.stage != null && FlxG.stage.window != null)
+    {
+      refreshRate = Math.round(FlxG.stage.window.displayMode.refreshRate);
+    }
+
+    final label:String = Preferences.unlockedFramerate ? 'UNL FPS' : 'FPS';
+    return refreshRate > 0 ? '$label: $fps | HZ: $refreshRate' : '$label: $fps';
+    #else
+    return 'FPS: $fps';
+    #end
   }
 
   function updateGcMemGraph():Void

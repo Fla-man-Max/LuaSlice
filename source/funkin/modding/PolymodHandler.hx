@@ -113,7 +113,14 @@ class PolymodHandler
     createModRoot();
     #end
     trace('Initializing Polymod (using configured mods)...');
-    loadModsByDir(Save.instance.enabledModDirs.value);
+    final installedModDirs = getAllModDirs();
+    final configuredModDirs = Save.instance.enabledModDirs.value;
+    final availableModDirs = configuredModDirs.filter((dir) -> installedModDirs.contains(dir));
+    for (dir in configuredModDirs)
+    {
+      if (!installedModDirs.contains(dir)) trace('Skipping enabled mod directory that is no longer installed: $dir');
+    }
+    loadModsByDir(availableModDirs);
   }
 
   /**

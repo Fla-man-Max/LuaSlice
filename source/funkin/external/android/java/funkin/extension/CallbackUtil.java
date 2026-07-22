@@ -2,6 +2,8 @@ package funkin.extensions;
 
 import android.content.Intent;
 
+import funkin.util.MobileFileUtil;
+
 import org.haxe.extension.Extension;
 
 import org.haxe.lime.HaxeObject;
@@ -98,6 +100,12 @@ public class CallbackUtil extends Extension
   @Override
 	public boolean onActivityResult(int requestCode, int resultCode, Intent data)
 	{
+		if (MobileFileUtil.isFileDialogRequest(requestCode))
+		{
+			String uri = data != null && data.getData() != null ? data.getData().toString() : "";
+			callMethod("onFileDialogResult", requestCode, resultCode, uri);
+		}
+
 		callMethod("onActivityResult", requestCode, resultCode);
 
 		return true;

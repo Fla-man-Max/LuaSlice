@@ -17,6 +17,7 @@ class ChangeStageSongEvent extends SongEvent
   public override function handleEvent(data:SongEventData):Void
   {
     final stageId:String = data.getString('stage') ?? '';
+    if (data.getBool('preload') ?? false) PlayState.instance?.songEventRuntime?.preload('stage', stageId);
     if (PlayState.instance == null || !PlayState.instance.changeStage(stageId))
     {
       trace(' WARNING '.warning() + ' ChangeStageSongEvent: Could not load stage "${stageId}".');
@@ -40,6 +41,11 @@ class ChangeStageSongEvent extends SongEvent
       defaultValue: Constants.DEFAULT_STAGE,
       type: SongEventFieldType.ENUM,
       keys: stages,
+    }, {
+      name: 'preload',
+      title: 'Preload',
+      defaultValue: false,
+      type: SongEventFieldType.BOOL,
     }]);
   }
 }

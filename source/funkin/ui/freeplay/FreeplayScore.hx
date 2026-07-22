@@ -79,6 +79,8 @@ class ScoreNum extends FlxSprite
 
   function set_digit(val):Int
   {
+    if (Preferences.isLowQualityMax()) return val;
+
     if (animation.curAnim != null && animation.curAnim.name != numToString[val])
     {
       animation.play(numToString[val], true, false, 0);
@@ -110,6 +112,14 @@ class ScoreNum extends FlxSprite
   public function new(x:Float, y:Float, ?initDigit:Int = 0, ?styleData:FreeplayStyle)
   {
     super(x, y);
+
+    if (Preferences.isLowQualityMax())
+    {
+      makeGraphic(1, 1, 0x00000000);
+      visible = false;
+      active = false;
+      return;
+    }
 
     if (styleData == null)
     {

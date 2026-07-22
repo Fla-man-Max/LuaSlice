@@ -1,4 +1,4 @@
-package funkin.scripting;
+package;
 
 #if FEATURE_LUA_SCRIPTS
 class LuaApiPrelude
@@ -7,7 +7,7 @@ class LuaApiPrelude
   {
     return [
       "LuaSlice = LuaSlice or {}",
-      "LuaSlice.version = '0.0.5'",
+      "LuaSlice.version = '0.0.6'",
       "luaslice = LuaSlice",
       "function LuaSlice.versionAtLeast(version) local function parts(v) local a,b,c = tostring(v):match('(%d+)%.(%d+)%.(%d+)'); return tonumber(a) or 0, tonumber(b) or 0, tonumber(c) or 0 end; local a,b,c = parts(LuaSlice.version); local x,y,z = parts(version); if a ~= x then return a > x end; if b ~= y then return b > y end; return c >= z end",
       "function requiresLuaSlice(version) if not LuaSlice.versionAtLeast(version) then debugPrint('This script needs LuaSlice ' .. tostring(version) .. '+') return false end return true end",
@@ -78,6 +78,7 @@ class LuaApiPrelude
       "shader.apply = function(target, tag) return setShaderOnSprite(target, tag) end",
       "shader.remove = function(target) return removeLuaShader(target) end",
       "shader.exists = function(tag) return luaShaderExists(tag) end",
+      "shader.setColor = function(tag, property, color) return setShaderColor(tag, property or 'color', color or '#FFFFFF') end",
       "character = character or {}",
       "character.exists = function(target) return objectExists(target) end",
       "character.playAnim = function(target, animation, force, reversed, frame) if not objectExists(target) then return false end return playAnim(target, animation, force == true, reversed == true, v(frame, 0)) end",
@@ -136,8 +137,9 @@ class LuaApiPrelude
       "__api('group.set', 'group', 'Sets multiple properties on every valid object in a group.', {'name','values'}, \"group.set('hudStuff', { alpha = 0.5 })\")",
       "__api('group.tween', 'group', 'Tweens every valid object in a group.', {'name','values','duration','options?'}, \"group.tween('hudStuff', { alpha = 0 }, 0.5)\")",
       "__api('shader.init', 'shader', 'Loads a shader by name or tag.', {'name','tag?'}, \"shader.init('glitchShader')\")",
-      "__api('shader.apply', 'shader', 'Applies a shader to a sprite target.', {'target','tag'}, \"shader.apply('dad', 'glitchShader')\")",
+      "__api('shader.apply', 'shader', 'Applies a shader to a Lua sprite, character, or named stage object.', {'target','tag'}, \"shader.apply('object:streetLamp', 'glitchShader')\")",
       "__api('shader.exists', 'shader', 'Checks whether a shader tag is loaded.', {'tag'}, \"shader.exists('glitchShader')\")",
+      "__api('shader.setColor', 'shader', 'Sets a color property on a supported shader.', {'tag','property','color'}, \"shader.setColor('rim', 'color', '#52351D')\")",
       "__api('window.setTitle', 'window', 'Changes the game window title.', {'title'}, \"window.setTitle('LuaSlice Test')\")",
       "__api('character.playAnim', 'character', 'Safely plays a character animation.', {'target','animation','force?'}, \"character.playAnim('dad', 'singLEFT')\")",
       "__api('stage.exists', 'stage', 'Checks whether a stage is registered.', {'id'}, \"stage.exists('mainStage')\")",

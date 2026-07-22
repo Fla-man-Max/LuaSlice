@@ -9,7 +9,6 @@ import haxe.ui.components.NumberStepper;
 import haxe.ui.components.TextArea;
 import haxe.ui.containers.dialogs.Dialogs.FileDialogTypes;
 import haxe.ui.containers.dialogs.Dialogs;
-import haxe.ui.ToolkitAssets;
 import openfl.display.BitmapData;
 import haxe.ui.events.UIEvent;
 
@@ -48,18 +47,16 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
         if (selectedFile == null) return;
         objImage.resource = null;
 
-        ToolkitAssets.instance.imageFromBytes(selectedFile.bytes, function(imageInfo)
+        try
         {
-          if (imageInfo == null) return;
-
-          objImage.resource = imageInfo.data;
-          linkedObj.frame = imageInfo.data;
-
-          // This checks if the same image had already been loaded, so that we don't add it twice.
-          // Kind of hacky but it is what it is.
+          final bitmap = BitmapData.fromBytes(selectedFile.bytes);
+          if (bitmap == null) throw 'Unsupported or invalid image data.';
           var name:String = haxe.io.Path.withoutExtension(selectedFile.name);
-          var bitToLoad:String = state.addBitmap(linkedObj.updateFramePixels(), name);
+          var bitToLoad:String = state.addBitmap(bitmap, name);
           linkedObj.loadGraphic(state.bitmaps[bitToLoad]);
+          linkedObj.sourceAssetPath = bitToLoad;
+          linkedObj.animType = 'sparrow';
+          linkedObj.atlasSettings = null;
           linkedObj.updateHitbox();
 
           state.removeUnusedBitmaps();
@@ -70,7 +67,11 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
           objImageHeight.pos = objImageHeight.max;
 
           state.notifyChange("Object Graphic Loaded", "The Image File " + selectedFile.name + " has been loaded.");
-        });
+        }
+        catch (error)
+        {
+          state.notifyChange('Image Load Error', 'Could not load ${selectedFile.name}: ${error}', true);
+        }
       });
     }
 
@@ -83,6 +84,9 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
       {
         var bitToLoad:String = state.addBitmap(BitmapData.fromBytes(bytes), linkedObj.name);
         linkedObj.loadGraphic(state.bitmaps[bitToLoad]);
+        linkedObj.sourceAssetPath = bitToLoad;
+        linkedObj.animType = 'sparrow';
+        linkedObj.atlasSettings = null;
         linkedObj.updateHitbox();
 
         state.removeUnusedBitmaps();
@@ -101,6 +105,9 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
       if (linkedObj == null) return;
 
       linkedObj.loadGraphic(AssetDataHandler.getDefaultGraphic());
+      linkedObj.sourceAssetPath = '#FFFFFF';
+      linkedObj.animType = 'sparrow';
+      linkedObj.atlasSettings = null;
       linkedObj.updateHitbox();
 
       // remove unused bitmaps
@@ -201,6 +208,8 @@ class StageEditorObjectGraphicToolbox extends StageEditorDefaultToolbox
 
     try
     {
+      linkedObj.animType = usePacker ? 'packer' : 'sparrow';
+      linkedObj.atlasSettings = null;
       if (usePacker)
       {
         linkedObj.frames = FlxAtlasFrames.fromSpriteSheetPacker(linkedObj.graphic, objFrameTxt.text);

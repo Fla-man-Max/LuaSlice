@@ -67,7 +67,7 @@ class Main extends Sprite
     haxe.Log.trace = funkin.util.logging.AnsiTrace.trace;
     funkin.util.logging.AnsiTrace.traceBF();
     #if FEATURE_LUA_SCRIPTS
-    funkin.scripting.LuaLogger.init();
+    LuaLogger.init();
     #end
 
     // Get OpenFL to stop complaining so much.
@@ -258,7 +258,7 @@ class Main extends Sprite
   function repositionCounters(lerp:Bool):Void
   {
     // Calling this so it gets scaled based on the resolution of the game and device's resolution.
-    var scale:Float = Math.max(Math.min(FlxG.stage.stageWidth / FlxG.width, FlxG.stage.stageHeight / FlxG.height), 1);
+    var scale:Float = Math.max(Math.min(FlxG.stage.stageWidth / FlxG.width, FlxG.stage.stageHeight / FlxG.height), 1) * 0.85;
 
     if (debugDisplay != null)
     {

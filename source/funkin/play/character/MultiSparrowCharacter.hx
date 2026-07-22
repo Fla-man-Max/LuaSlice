@@ -104,6 +104,7 @@ class MultiSparrowCharacter extends BaseCharacter
           subTexture.parent.destroyOnNoUse = false;
 
           textureList.push(subTexture);
+          if (!_usedAtlases.contains(subTexture)) _usedAtlases.push(subTexture);
         default:
           var subTexture:FlxAtlasFrames = Paths.getSparrowAtlas(animation.assetPath);
           // If we don't do this, the unused textures will be removed as soon as they're loaded.

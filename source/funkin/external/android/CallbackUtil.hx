@@ -22,6 +22,8 @@ class CallbackUtil #if (lime >= "8.0.0") implements JNISafety #end
    */
   public static var onActivityResult:FlxTypedSignal<Int->Int->Void> = new FlxTypedSignal<Int->Int->Void>();
 
+  public static var onFileDialogResult:FlxTypedSignal<Int->Int->String->Void> = new FlxTypedSignal<Int->Int->String->Void>();
+
   /**
    * Signal triggered when the user opens a FNFC file with the game in runtime.
    *

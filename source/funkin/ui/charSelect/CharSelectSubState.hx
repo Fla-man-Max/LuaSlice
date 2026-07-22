@@ -17,6 +17,7 @@ import funkin.data.freeplay.player.PlayerData.PlayerCharSelectData;
 import funkin.data.freeplay.player.PlayerRegistry;
 import funkin.graphics.FunkinSprite;
 import funkin.graphics.shaders.BlueFade;
+import funkin.luasliceMemory.MemoryCleanup;
 import funkin.modding.events.ScriptEvent;
 import funkin.modding.events.ScriptEventDispatcher;
 import funkin.play.stage.Stage;
@@ -29,7 +30,6 @@ import funkin.util.FramesJSFLParser;
 import funkin.util.FramesJSFLParser.FramesJSFLInfo;
 import funkin.util.HapticUtil;
 import funkin.util.MathUtil;
-import funkin.vis.dsp.SpectralAnalyzer;
 import openfl.display.BlendMode;
 import openfl.filters.ShaderFilter;
 import openfl.filters.BitmapFilter;
@@ -77,15 +77,14 @@ class CharSelectSubState extends MusicBeatSubState
   var selectTimer:FlxTimer = new FlxTimer();
   var allowInput:Bool = false;
 
-  var selectSound:FunkinSound = new FunkinSound();
-  var unlockSound:FunkinSound = new FunkinSound();
-  var lockedSound:FunkinSound = new FunkinSound();
-  var introSound:FunkinSound = new FunkinSound();
-  var staticSound:FunkinSound = new FunkinSound();
+  var selectSound:FunkinSound;
+  var unlockSound:FunkinSound;
+  var lockedSound:FunkinSound;
+  var introSound:FunkinSound;
+  var staticSound:FunkinSound;
 
   var selectedBizz:Array<BitmapFilter> = [new DropShadowFilter(0, 0, 0xFFFFFF, 1, 2, 2, 19, 1, false, false,
     false), new DropShadowFilter(5, 45, 0x000000, 1, 2, 2, 1, 1, false, false, false)];
-
   var bopInfo:Null<Null<FramesJSFLInfo>>;
 
   // var blackScreen:FunkinSprite;
@@ -123,6 +122,7 @@ class CharSelectSubState extends MusicBeatSubState
     selectSound = new FunkinSound();
     unlockSound = new FunkinSound();
     lockedSound = new FunkinSound();
+    introSound = new FunkinSound();
     staticSound = new FunkinSound();
   }
 
@@ -147,13 +147,9 @@ class CharSelectSubState extends MusicBeatSubState
       CharSelectAtlasHandler.loadAtlas('charSelect/${playerId}Chill');
 
       var gfPath:Null<String> = playerData.gf?.assetPath;
-      if (gfPath != null)
-      {
-        CharSelectAtlasHandler.loadAtlas(gfPath);
-      }
+      if (gfPath != null) CharSelectAtlasHandler.loadAtlas(gfPath);
     }
 
-    // Mr. Static also needs some caching...
     CharSelectAtlasHandler.loadAtlas('charSelect/lockedChill', {filterQuality: LOW, cacheOnLoad: true});
   }
 
@@ -345,12 +341,7 @@ class CharSelectSubState extends MusicBeatSubState
       restartTrack: true,
       onLoad: function()
       {
-        @:privateAccess
-        gfChill.analyzer = new SpectralAnalyzer(FlxG.sound.music._channel.__audioSource, 7, 0.1);
-        #if sys
-        @:privateAccess
-        gfChill.analyzer.fftN = 512;
-        #end
+        gfChill.initAnalyzer(FlxG.sound.music);
       }
     });
 
@@ -425,7 +416,6 @@ class CharSelectSubState extends MusicBeatSubState
     blackScreen.y = -(FlxG.height * 0.5);
     add(blackScreen);
 
-    introSound = new FunkinSound();
     introSound.loadEmbedded(Paths.sound('CS_Lights'));
     introSound.volume = 0;
 
@@ -452,7 +442,16 @@ class CharSelectSubState extends MusicBeatSubState
 
   override public function destroy():Void
   {
+    Conductor.stepHit.remove(spamOnStep);
+    selectTimer.cancel();
+    selectTimer.destroy();
+    for (sound in [selectSound, unlockSound, lockedSound, introSound, staticSound])
+    {
+      FlxG.sound.list.remove(sound, true);
+      sound.destroy();
+    }
     CharSelectAtlasHandler.clearAtlasCache();
+    MemoryCleanup.requestFullCleanup();
     super.destroy();
   }
 
@@ -477,14 +476,7 @@ class CharSelectSubState extends MusicBeatSubState
         {
           allowInput = true;
 
-          @:privateAccess
-          gfChill.analyzer = new SpectralAnalyzer(FlxG.sound.music._channel.__audioSource, 7, 0.1);
-          #if sys
-          // On native it uses FFT stuff that isn't as optimized as the direct browser stuff we use on HTML5
-          // So we want to manually change it!
-          @:privateAccess
-          gfChill.analyzer.fftN = 512;
-          #end
+          gfChill.initAnalyzer(FlxG.sound.music);
         }
       });
     }
@@ -593,7 +585,6 @@ class CharSelectSubState extends MusicBeatSubState
 
         nametag.switchChar(char);
         gfChill.switchGF(char);
-        gfChill.visible = true;
 
         var icon = new PixelatedIcon(0, 0);
         icon.setCharacter(char);
@@ -634,14 +625,7 @@ class CharSelectSubState extends MusicBeatSubState
             {
               allowInput = true;
 
-              @:privateAccess
-              gfChill.analyzer = new SpectralAnalyzer(FlxG.sound.music._channel.__audioSource, 7, 0.1);
-              #if sys
-              // On native it uses FFT stuff that isn't as optimized as the direct browser stuff we use on HTML5
-              // So we want to manually change it!
-              @:privateAccess
-              gfChill.analyzer.fftN = 512;
-              #end
+              gfChill.initAnalyzer(FlxG.sound.music);
             }
           });
         }
@@ -1213,7 +1197,6 @@ class CharSelectSubState extends MusicBeatSubState
         playerChill.visible = true;
         playerChill.switchChar(value);
         gfChill.switchGF(value);
-        gfChill.visible = true;
       }
     });
 

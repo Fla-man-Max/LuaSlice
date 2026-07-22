@@ -21,10 +21,13 @@ class CharSelectPlayer extends FunkinSprite implements IBPMSyncedScriptedClass
 
     super(x, y);
 
-    loadTextureAtlas(DEFAULT_PATH, {
-      applyStageMatrix: true,
-      swfMode: true
-    });
+    this.applyStageMatrix = true;
+    final texture = CharSelectAtlasHandler.loadAtlas(DEFAULT_PATH, {swfMode: true});
+    if (texture != null)
+    {
+      frames = texture;
+      currentBFPath = DEFAULT_PATH;
+    }
 
     anim.onFinish.add(function(animLabel:String)
     {
@@ -83,6 +86,7 @@ class CharSelectPlayer extends FunkinSprite implements IBPMSyncedScriptedClass
     if (texture != null)
     {
       frames = texture;
+      currentBFPath = 'charSelect/${str}Chill';
     }
     else
     {

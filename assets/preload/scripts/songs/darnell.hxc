@@ -246,7 +246,7 @@ class DarnellSong extends Song
       PlayState.instance.tweenCameraToPosition(darnellPos[0] + 180, darnellPos[1], 2, FlxEase.sineInOut);
       PlayState.instance.isInCutscene = false;
       PlayState.instance.startCountdown();
-      cutsceneMusic.stop(); // stop the music!!!!!!
+      releaseCutsceneAudio();
 
       PlayState.instance.togglePauseButton(true);
       PlayState.instance.isInCutscene = false;
@@ -348,5 +348,26 @@ class DarnellSong extends Song
     {
       cutsceneConductor.update(cutsceneMusic.time);
     }
+  }
+
+  function releaseCutsceneAudio():Void
+  {
+    if (cutsceneConductor != null)
+    {
+      cutsceneConductor.onBeatHit.remove(onCutsceneBeatHit);
+      cutsceneConductor = null;
+    }
+    if (cutsceneMusic != null)
+    {
+      cutsceneMusic.stop();
+      cutsceneMusic.destroy();
+      cutsceneMusic = null;
+    }
+  }
+
+  function onDestroy(event:ScriptEvent):Void
+  {
+    releaseCutsceneAudio();
+    super.onDestroy(event);
   }
 }

@@ -19,6 +19,7 @@ import funkin.play.character.BaseCharacter.CharacterType;
 import funkin.ui.debug.charting.dialogs.ChartEditorAboutDialog;
 import funkin.ui.debug.charting.dialogs.ChartEditorBaseDialog.DialogDropTarget;
 import funkin.ui.debug.charting.dialogs.ChartEditorCharacterIconSelectorMenu;
+import funkin.ui.debug.charting.dialogs.ChartEditorPsychEngineImportDialog;
 import funkin.ui.debug.charting.dialogs.ChartEditorUploadChartDialog;
 import funkin.ui.debug.charting.dialogs.ChartEditorWelcomeDialog;
 import funkin.ui.debug.charting.dialogs.ChartEditorUploadVocalsDialog;
@@ -286,6 +287,12 @@ class ChartEditorDialogHandler
 
   public static function openImportChartWizard(state:ChartEditorState, format:String, closable:Bool):Void
   {
+    if (format == 'psych')
+    {
+      ChartEditorPsychEngineImportDialog.build(state, closable);
+      return;
+    }
+
     // Open the "Open Chart" wizard
     // Step 1. Open Chart
     var openChartDialog:Null<Dialog> = openImportChartDialog(state, format);
@@ -533,7 +540,7 @@ class ChartEditorDialogHandler
 
     instrumentalBox.onClick = function(_)
     {
-      Dialogs.openBinaryFile('Open Instrumental', [{label: 'Audio File (.ogg)', extension: 'ogg'}], function(selectedFile:SelectedFileInfo)
+      FileUtil.browseForBinaryFile('Open Instrumental', [{label: 'Audio File (.ogg)', extension: 'ogg'}], function(selectedFile:SelectedFileInfo)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
@@ -945,7 +952,7 @@ class ChartEditorDialogHandler
 
     onClickMetadataVariation = function(variation:String, label:Label, _:UIEvent)
     {
-      Dialogs.openBinaryFile('Open Chart ($variation) Metadata', [{label: 'JSON File (.json)', extension: 'json'}], function(selectedFile)
+      FileUtil.browseForBinaryFile('Open Chart ($variation) Metadata', [{label: 'JSON File (.json)', extension: 'json'}], function(selectedFile)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
@@ -1031,7 +1038,7 @@ class ChartEditorDialogHandler
 
     onClickChartDataVariation = function(variation:String, label:Label, _:UIEvent)
     {
-      Dialogs.openBinaryFile('Open Chart ($variation) Metadata', [{label: 'JSON File (.json)', extension: 'json'}], function(selectedFile)
+      FileUtil.browseForBinaryFile('Open Chart ($variation) Metadata', [{label: 'JSON File (.json)', extension: 'json'}], function(selectedFile)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
@@ -1190,7 +1197,7 @@ class ChartEditorDialogHandler
 
     var onDropFile:String->Void;
 
-    var onFileSelected:String->String->Void = (pathStr:String, content:String) ->
+    var onFileSelected:String->String->Dynamic->Void = (pathStr:String, content:String, externalEvents:Dynamic) ->
     {
       var path:Path = new Path(pathStr ?? "");
       trace('Selected file: ' + path.toString());
@@ -1227,20 +1234,24 @@ class ChartEditorDialogHandler
             state.error('Failure', 'Failed to parse Psych Engine chart (${path.file}.${path.ext})');
             return;
           }
-
-          var externalEvents:Dynamic = null;
-          #if sys
-          var eventsPath = Path.join([path.dir ?? '', 'events.json']);
-          if (eventsPath != path.toString() && FileUtil.fileExists(eventsPath))
+          if (!PsychEngineImporter.isChart(psychData))
           {
-            externalEvents = PsychEngineImporter.parseRaw(FileUtil.readStringFromPath(eventsPath), eventsPath);
+            state.error('Failure', 'This is not a Psych Engine song chart. Select the song difficulty JSON, not events.json.');
+            return;
           }
-          #end
 
           var psychDifficulty = PsychEngineImporter.inferDifficulty(path.file);
-          songMetadata = PsychEngineImporter.migrateMetadata(psychData, psychDifficulty);
-          songChartData = PsychEngineImporter.migrateChartData(psychData, psychDifficulty, externalEvents);
-          loadedText = 'Loaded Psych Engine chart and events';
+          try
+          {
+            songMetadata = PsychEngineImporter.migrateMetadata(psychData, psychDifficulty);
+            songChartData = PsychEngineImporter.migrateChartData(psychData, psychDifficulty, externalEvents);
+          }
+          catch (error)
+          {
+            state.error('Failure', 'Could not convert this Psych Engine chart:\n${error}');
+            return;
+          }
+          loadedText = externalEvents == null ? 'Loaded Psych Engine chart' : 'Loaded Psych Engine chart and events';
         case 'stepmania':
           var stepmaniaData:Null<StepManiaData> = StepManiaImporter.parseStepManiaFile(content);
 
@@ -1288,23 +1299,47 @@ class ChartEditorDialogHandler
       state.success('Success', '$loadedText (${path.file}.${path.ext})');
     };
 
+    var handleChartSelection = function(pathStr:String, content:String)
+    {
+      if (format != 'psych')
+      {
+        onFileSelected(pathStr, content, null);
+        return;
+      }
+
+      final chartData = PsychEngineImporter.parseRaw(content, pathStr);
+      if (chartData == null || !PsychEngineImporter.isChart(chartData))
+      {
+        state.error('Failure', 'This is not a Psych Engine song chart. Select the song difficulty JSON first.');
+        return;
+      }
+
+      FileUtil.browseForTextFile('Select Psych Engine events.json (Cancel to skip)', fileFilter ?? [], function(selectedFile)
+      {
+        final eventContent = selectedFile.text ?? selectedFile.bytes?.toString() ?? '';
+        final externalEvents = PsychEngineImporter.parseRaw(eventContent, selectedFile.name ?? selectedFile.fullPath ?? 'events.json');
+        if (externalEvents == null || !Std.isOfType(Reflect.field(externalEvents, 'events'), Array))
+        {
+          state.error('Failure', 'The second file is not a Psych Engine events JSON.');
+          return;
+        }
+        onFileSelected(pathStr, content, externalEvents);
+      }, () -> onFileSelected(pathStr, content, null));
+    };
+
     importBox.onClick = function(_)
     {
-      // TODO / BUG: File filtering not working on mac finder dialog, so we don't use it for now
-      Dialogs.openBinaryFile('Import Chart - ${prettyFormat}', fileFilter ?? [], function(selectedFile:SelectedFileInfo)
+      FileUtil.browseForTextFile('Import Chart - ${prettyFormat}', fileFilter ?? [], function(selectedFile)
       {
-        if (selectedFile != null && selectedFile.bytes != null)
-        {
-          @:nullSafety(Off)
-          onFileSelected(selectedFile.fullPath, selectedFile.bytes.toString());
-        }
+        final content = selectedFile.text ?? selectedFile.bytes?.toString() ?? '';
+        handleChartSelection(selectedFile.name ?? selectedFile.fullPath ?? 'chart.${fileExt}', content);
       });
     }
 
     onDropFile = function(pathStr:String)
     {
       var selectedFileText:String = FileUtil.readStringFromPath(pathStr);
-      onFileSelected(pathStr, selectedFileText);
+      handleChartSelection(pathStr, selectedFileText);
     };
 
     state.addDropHandler({component: importBox, handler: onDropFile});

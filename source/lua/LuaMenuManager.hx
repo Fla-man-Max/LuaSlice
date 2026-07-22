@@ -1,8 +1,8 @@
-package funkin.scripting;
+package;
 
 #if FEATURE_LUA_SCRIPTS
-import flixel.FlxG;
 import flixel.FlxBasic;
+import flixel.FlxG;
 import flixel.FlxSprite;
 import flixel.group.FlxGroup.FlxTypedGroup;
 import flixel.text.FlxText;
@@ -13,20 +13,7 @@ import funkin.Paths;
 import funkin.play.PlayState;
 #end
 
-#if FEATURE_LUA_SCRIPTS
-typedef LuaMenuData =
-{
-  var group:FlxTypedGroup<FlxBasic>;
-  var items:Array<String>;
-  var selected:Int;
-  var normalColor:FlxColor;
-  var selectedColor:FlxColor;
-  var itemSprites:Array<FlxSprite>;
-  var mode:String;
-}
-#end
-
-class LuaMenusManager
+class LuaMenuManager
 {
   #if FEATURE_LUA_SCRIPTS
   var owner:LuaScriptManager;

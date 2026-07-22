@@ -21,6 +21,7 @@ class Constants
    * Change this if you're making an engine.
    */
   public static final TITLE:String = "LuaSlice";
+  public static final LUASLICE_VERSION:String = "v0.0.6";
 
   /**
    * The current version number of the game.
@@ -47,7 +48,8 @@ class Constants
   #if FEATURE_DEBUG_FUNCTIONS
   static function get_VERSION():String
   {
-    return 'v${Application.current.meta.get('version')} (${GIT_BRANCH} : ${GIT_HASH}${GIT_HAS_LOCAL_CHANGES ? ' : MODIFIED' : ''})' + VERSION_SUFFIX;
+    return 'LuaSlice: ${LUASLICE_VERSION} | FNF: v${Application.current.meta.get('version')} | ${GIT_BRANCH} : ${GIT_HASH}${GIT_HAS_LOCAL_CHANGES ? ' : MODIFIED' : ''}'
+      + VERSION_SUFFIX;
   }
   #else
   static function get_VERSION():String

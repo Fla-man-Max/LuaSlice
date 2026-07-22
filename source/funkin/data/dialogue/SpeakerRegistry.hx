@@ -21,6 +21,17 @@ class SpeakerRegistry extends BaseRegistry<Speaker, SpeakerData, SpeakerEntryPar
   {
     super('SPEAKER', 'dialogue/speakers', SPEAKER_DATA_VERSION_RULE);
   }
+
+  public function createFreshEntry(id:String):Null<Speaker>
+  {
+    if (!hasEntry(id)) return null;
+    #if mobile
+    return createEntry(id);
+    #else
+    final scriptedClass = getScriptedEntryClassName(id);
+    return scriptedClass == null ? createEntry(id) : createScriptedEntry(scriptedClass);
+    #end
+  }
 }
 
 typedef SpeakerEntryParams =

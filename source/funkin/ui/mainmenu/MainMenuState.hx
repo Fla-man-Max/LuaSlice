@@ -37,7 +37,7 @@ import funkin.api.newgrounds.Referral;
 import funkin.ui.mainmenu.UpgradeSparkle;
 import flixel.group.FlxSpriteGroup.FlxTypedSpriteGroup;
 #if FEATURE_LUA_SCRIPTS
-import funkin.scripting.LuaScriptManager;
+import LuaScriptManager;
 #end
 #if FEATURE_DISCORD_RPC
 import funkin.api.discord.DiscordClient;
@@ -47,6 +47,7 @@ import funkin.api.newgrounds.NewgroundsClient;
 #end
 #if mobile
 import funkin.mobile.input.ControlsHandler;
+import funkin.mobile.ui.FunkinHotReloadButton;
 import funkin.mobile.util.InAppPurchasesUtil;
 #end
 
@@ -61,6 +62,7 @@ class MainMenuState extends MusicBeatState
 
   #if mobile
   var gyroPan:Null<FlxPoint>;
+  var hotReloadButton:Null<FunkinHotReloadButton>;
   #end
 
   var overrideMusic:Bool = false;
@@ -78,7 +80,11 @@ class MainMenuState extends MusicBeatState
   function lockMenuInput(state:UIState):Void
   {
     uiStateMachine.transition(state);
-    if (menuItems != null) menuItems.busy = true;
+    if (menuItems != null)
+    {
+      menuItems.busy = true;
+      menuItems.enabled = false;
+    }
 
     #if mobile
     if (optionsButton != null)
@@ -138,6 +144,10 @@ class MainMenuState extends MusicBeatState
     hasUpgraded = true;
     #end
 
+    #if mobile
+    hasUpgraded = true;
+    #end
+
     if (!overrideMusic) playMenuMusic();
 
     // We want the state to always be able to begin with being able to accept inputs and show the anims of the menu items.
@@ -180,7 +190,6 @@ class MainMenuState extends MusicBeatState
       FlxG.signals.preStateSwitch.addOnce(() ->
       {
         funkin.FunkinMemory.clearFreeplay();
-        funkin.FunkinMemory.purgeCache();
       });
       startExitState(() -> new StoryMenuState());
     });
@@ -248,6 +257,19 @@ class MainMenuState extends MusicBeatState
       });
     }
 
+    #if FEATURE_OPEN_URL
+    createMenuItem('discord', 'mainmenu/discord', function()
+    {
+      WindowUtil.openURL('https://discord.gg/sCr5rpPwBn');
+      uiStateMachine.transition(Idle);
+      if (menuItems != null)
+      {
+        menuItems.busy = false;
+        menuItems.enabled = true;
+      }
+    }, #if web true #else false #end);
+    #end
+
     createMenuItem('credits', 'mainmenu/credits', function()
     {
       startExitState(() -> new funkin.ui.credits.CreditsState());
@@ -311,6 +333,19 @@ class MainMenuState extends MusicBeatState
     // TODO: This is absolutely disgusting but what the hell sure, fix it later -Zack
     addBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, goBack, 1.0);
 
+    if (camControls == null)
+    {
+      camControls = new funkin.graphics.FunkinCamera('camControls');
+      FlxG.cameras.add(camControls, false);
+      camControls.bgColor = 0x0;
+    }
+    hotReloadButton = new FunkinHotReloadButton(FlxG.width - 180, 20, function()
+    {
+      FlxG.resetState();
+    }, 0.6);
+    hotReloadButton.cameras = [camControls];
+    add(hotReloadButton);
+
     if (!ControlsHandler.usingExternalInputDevice)
     {
       addOptionsButton(35, FlxG.height - 210, goOptions);
@@ -339,7 +374,7 @@ class MainMenuState extends MusicBeatState
   {
     if (leftWatermarkText == null) return;
 
-    leftWatermarkText.text = 'V-slice: v0.8.5 | LuaSlice: v0.0.5';
+    leftWatermarkText.text = 'V-slice: v0.8.5 | LuaSlice: v0.0.6';
 
     #if FEATURE_NEWGROUNDS
     if (NewgroundsClient.instance.isLoggedIn())
@@ -559,6 +594,11 @@ class MainMenuState extends MusicBeatState
     if (!(subState is flixel.addons.transition.Transition))
     {
       uiStateMachine.transition(Idle);
+      if (menuItems != null)
+      {
+        menuItems.busy = false;
+        menuItems.enabled = true;
+      }
 
       #if FEATURE_TOUCH_CONTROLS
       // we want to reset our backButton + optionsButton if we are returning to the main menu from a substate like freeplay

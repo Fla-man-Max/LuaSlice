@@ -16,7 +16,6 @@ import funkin.ui.freeplay.FreeplayState;
 import funkin.ui.MusicBeatSubState;
 import funkin.ui.transition.stickers.StickerPack;
 import funkin.FunkinMemory;
-import funkin.util.DeviceUtil;
 import funkin.Preferences;
 
 using Lambda;
@@ -215,16 +214,6 @@ class StickerSubState extends MusicBeatSubState
             switchingState = true;
             FlxTransitionableState.skipNextTransIn = true;
             FlxTransitionableState.skipNextTransOut = true;
-            FlxG.signals.preStateSwitch.addOnce(() -> {
-              #if ios
-              trace(DeviceUtil.iPhoneNumber);
-              if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
-              else
-                funkin.FunkinMemory.purgeCache();
-              #else
-              funkin.FunkinMemory.purgeCache(true);
-              #end
-            });
             FlxG.switchState(() ->
             {
               // TODO: Rework this asset caching stuff

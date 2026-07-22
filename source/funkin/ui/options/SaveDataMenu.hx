@@ -146,6 +146,7 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
     {
       // Clear the save data.
       Save.clearData();
+      funkin.PlayerSettings.reset();
 
       FlxG.switchState(() -> new funkin.InitState());
     });
@@ -156,6 +157,7 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
     openConfirmPrompt("This will erase\nall song data.\nAre you sure?", "Delete", function()
     {
       Save.instance.clearSongData();
+      funkin.PlayerSettings.reset();
       FlxG.switchState(() -> new funkin.InitState());
     });
   }
@@ -165,6 +167,7 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
     openConfirmPrompt("This will reset\nall options to default.\nAre you sure?", "Reset", function()
     {
       Save.instance.clearOptions();
+      funkin.PlayerSettings.reset();
       FlxG.switchState(() -> new funkin.InitState());
     });
   }
@@ -174,6 +177,7 @@ class SaveDataMenu extends Page<OptionsState.OptionsMenuPageName>
     openConfirmPrompt("This will reset\nall controls to default.\nAre you sure?", "Reset", function()
     {
       Save.instance.clearControls();
+      funkin.PlayerSettings.reset();
       FlxG.switchState(() -> new funkin.InitState());
     });
   }

@@ -18,6 +18,7 @@ class ChangeCharacterSongEvent extends SongEvent
   {
     final char:Int = data.getInt('char') ?? 0;
     final characterId:String = data.getString('id') ?? '';
+    if (data.getBool('preload') ?? false) PlayState.instance?.songEventRuntime?.preload('character', characterId);
     if (PlayState.instance == null || !PlayState.instance.changeCharacter(char, characterId, true))
     {
       trace(' WARNING '.warning() + ' ChangeCharacterSongEvent: Could not load character "${characterId}".');
@@ -47,6 +48,11 @@ class ChangeCharacterSongEvent extends SongEvent
       defaultValue: Constants.DEFAULT_CHARACTER,
       type: SongEventFieldType.ENUM,
       keys: characters,
+    }, {
+      name: 'preload',
+      title: 'Preload',
+      defaultValue: false,
+      type: SongEventFieldType.BOOL,
     }]);
   }
 }

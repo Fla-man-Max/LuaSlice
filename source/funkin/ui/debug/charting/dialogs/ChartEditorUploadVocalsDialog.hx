@@ -11,8 +11,8 @@ import haxe.ui.components.Button;
 import haxe.ui.components.Label;
 import haxe.ui.containers.dialogs.Dialog.DialogButton;
 import haxe.ui.containers.dialogs.Dialog.DialogEvent;
+import haxe.ui.containers.dialogs.Dialogs.SelectedFileInfo;
 import haxe.ui.containers.Box;
-import haxe.ui.containers.dialogs.Dialogs;
 import haxe.ui.core.Component;
 
 // @:nullSafety // TODO: Fix null safety when used with HaxeUI build macros.
@@ -109,7 +109,7 @@ class ChartEditorUploadVocalsDialog extends ChartEditorBaseDialog
 
       vocalsEntry.onClick = function(_event)
       {
-        Dialogs.openBinaryFile('Open $charName Vocals', [{label: 'Audio File (.ogg)', extension: 'ogg'}], function(selectedFile)
+        FileUtil.browseForBinaryFile('Open $charName Vocals', [{label: 'Audio File (.ogg)', extension: 'ogg'}], function(selectedFile)
         {
           if (selectedFile != null && selectedFile.bytes != null)
           {
@@ -259,7 +259,11 @@ class ChartEditorUploadVocalsDialog extends ChartEditorBaseDialog
           chartEditorState.success('Loaded Chart',
             result.length == 0 ? 'Loaded chart (${selectedFile.name})' : 'Loaded chart (${selectedFile.name})\n${result.join("\n")}');
 
+          #if android
+          chartEditorState.currentWorkingFilePath = null;
+          #else
           if (selectedFile.fullPath != null) chartEditorState.currentWorkingFilePath = selectedFile.fullPath;
+          #end
           this.hideDialog(DialogButton.APPLY);
         }
       }

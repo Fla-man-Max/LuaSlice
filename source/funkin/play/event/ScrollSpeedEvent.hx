@@ -56,6 +56,7 @@ class ScrollSpeedEvent extends SongEvent
     var strumline:String = data.getString('strumline') ?? DEFAULT_STRUMLINE;
 
     var absolute:Bool = data.getBool('absolute') ?? DEFAULT_ABSOLUTE;
+    var returnToOriginal:Bool = data.getBool('returnToOriginal') ?? false;
 
     var strumlineNames:Array<String> = [];
 
@@ -88,6 +89,18 @@ class ScrollSpeedEvent extends SongEvent
         }
 
         PlayState.instance.tweenScrollSpeed(scroll, durSeconds, easeFunction, strumlineNames);
+        if (returnToOriginal)
+        {
+          final originalSpeed:Float = switch (strumline)
+          {
+            case 'opponent': PlayState.instance.opponentStrumline.scrollSpeed;
+            default: PlayState.instance.playerStrumline.scrollSpeed;
+          };
+          PlayState.instance.songEventRuntime?.schedule(durSeconds / PlayState.instance.playbackRate, function()
+          {
+            PlayState.instance?.tweenScrollSpeed(originalSpeed, durSeconds, easeFunction, strumlineNames);
+          });
+        }
     }
   }
 
@@ -153,6 +166,11 @@ class ScrollSpeedEvent extends SongEvent
         name: 'absolute',
         title: 'Absolute',
         defaultValue: DEFAULT_ABSOLUTE,
+        type: SongEventFieldType.BOOL,
+      }, {
+        name: 'returnToOriginal',
+        title: 'Return to Original Speed',
+        defaultValue: false,
         type: SongEventFieldType.BOOL,
       }]
     }]);

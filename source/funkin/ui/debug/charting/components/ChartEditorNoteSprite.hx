@@ -8,6 +8,7 @@ import flixel.FlxSprite;
 import flixel.graphics.frames.FlxFramesCollection;
 import flixel.graphics.frames.FlxAtlasFrames;
 import flixel.graphics.frames.FlxFrame;
+import flixel.graphics.FlxGraphic;
 import funkin.data.animation.AnimationData;
 import funkin.data.song.SongData.SongNoteData;
 import funkin.data.notestyle.NoteStyleRegistry;
@@ -87,7 +88,7 @@ class ChartEditorNoteSprite extends FlxSprite
 
     var entries:Array<String> = NoteStyleRegistry.instance.listEntryIds();
 
-    if (noteFrameCollection == null)
+    if (!isFrameCacheUsable())
     {
       buildEmptyFrameCollection();
 
@@ -110,6 +111,35 @@ class ChartEditorNoteSprite extends FlxSprite
   }
 
   static var noteFrameCollection:Null<FlxFramesCollection> = null;
+  static var retainedGraphics:Array<FlxGraphic> = [];
+
+  @:nullSafety(Off)
+  static function isFrameCacheUsable():Bool
+  {
+    if (noteFrameCollection == null || noteFrameCollection.frames == null || noteFrameCollection.frames.length == 0) return false;
+    for (frame in noteFrameCollection.frames)
+    {
+      final graphic = frame?.parent;
+      if (graphic == null || graphic.isDestroyed) return false;
+    }
+    return true;
+  }
+
+  static function retainGraphic(graphic:FlxGraphic):Void
+  {
+    if (!retainedGraphics.contains(graphic)) retainedGraphics.push(graphic);
+    graphic.persist = true;
+  }
+
+  public static function clearFrameCache():Void
+  {
+    for (graphic in retainedGraphics)
+    {
+      if (graphic != null && !graphic.isDestroyed) graphic.persist = false;
+    }
+    retainedGraphics.resize(0);
+    noteFrameCollection = null;
+  }
 
   function fetchNoteStyle(noteStyleId:String):NoteStyle
   {
@@ -131,6 +161,7 @@ class ChartEditorNoteSprite extends FlxSprite
       FlxG.log.error('Could not retrieve frame collection for ${noteStyle}: ${Paths.image(noteStyle.getNoteAssetPath(), noteStyle.getNoteAssetLibrary())}');
       return;
     }
+    retainGraphic(frameCollection.parent);
     for (frame in frameCollection.frames)
     {
       // cloning the frame because else
@@ -266,6 +297,13 @@ class ChartEditorNoteSprite extends FlxSprite
 
     // Remove the tooltip to prevent recently deleted notes from showing a tooltip.
     ToolTipManager.instance.unregisterTooltipRegion(this.tooltip);
+  }
+
+  override public function destroy():Void
+  {
+    ToolTipManager.instance.unregisterTooltipRegion(this.tooltip);
+    kindIndicator.destroy();
+    super.destroy();
   }
 
   function get_noteStyle():Null<String>

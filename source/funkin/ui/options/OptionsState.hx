@@ -18,8 +18,11 @@ import funkin.ui.mainmenu.MainMenuState;
 import funkin.ui.MusicBeatState;
 import funkin.graphics.shaders.HSVShader;
 import funkin.input.Controls;
+#if FEATURE_CHART_EDITOR
+import funkin.ui.debug.charting.ChartEditorState;
+#end
 #if FEATURE_LUA_SCRIPTS
-import funkin.scripting.LuaScriptManager;
+import LuaScriptManager;
 #end
 #if FEATURE_NEWGROUNDS
 import funkin.api.newgrounds.NewgroundsClient;
@@ -45,7 +48,7 @@ class OptionsState extends MusicBeatState
   /**
    * Instance of the OptionsState
    */
-  public static var instance:OptionsState;
+  public static var instance:Null<OptionsState>;
 
   static var luaPauseExitTarget:Null<String>;
   static var luaPauseHideExit:Bool = false;
@@ -132,11 +135,24 @@ class OptionsState extends MusicBeatState
 
   override function destroy():Void
   {
+    PlayerSettings.player1.saveControls();
+    funkin.save.Save.system.flush();
+
     #if FEATURE_LUA_SCRIPTS
+    luaOptionsScriptManager?.callHook('onDestroy', []);
     luaOptionsScriptManager?.destroy();
     luaOptionsScriptManager = null;
     #end
     super.destroy();
+    if (instance == this) instance = null;
+  }
+
+  override function update(elapsed:Float):Void
+  {
+    super.update(elapsed);
+    #if FEATURE_LUA_SCRIPTS
+    luaOptionsScriptManager?.callHook('onUpdate', [elapsed]);
+    #end
   }
 
   function exitOffsets():Void
@@ -320,6 +336,12 @@ class OptionsMenu extends Page<OptionsMenuPageName>
     createItem("OPEN DATA FOLDER", function()
     {
       funkin.external.android.DataFolderUtil.openDataFolder();
+    });
+    #end
+    #if (mobile && FEATURE_CHART_EDITOR)
+    createItem("CHART EDITOR", function()
+    {
+      FlxG.switchState(() -> new ChartEditorState());
     });
     #end
     #if FEATURE_NEWGROUNDS

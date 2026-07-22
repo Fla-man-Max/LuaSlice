@@ -5,6 +5,7 @@ import flixel.tweens.FlxEase;
 import flixel.tweens.FlxTween;
 import flixel.util.FlxColor;
 import flixel.util.FlxSignal;
+import funkin.Preferences;
 import funkin.play.PlayState;
 #if html5
 import funkin.graphics.video.FlxVideo;
@@ -26,6 +27,7 @@ class VideoCutscene
   static var blackScreen:FlxSprite;
 
   static var cutsceneType:CutsceneType;
+  static var finishing:Bool = false;
 
   #if html5
   static var vid:FlxVideo;
@@ -69,6 +71,18 @@ class VideoCutscene
   public static function play(filePath:String, ?cutsceneType:CutsceneType = STARTING):Void
   {
     if (PlayState.instance == null) return;
+    if (isPlaying() || blackScreen != null) destroyVideo();
+    finishing = false;
+    VideoCutscene.cutsceneType = cutsceneType;
+
+    if (Preferences.isLowQualityMinimal())
+    {
+      PlayState.instance.isInCutscene = false;
+      PlayState.instance.camHUD.visible = true;
+      onVideoEnded.dispatch();
+      onCutsceneFinish(cutsceneType);
+      return;
+    }
 
     #if FEATURE_VIDEO_PLAYBACK
     if (!openfl.Assets.exists(filePath))
@@ -90,8 +104,6 @@ class VideoCutscene
     blackScreen.scrollFactor.set(0, 0);
     blackScreen.cameras = [PlayState.instance.camCutscene];
     PlayState.instance.add(blackScreen);
-
-    VideoCutscene.cutsceneType = cutsceneType;
 
     #if mobile
     if (cutsceneType == ENDING)
@@ -146,6 +158,7 @@ class VideoCutscene
     else
     {
       trace('ALERT: Video is null! Could not play cutscene!');
+      finishVideo(0);
     }
   }
   #end
@@ -206,10 +219,15 @@ class VideoCutscene
       {
         onVideoStarted.dispatch();
       }
+      else
+      {
+        finishVideo(0);
+      }
     }
     else
     {
       trace('ALERT: Video is null! Could not play cutscene!');
+      finishVideo(0);
     }
   }
   #end
@@ -260,7 +278,7 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = false;
-      blackScreen.visible = false;
+      if (blackScreen != null) blackScreen.visible = true;
     }
     #end
 
@@ -268,7 +286,7 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = false;
-      blackScreen.visible = false;
+      if (blackScreen != null) blackScreen.visible = true;
     }
     #end
   }
@@ -279,7 +297,7 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = true;
-      blackScreen.visible = false;
+      if (blackScreen != null) blackScreen.visible = false;
     }
     #end
 
@@ -287,7 +305,7 @@ class VideoCutscene
     if (vid != null)
     {
       vid.visible = true;
-      blackScreen.visible = false;
+      if (blackScreen != null) blackScreen.visible = false;
     }
     #end
   }
@@ -318,14 +336,17 @@ class VideoCutscene
    */
   public static function finishVideo(?transitionTime:Float = 0.5):Void
   {
+    if (finishing) return;
+    finishing = true;
     trace('ALERT: Finish video cutscene called!');
 
     var cutsceneType:CutsceneType = VideoCutscene.cutsceneType;
+    final state = PlayState.instance;
 
     #if html5
     if (vid != null)
     {
-      PlayState.instance.remove(vid);
+      state?.remove(vid);
     }
     #end
 
@@ -333,31 +354,53 @@ class VideoCutscene
     if (vid != null)
     {
       vid.stop();
-      PlayState.instance.remove(vid);
+      state?.remove(vid);
     }
     #end
 
     #if (html5 || hxvlc)
-    vid.destroy();
-    vid = null;
+    if (vid != null)
+    {
+      vid.destroy();
+      vid = null;
+    }
     #end
 
-    PlayState.instance.camHUD.visible = true;
-
-    FlxTween.tween(blackScreen, {alpha: 0}, transitionTime, {
-      ease: FlxEase.quadInOut,
-      onComplete: function(twn:FlxTween)
+    if (state == null)
+    {
+      if (blackScreen != null)
       {
-        PlayState.instance.remove(blackScreen);
+        blackScreen.destroy();
         blackScreen = null;
       }
-    });
-    FlxTween.tween(FlxG.camera, {zoom: PlayState.instance.stageZoom}, transitionTime, {
+      onVideoEnded.dispatch();
+      finishing = false;
+      return;
+    }
+
+    state.camHUD.visible = true;
+
+    if (blackScreen != null)
+    {
+      final screen = blackScreen;
+      blackScreen = null;
+      FlxTween.tween(screen, {alpha: 0}, transitionTime, {
+        ease: FlxEase.quadInOut,
+        onComplete: function(twn:FlxTween)
+        {
+          state.remove(screen);
+          screen.destroy();
+        }
+      });
+    }
+
+    FlxTween.tween(FlxG.camera, {zoom: state.stageZoom}, transitionTime, {
       ease: FlxEase.quadInOut,
       onComplete: function(twn:FlxTween)
       {
         onVideoEnded.dispatch();
         onCutsceneFinish(cutsceneType);
+        finishing = false;
       }
     });
   }
@@ -368,6 +411,7 @@ class VideoCutscene
    */
   static function onCutsceneFinish(cutsceneType:CutsceneType):Void
   {
+    if (PlayState.instance == null) return;
     switch (cutsceneType)
     {
       case CutsceneType.STARTING:
@@ -385,15 +429,16 @@ class VideoCutscene
    */
   public static function destroyVideo()
   {
+    final state = PlayState.instance;
     #if html5
-    if (vid != null) PlayState.instance.remove(vid);
+    if (vid != null) state?.remove(vid);
     #end
 
     #if hxvlc
     if (vid != null)
     {
       vid.stop();
-      PlayState.instance.remove(vid);
+      state?.remove(vid);
     }
     #end
 
@@ -407,9 +452,12 @@ class VideoCutscene
 
     if (blackScreen != null)
     {
-      PlayState.instance.remove(blackScreen);
+      FlxTween.cancelTweensOf(blackScreen);
+      state?.remove(blackScreen);
+      blackScreen.destroy();
       blackScreen = null;
     }
+    finishing = false;
   }
 }
 

@@ -33,6 +33,7 @@ import funkin.graphics.shaders.HSVShader;
 import funkin.graphics.shaders.PureColor;
 import funkin.graphics.shaders.StrokeShader;
 import funkin.input.Controls;
+import funkin.luasliceMemory.MemoryCleanup;
 import funkin.modding.events.ScriptEvent;
 import funkin.modding.events.ScriptEventDispatcher;
 import funkin.Preferences;
@@ -43,7 +44,7 @@ import funkin.play.song.Song;
 import funkin.save.Save;
 import funkin.save.Save.SaveScoreData;
 #if FEATURE_LUA_SCRIPTS
-import funkin.scripting.LuaScriptManager;
+import LuaScriptManager;
 #end
 import funkin.ui.AtlasText;
 import funkin.ui.FullScreenScaleMode;
@@ -1901,7 +1902,7 @@ class FreeplayState extends MusicBeatSubState
 
   function handleDebugKeys():Void
   {
-    #if FEATURE_CHART_EDITOR
+    #if (FEATURE_CHART_EDITOR && !mobile)
     if (!uiStateMachine.canInteract()) return;
     if (controls.DEBUG_CHART)
     {
@@ -2265,6 +2266,7 @@ class FreeplayState extends MusicBeatSubState
 
   public override function destroy():Void
   {
+    clearPreviews();
     #if FEATURE_LUA_SCRIPTS
     if (luaScriptManager != null)
     {
@@ -2273,11 +2275,15 @@ class FreeplayState extends MusicBeatSubState
       luaScriptManager = null;
     }
     #end
+    FlxTween.cancelTweensOf(funnyCam);
+    FlxTween.cancelTweensOf(rankCamera);
+    funnyCam.filters = [];
+    rankCamera.filters = [];
     super.destroy();
-    // remove and destroy freeplay camera
-    FlxG.cameras.remove(funnyCam);
-    // Cancel all song preview timers just in case a preview loads after we exit.
-    clearPreviews();
+    if (FlxG.cameras.list.contains(funnyCam)) FlxG.cameras.remove(funnyCam);
+    if (FlxG.cameras.list.contains(rankCamera)) FlxG.cameras.remove(rankCamera);
+    funkin.FunkinMemory.clearFreeplay();
+    MemoryCleanup.requestFullCleanup();
   }
 
   function goBack():Void
@@ -3204,25 +3210,26 @@ class FreeplayState extends MusicBeatSubState
     if (!Preferences.isLowQualityMinimal()) return;
 
     hideLowQuality(ostName);
+    hideLowQuality(grpDifficulties);
+    hideLowQuality(difficultyDots);
 
     if (!Preferences.isLowQualityMax()) return;
 
-    hideLowQuality(dj);
     hideLowQuality(fpScoreDisplay);
     hideLowQuality(txtCompletion);
     hideLowQuality(letterSort);
     hideLowQuality(albumRoll);
-    hideLowQuality(diffSelLeft);
-    hideLowQuality(diffSelRight);
+    hideLowQuality(diffSelLeft, false);
+    hideLowQuality(diffSelRight, false);
     hideLowQuality(fnfHighscoreSpr);
     hideLowQuality(clearBoxSprite);
   }
 
-  function hideLowQuality(sprite:Null<FlxBasic>):Void
+  function hideLowQuality(sprite:Null<FlxBasic>, disableUpdates:Bool = true):Void
   {
     if (sprite == null) return;
     sprite.visible = false;
-    sprite.active = false;
+    if (disableUpdates) sprite.active = false;
   }
 }
 

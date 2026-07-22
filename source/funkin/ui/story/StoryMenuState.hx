@@ -21,7 +21,7 @@ import funkin.play.song.Song;
 import funkin.save.Save;
 import funkin.save.Save.SaveScoreData;
 #if FEATURE_LUA_SCRIPTS
-import funkin.scripting.LuaScriptManager;
+import LuaScriptManager;
 #end
 import funkin.ui.mainmenu.MainMenuState;
 import funkin.ui.MusicBeatState;
@@ -715,7 +715,8 @@ class StoryMenuState extends MusicBeatState
           ease: FlxEase.linear,
           onComplete: function(_)
           {
-            remove(oldBackground);
+            remove(oldBackground, true);
+            oldBackground.destroy();
           }
         });
 

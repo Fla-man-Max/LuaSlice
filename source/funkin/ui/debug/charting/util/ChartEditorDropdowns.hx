@@ -124,6 +124,39 @@ class ChartEditorDropdowns
     var returnValue:DropDownEntry = {id: "FocusCamera", text: "Focus Camera"};
 
     var songEvents:Array<SongEvent> = SongEventRegistry.listEvents();
+    final priority = [
+      'FocusCamera',
+      'ZoomCamera',
+      'ScrollSpeed',
+      'PreloadResource',
+      'Shader',
+      'ChangeCharacter',
+      'ChangeStage',
+      'HealthDrain',
+      'PlayDialogue',
+      'PlayAudio',
+      'PlayCountdown',
+      'HUDFade',
+      'Blackout',
+      'Overlay',
+      'CameraFlash',
+      'CameraShake',
+      'StageObjectControl'
+    ];
+    songEvents.sort((a, b) ->
+    {
+      final aIndex = priority.indexOf(a.id);
+      final bIndex = priority.indexOf(b.id);
+      if (aIndex >= 0 || bIndex >= 0)
+      {
+        if (aIndex < 0) return 1;
+        if (bIndex < 0) return -1;
+        return aIndex - bIndex;
+      }
+      final aTitle = a.getTitle().toLowerCase();
+      final bTitle = b.getTitle().toLowerCase();
+      return aTitle < bTitle ? -1 : (aTitle > bTitle ? 1 : 0);
+    });
 
     for (event in songEvents)
     {
@@ -131,8 +164,6 @@ class ChartEditorDropdowns
       if (startingEventId == event.id) returnValue = value;
       dropDown.dataSource.add(value);
     }
-
-    dropDown.dataSource.sort('text', ASCENDING);
 
     return returnValue;
   }

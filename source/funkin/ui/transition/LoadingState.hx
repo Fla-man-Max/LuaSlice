@@ -9,6 +9,7 @@ import flixel.util.FlxTimer;
 import flixel.util.typeLimit.NextState;
 import funkin.graphics.FunkinSprite;
 import funkin.graphics.shaders.ScreenWipeShader;
+import funkin.luasliceMemory.MemoryCleanup;
 import funkin.play.PlayState;
 import funkin.play.PlayStatePlaylist;
 import funkin.play.song.Song.SongDifficulty;
@@ -75,11 +76,11 @@ class LoadingState extends MusicBeatSubState
           throw 'Invalid parameter: Target song should not be null';
         }
 
+        var difficulty:String = playParams.targetDifficulty ?? Constants.DEFAULT_DIFFICULTY;
+        var variation:String = playParams.targetVariation ?? Constants.DEFAULT_VARIATION;
         playParams.targetSong.cacheCharts(true);
 
         // Preload the song for the play state.
-        var difficulty:String = playParams.targetDifficulty ?? Constants.DEFAULT_DIFFICULTY;
-        var variation:String = playParams.targetVariation ?? Constants.DEFAULT_VARIATION;
         var targetChart:Null<SongDifficulty> = playParams.targetSong.getDifficulty(difficulty, variation);
         if (targetChart == null)
         {
@@ -205,6 +206,7 @@ class LoadingState extends MusicBeatSubState
     }
     else
     {
+      MemoryCleanup.requestFullCleanup();
       FlxG.switchState(target);
     }
   }
@@ -268,6 +270,8 @@ class LoadingState extends MusicBeatSubState
     }
     #else
     // All assets preloaded, switch directly to play state (defualt on other targets).
+    if (!asSubState) FunkinMemory.beginStateCache();
+
     @:nullSafety(Off)
     if (shouldStopMusic && FlxG.sound.music != null)
     {
@@ -297,41 +301,6 @@ class LoadingState extends MusicBeatSubState
         FunkinMemory.cacheNoteStyle(noteStyle);
       }
 
-      // TODO: This sucks lol.
-      if (params.targetSong.songName == "2hot")
-      {
-        var spritesToCache = ["wked1_cutscene_1_can", "spraypaintExplosionEZ", "SpraypaintExplosion", "CanImpactParticle", "spraycanAtlas/spritemap1"];
-
-        var soundsToCache = ["Darnell_Lighter", "fuse_burning", "Gun_Prep", "Kick_Can_FORWARD", "Kick_Can_UP", "Lightning1", "Lightning2", "Lightning3", "Pico_Bonk", "Shoot_1", "shot1", "shot2", "shot3", "shot4"];
-
-        for (sprite in spritesToCache)
-        {
-          trace('Queueing $sprite to preload.');
-          // new Future<String>(function() {
-          var path = Paths.image(sprite, "weekend1");
-          funkin.FunkinMemory.cacheTexture(path);
-          // Another dumb hack: FlxAnimate fetches from OpenFL's BitmapData cache directly and skips the FlxGraphic cache.
-          // Since FlxGraphic tells OpenFL to not cache it, we have to do it manually.
-          if (path.endsWith('spritemap1.png') #if FEATURE_COMPRESSED_TEXTURES || path.endsWith('spritemap1.astc') #end)
-          {
-            trace('Preloading FlxAnimate asset: ${path}');
-            openfl.Assets.getBitmapData(path, true);
-          }
-          // return '${path} successfuly loaded.';
-          // }, true);
-        }
-
-        for (sound in soundsToCache)
-        {
-          trace('Queueing $sound to preload.');
-          new Future<String>(function()
-          {
-            var path = Paths.sound(sound, "weekend1");
-            funkin.FunkinMemory.cacheSound(path);
-            return '${path} successfuly loaded.';
-          }, true);
-        }
-      }
     }
 
     if (asSubState)
@@ -340,12 +309,12 @@ class LoadingState extends MusicBeatSubState
     }
     else
     {
-      // funkin.FunkinMemory.clearFreeplay();
       FlxG.signals.preStateSwitch.addOnce(function()
       {
         funkin.FunkinMemory.clearFreeplay();
-        funkin.FunkinMemory.purgeCache(true);
+        funkin.FunkinMemory.finishStateCache();
       });
+      MemoryCleanup.requestFullCleanup();
       FlxG.switchState(playStateCtor);
     }
     #end

@@ -124,6 +124,7 @@ class Speaker extends FlxSprite implements IDialogueScriptedClass implements IRe
     trace('[SPEAKER] Loading spritesheet ${_data.assetPath} for ${id}');
 
     var tex:FlxFramesCollection = Paths.getSparrowAtlas(_data.assetPath);
+    if (tex == null) tex = Paths.getSparrowAtlas(_data.assetPath, 'week6');
     if (tex == null)
     {
       trace('Could not load Sparrow sprite: ${_data.assetPath}');

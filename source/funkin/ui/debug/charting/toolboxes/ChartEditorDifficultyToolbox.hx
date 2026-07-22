@@ -37,6 +37,7 @@ class ChartEditorDifficultyToolbox extends ChartEditorBaseToolbox
   var difficultyToolboxTree:TreeView;
   var difficultyToolboxAddVariation:Button;
   var difficultyToolboxAddDifficulty:Button;
+  var difficultyToolboxRemoveVariation:Button;
   var difficultyToolboxRemoveDifficulty:Button;
   var difficultyToolboxSaveMetadata:Button;
   var difficultyToolboxSaveChart:Button;
@@ -105,6 +106,28 @@ class ChartEditorDifficultyToolbox extends ChartEditorBaseToolbox
       }
 
       Dialogs.messageBox("Are you sure? This cannot be undone.", "Remove Difficulty", MessageBoxType.TYPE_YESNO, callback);
+    };
+
+    difficultyToolboxRemoveVariation.onClick = function(_:UIEvent)
+    {
+      final variation = chartEditorState.selectedVariation;
+      if (variation == Constants.DEFAULT_VARIATION)
+      {
+        chartEditorState.error('Remove Variation', 'The Default variation cannot be removed.');
+        return;
+      }
+
+      Dialogs.messageBox('Remove the entire "${variation.toTitleCase()}" variation and all of its difficulties? This cannot be undone.', 'Remove Variation',
+        MessageBoxType.TYPE_YESNO, button ->
+        {
+          if (button != DialogButton.YES) return;
+          if (chartEditorState.removeVariation(variation))
+          {
+            updateTree();
+            refresh();
+            chartEditorState.success('Remove Variation', 'Removed the "${variation.toTitleCase()}" variation and all of its difficulties.');
+          }
+        });
     };
 
     difficultyToolboxSaveMetadata.onClick = function(_:UIEvent)
@@ -307,8 +330,17 @@ class ChartEditorDifficultyToolbox extends ChartEditorBaseToolbox
 
           refreshTreeSelection();
         }
+      case 'variation':
+        final variation = targetNode.data.id.substr('stv_variation_'.length);
+        final difficulty = chartEditorState.getAvailableDifficulties(variation)[0];
+        if (variation != '' && difficulty != null)
+        {
+          trace('Changing variation to "$variation"');
+          chartEditorState.performCommand(new SwitchDifficultyCommand(chartEditorState.selectedDifficulty, difficulty, chartEditorState.selectedVariation,
+            variation));
+          refreshTreeSelection();
+        }
       // case 'song':
-      // case 'variation':
       default:
         // Reset the user's selection.
         trace('Selected wrong node type, resetting selection.');

@@ -3,6 +3,7 @@ package funkin.ui.freeplay;
 import flixel.group.FlxSpriteGroup;
 import flixel.FlxSprite;
 import flixel.util.FlxTimer;
+import funkin.Preferences;
 
 @:nullSafety
 class FreeplayFlames extends FlxSpriteGroup
@@ -19,6 +20,20 @@ class FreeplayFlames extends FlxSpriteGroup
   public function new(x:Float, y:Float)
   {
     super(x, y);
+
+    if (Preferences.isLowQualityMax())
+    {
+      for (i in 0...5)
+      {
+        var flame = new FlxSprite();
+        flame.makeGraphic(1, 1, 0x00000000);
+        flame.visible = false;
+        flame.active = false;
+        add(flame);
+      }
+      active = false;
+      return;
+    }
 
     for (i in 0...5)
     {

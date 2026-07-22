@@ -100,12 +100,32 @@ class SongMenuItem extends FlxSpriteGroup
     // capsule.animation
     add(capsule);
 
-    bpmText = new FlxSprite(144, 87).loadGraphic(Paths.image('freeplay/freeplayCapsule/bpmtext'));
-    bpmText.setGraphicSize(Std.int(bpmText.width * 0.9));
+    bpmText = new FlxSprite(144, 87);
+    if (Preferences.isLowQualityMinimal())
+    {
+      bpmText.makeGraphic(1, 1, FlxColor.TRANSPARENT);
+      bpmText.visible = false;
+      bpmText.active = false;
+    }
+    else
+    {
+      bpmText.loadGraphic(Paths.image('freeplay/freeplayCapsule/bpmtext'));
+      bpmText.setGraphicSize(Std.int(bpmText.width * 0.9));
+    }
     add(bpmText);
 
-    difficultyText = new FlxSprite(414, 87).loadGraphic(Paths.image('freeplay/freeplayCapsule/difficultytext'));
-    difficultyText.setGraphicSize(Std.int(difficultyText.width * 0.9));
+    difficultyText = new FlxSprite(414, 87);
+    if (Preferences.isLowQualityMinimal())
+    {
+      difficultyText.makeGraphic(1, 1, FlxColor.TRANSPARENT);
+      difficultyText.visible = false;
+      difficultyText.active = false;
+    }
+    else
+    {
+      difficultyText.loadGraphic(Paths.image('freeplay/freeplayCapsule/difficultytext'));
+      difficultyText.setGraphicSize(Std.int(difficultyText.width * 0.9));
+    }
     add(difficultyText);
 
     weekText = new FunkinSprite(291, 88);
@@ -244,6 +264,13 @@ class SongMenuItem extends FlxSpriteGroup
 
   function checkWeek():Void
   {
+    if (Preferences.isLowQualityMinimal())
+    {
+      weekText.visible = false;
+      weekText.active = false;
+      return;
+    }
+
     weekText.offset.set(0, 0);
 
     if (this.freeplayData?.levelId == null)
@@ -459,10 +486,13 @@ class SongMenuItem extends FlxSpriteGroup
     else
     {
       songText.text = freeplayData.fullSongName;
-      if (freeplayData.songCharacter != null) pixelIcon.setCharacter(freeplayData.songCharacter);
+      if (!Preferences.isLowQualityMinimal() && freeplayData.songCharacter != null) pixelIcon.setCharacter(freeplayData.songCharacter);
       if (pixelIcon.char != freeplayData.songCharacter) pixelIcon.visible = false;
-      updateBPM(Std.int(freeplayData.songStartingBpm) ?? 0);
-      updateDifficultyRating(freeplayData.difficultyRating ?? 0);
+      if (!Preferences.isLowQualityMinimal())
+      {
+        updateBPM(Std.int(freeplayData.songStartingBpm) ?? 0);
+        updateDifficultyRating(freeplayData.difficultyRating ?? 0);
+      }
       if (updateRank) updateScoringRank(freeplayData.scoringRank);
       newText.visible = freeplayData.isNew;
       favIcon.visible = freeplayData.isFav;
@@ -470,6 +500,7 @@ class SongMenuItem extends FlxSpriteGroup
       checkClip();
     }
     updateSelected();
+    applyPerformanceOptions();
   }
 
   function updateDifficultyRating(newRating:Int):Void
@@ -548,6 +579,7 @@ class SongMenuItem extends FlxSpriteGroup
     }
 
     updateSelected();
+    applyPerformanceOptions();
   }
 
   public function initPosition(x:Float, y:Float):Void
@@ -725,17 +757,30 @@ class SongMenuItem extends FlxSpriteGroup
     theActualHitbox.y = y + 20;
 
     super.update(elapsed);
-    applyPerformanceOptions();
   }
 
   function applyPerformanceOptions():Void
   {
     if (!Preferences.isLowQualityMinimal()) return;
 
-    if (pixelIcon != null) pixelIcon.visible = false;
-    if (bpmText != null) bpmText.visible = false;
-    if (difficultyText != null) difficultyText.visible = false;
-    if (weekText != null) weekText.visible = false;
+    pixelIcon.visible = false;
+    pixelIcon.active = false;
+    bpmText.visible = false;
+    bpmText.active = false;
+    difficultyText.visible = false;
+    difficultyText.active = false;
+    weekText.visible = false;
+    weekText.active = false;
+    for (number in bpmNumbers)
+    {
+      number.visible = false;
+      number.active = false;
+    }
+    for (number in difficultyNumbers)
+    {
+      number.visible = false;
+      number.active = false;
+    }
   }
 
   /**
@@ -893,6 +938,8 @@ class CapsuleNumber extends FlxSprite
 
   function set_digit(val):Int
   {
+    if (Preferences.isLowQualityMinimal()) return val;
+
     animation.play(numToString[val], true, false, 0);
 
     centerOffsets(false);
@@ -924,6 +971,14 @@ class CapsuleNumber extends FlxSprite
   public function new(x:Float, y:Float, big:Bool = false, ?initDigit:Int = 0)
   {
     super(x, y);
+
+    if (Preferences.isLowQualityMinimal())
+    {
+      makeGraphic(1, 1, FlxColor.TRANSPARENT);
+      visible = false;
+      active = false;
+      return;
+    }
 
     if (big)
     {

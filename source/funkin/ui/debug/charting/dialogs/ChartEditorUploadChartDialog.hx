@@ -143,7 +143,11 @@ class ChartEditorUploadChartDialog extends ChartEditorBaseDialog
           chartEditorState.success('Loaded Chart',
             result.length == 0 ? 'Loaded chart (${selectedFile.name})' : 'Loaded chart (${selectedFile.name})\n${result.join("\n")}');
 
+          #if android
+          chartEditorState.currentWorkingFilePath = null;
+          #else
           if (selectedFile.fullPath != null) chartEditorState.currentWorkingFilePath = selectedFile.fullPath;
+          #end
           this.hideDialog(DialogButton.APPLY);
         }
       }

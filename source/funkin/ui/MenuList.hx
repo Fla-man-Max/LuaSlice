@@ -356,6 +356,8 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
 
   public function accept():Void
   {
+    if (!enabled || busy) return;
+
     var menuItem:T = members[selectedIndex];
 
     if (!menuItem.available) return;

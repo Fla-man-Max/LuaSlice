@@ -39,6 +39,7 @@ import funkin.graphics.FunkinSprite;
 import funkin.input.Cursor;
 import funkin.input.TurboButtonHandler;
 import funkin.input.TurboKeyHandler;
+import funkin.luasliceMemory.MemoryCleanup;
 import funkin.modding.events.ScriptEvent;
 import funkin.play.event.SongEvent;
 import funkin.play.notes.notekind.NoteKindManager;
@@ -989,6 +990,11 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
    */
   var currentEventSelection:Array<SongEventData> = [];
 
+  #if mobile
+  var lastClickedNote:SongNoteData = null;
+  var lastNoteClickTime:Float = 0;
+  #end
+
   /**
    * The position where the user clicked to start a selection.
    * `null` if the user isn't currently selecting anything.
@@ -1021,6 +1027,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
   final displayedEventDataCache:Array<SongEventData> = [];
 
   var noteTooltipsDirty:Bool = true;
+  var hoveredEventTooltip:Null<ChartEditorEventSprite> = null;
 
   /**
    * Whether the selected characters have been modified and the health icons need to be updated.
@@ -3286,14 +3293,15 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     {
       if (currentWorkingFilePath != null)
       {
-        this.exportAllSongData(true, currentWorkingFilePath);
+        this.exportAllSongData(true, currentWorkingFilePath, path -> this.success('Saved Chart', 'Chart saved successfully to ${path}.'));
       }
       else
       {
-        this.exportAllSongData(false, null);
+        this.exportAllSongData(false, null, path -> this.success('Saved Chart', 'Chart saved successfully to ${path}.'));
       }
     };
-    menubarItemSaveChartAs.onClick = _ -> this.exportAllSongData(false, null);
+    menubarItemSaveChartAs.onClick = _ ->
+      this.exportAllSongData(false, null, path -> this.success('Saved Chart', 'Chart saved successfully to ${path}.'));
     menubarItemExit.onClick = _ -> quitChartEditor(true);
 
     // Edit
@@ -3448,15 +3456,39 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     menubarItemDifficultyUp.onClick = _ -> incrementDifficulty(1);
     menubarItemDifficultyDown.onClick = _ -> incrementDifficulty(-1);
 
-    menuBarItemThemeLight.onChange = function(event:UIEvent)
+    menuBarItemThemeLight.onClick = function(_)
     {
-      if (event.target.value) currentTheme = ChartEditorTheme.Light;
+      currentTheme = ChartEditorTheme.Light;
+      Save.instance.chartEditorTheme.value = currentTheme;
+      menuBarItemThemeLight.selected = true;
+      menuBarItemThemeDark.selected = false;
+    };
+    menuBarItemThemeLight.onChange = function(_)
+    {
+      if (menuBarItemThemeLight.selected)
+      {
+        currentTheme = ChartEditorTheme.Light;
+        Save.instance.chartEditorTheme.value = currentTheme;
+        menuBarItemThemeDark.selected = false;
+      }
     };
     menuBarItemThemeLight.selected = currentTheme == ChartEditorTheme.Light;
 
-    menuBarItemThemeDark.onChange = function(event:UIEvent)
+    menuBarItemThemeDark.onClick = function(_)
     {
-      if (event.target.value) currentTheme = ChartEditorTheme.Dark;
+      currentTheme = ChartEditorTheme.Dark;
+      Save.instance.chartEditorTheme.value = currentTheme;
+      menuBarItemThemeLight.selected = false;
+      menuBarItemThemeDark.selected = true;
+    };
+    menuBarItemThemeDark.onChange = function(_)
+    {
+      if (menuBarItemThemeDark.selected)
+      {
+        currentTheme = ChartEditorTheme.Dark;
+        Save.instance.chartEditorTheme.value = currentTheme;
+        menuBarItemThemeLight.selected = false;
+      }
     };
     menuBarItemThemeDark.selected = currentTheme == ChartEditorTheme.Dark;
 
@@ -3582,6 +3614,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     // TODO: Pass specific HaxeUI components to add context menus to them.
     // registerContextMenu(null, Paths.ui('chart-editor/context/test'));
   }
+
 
   function copySelection():Void
   {
@@ -4053,6 +4086,10 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
         {
           // Event is already displayed and should remain displayed.
           displayedEventData.push(eventSprite.eventData);
+
+          final expectedAnimation = eventSprite.correctAnimationName(eventSprite.eventData.eventKind);
+          if (eventSprite.animation.curAnim?.name != expectedAnimation) eventSprite.playAnimation(expectedAnimation);
+          eventSprite.updateTooltipText();
 
           // Update the event sprite's position.
           eventSprite.updateEventPosition(renderedEvents);
@@ -4678,6 +4715,8 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     // early return if we shouldn't handle the cursor at all
     if (!shouldHandleCursor)
     {
+      hoveredEventTooltip?.hideTooltip();
+      hoveredEventTooltip = null;
       if (gridGhostNote != null) gridGhostNote.visible = false;
       if (gridGhostHoldNote != null) gridGhostHoldNote.visible = false;
       if (gridGhostEvent != null) gridGhostEvent.visible = false;
@@ -4732,6 +4771,12 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     {
       // Cursor is not overlapping an event
       overlapsRenderedEvents = false;
+    }
+
+    if (hoveredEventTooltip != highlightedEvent)
+    {
+      hoveredEventTooltip?.hideTooltip();
+      hoveredEventTooltip = highlightedEvent;
     }
 
     // Find the first hold note that is at the cursor position.
@@ -5025,7 +5070,12 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
         {
           // We clicked on the grid without moving the mouse.
 
-          if (pressingControl())
+          if (FlxG.keys.pressed.SHIFT && highlightedEvent != null && highlightedEvent.eventData != null)
+          {
+            performCommand(new SetItemSelectionCommand([], [highlightedEvent.eventData]));
+            this.setToolboxState(CHART_EDITOR_TOOLBOX_EVENT_DATA_LAYOUT, true);
+          }
+          else if (pressingControl())
           {
             if (highlightedNote != null && highlightedNote.noteData != null)
             {
@@ -5041,7 +5091,6 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
             }
             else if (highlightedEvent != null && highlightedEvent.eventData != null)
             {
-              // Control click to select/deselect an individual note.
               if (isEventSelected(highlightedEvent.eventData))
               {
                 performCommand(new DeselectItemsCommand([], [highlightedEvent.eventData]));
@@ -5315,7 +5364,12 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
       if (FlxG.mouse.justPressed)
       {
         // Just clicked to place a note.
-        if (!isCursorOverHaxeUI && overlapsGrid && !overlapsSelectionBorder)
+        if (!isCursorOverHaxeUI && overlapsGrid && FlxG.keys.pressed.SHIFT && highlightedEvent != null && highlightedEvent.eventData != null)
+        {
+          performCommand(new SetItemSelectionCommand([], [highlightedEvent.eventData]));
+          this.setToolboxState(CHART_EDITOR_TOOLBOX_EVENT_DATA_LAYOUT, true);
+        }
+        else if (!isCursorOverHaxeUI && overlapsGrid && !overlapsSelectionBorder)
         {
           // We clicked on the grid without moving the mouse.
 
@@ -5364,6 +5418,20 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
           {
             if (highlightedNote != null && highlightedNote.noteData != null)
             {
+              #if mobile
+              var isDoubleClick:Bool = false;
+              if (lastClickedNote == highlightedNote.noteData && (haxe.Timer.stamp() - lastNoteClickTime) < 0.5) {
+                isDoubleClick = true;
+              }
+              lastClickedNote = highlightedNote.noteData;
+              lastNoteClickTime = haxe.Timer.stamp();
+
+              if (isDoubleClick) {
+                performCommand(new RemoveNotesCommand([highlightedNote.noteData]));
+                return;
+              }
+              #end
+
               if (isNoteSelected(highlightedNote.noteData))
               {
                 // Clicked a selected event, start dragging.
@@ -6922,6 +6990,24 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     difficultySelectDirty = true; // Force the Difficulty toolbox to update.
   }
 
+  function removeVariation(variation:String):Bool
+  {
+    if (variation == Constants.DEFAULT_VARIATION || songMetadata.size() <= 1 || !songMetadata.exists(variation)) return false;
+
+    songMetadata.remove(variation);
+    songChartData.remove(variation);
+
+    if (selectedVariation == variation)
+    {
+      selectedVariation = Constants.DEFAULT_VARIATION;
+      selectedDifficulty = getAvailableDifficulties(selectedVariation)[0];
+    }
+
+    refreshPlayDataVariations();
+    difficultySelectDirty = true;
+    return true;
+  }
+
   function incrementDifficulty(change:Int):Void
   {
     var variatedDifficulty:String = '$selectedDifficulty-$selectedVariation';
@@ -7507,33 +7593,56 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
 
   override function destroy():Void
   {
-    super.destroy();
-
     cleanupAutoSave();
+
+    if (bgMusicTimer != null)
+    {
+      bgMusicTimer.cancel();
+      bgMusicTimer.destroy();
+      bgMusicTimer = null;
+    }
 
     this.closeExistingMenu();
 
     // Hide the mouse cursor on other states.
     Cursor.hide();
 
-    @:privateAccess
-    ChartEditorNoteSprite.noteFrameCollection = null;
+    ChartEditorNoteSprite.clearFrameCache();
+    ChartEditorEventSprite.clearFrameCache();
 
     // Stop the music.
     if (welcomeMusic != null) welcomeMusic.destroy();
     if (audioInstTrack != null) audioInstTrack.destroy();
     if (audioVocalTrackGroup != null) audioVocalTrackGroup.destroy();
 
+    audioInstTrackData.clear();
+    audioVocalTrackData.clear();
+    songMetadata.clear();
+    songChartData.clear();
+    undoHistory.resize(0);
+    redoHistory.resize(0);
+    displayedNoteDataCache.resize(0);
+    displayedHoldNoteDataCache.resize(0);
+    displayedEventDataCache.resize(0);
+    characterPreviewEnvelopeCharacters.clear();
+    characterPreviewEnvelopeBounds.clear();
+
     // Reset the sounds used by some playables.
     funkin.play.GameOverSubState.reset();
     funkin.play.PauseSubState.reset();
     funkin.play.Countdown.reset();
+
+    MemoryCleanup.requestFullCleanup();
+    super.destroy();
   }
 
   function applyCanQuickSave():Void
   {
     if (menubarItemSaveChart == null) return;
 
+    #if mobile
+    menubarItemSaveChart.disabled = false;
+    #else
     if (currentWorkingFilePath == null)
     {
       menubarItemSaveChart.disabled = true;
@@ -7542,6 +7651,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     {
       menubarItemSaveChart.disabled = false;
     }
+    #end
   }
 
   function applyWindowTitle():Void

@@ -71,6 +71,24 @@ LuaSlice supports isolated `.lua` scripts and global `.luag` scripts. Lua is ena
 - `onReload()` runs after reload.
 - Lua-created sprites, text, sounds, tweens, timers, menus, shaders, and registered objects are cleaned before reload.
 
+## LuaSlice Chart Events
+- `PreloadResource`
+- `ChangeCharacter` with optional `preload`
+- `ChangeStage` with optional `preload`
+- `PlayAudio` with `play`, `resume`, `volume`, `pause`, and `stop` actions
+- `Shader` with apply/remove actions for `.hxc` and `.frag` shaders, including number, whole-number, on/off, X/Y, color, and optional transparent-pixel protection for sprite targets
+- `Overlay` and `Blackout`
+- `HealthDrain` with Player/Opponent targeting and optional score changes
+- `HUDFade` with Both, Player, and Opponent targeting for icons, notes, and strumlines
+- `PlayDialogue`
+- `PlayCountdown`
+- `HUDFade`
+- `CameraFlash` and `CameraShake`
+- `StageObjectControl`
+- `ScrollSpeed` with optional `returnToOriginal`
+
+These are normal Chart Editor events. File fields use explicit paths and start at `assets/` by default. Shader entries include `.hxc` classes, `.frag` files, and the built-in `DropShadowShader`. Character targets use BF, Dad, or GF choices, named stage objects use the Object target, and fragment shaders on sprite targets can ignore fully transparent pixels. Play Dialogue lists available conversation JSON files, preloads their music, speakers, and dialogue boxes, then releases them when the conversation closes. F5 and song retries remove active event effects before the song is restored.
+
 ## Script Folder Rules
 - `scripts/lua` loads `.lua` only.
 - `scripts/luag` loads `.luag` only.
@@ -188,6 +206,7 @@ Named layers:
 - `shader.apply(target, tag)`
 - `shader.remove(target)`
 - `shader.exists(tag)`
+- `shader.setColor(tag, property, color)`
 - `initLuaShader(name, tag?)`
 - `makeLuaShader(tag, pathOrSource?, vertexPathOrSource?)`
 - `setLuaShader(tag, target)`
@@ -196,6 +215,9 @@ Named layers:
 - `setLuaCameraShader(tag, camera?)`
 - `removeLuaCameraShader(camera?)`
 - `setLuaShaderFloatSimple(tag, name, value)`
+- `setShaderColor(tag, property, color)`
+
+Named stage objects can be targeted with `object:<name>`, for example `setShaderOnSprite("object:streetLamp", "rim")`. `DropShadowShader` supports `color`, `angle`, `distance`, `strength`, `threshold`, `antialiasAmt`, `baseHue`, `baseSaturation`, `baseBrightness`, `baseContrast`, and `maskThreshold`.
 
 ### Save
 - `save.get(key, fallback?)`
@@ -269,6 +291,8 @@ The config accepts `name`, `position`, and an `items` array containing `checkbox
 - `writeTextFile`
 - `randomFloat`
 - `randomInt`
+- `openLuaState(target, args?)`
+- `openLuaSubState(target, args?)`
 
 ### Event Control
 - `getCurrentEvent`
@@ -358,6 +382,9 @@ The config accepts `name`, `position`, and an `items` array containing `checkbox
 - `getScreenWidth`
 - `getScreenHeight`
 - `setFullscreen`
+- `getMemoryUsageMB`
+- `getDebugDisplayVisible`
+- `setDebugDisplayVisible`
 
 ### Sprites And Text
 - `addSprite`
@@ -439,6 +466,7 @@ Pause item targets include `resume`, `restartSong`, `changeDifficulty`, `practic
 - `setShaderFloatArray`
 - `setShaderInt`
 - `setShaderBool`
+- `setShaderColor`
 - `applyShader`
 - `clearShader`
 - `applyCameraShader`

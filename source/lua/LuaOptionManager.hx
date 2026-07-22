@@ -1,4 +1,4 @@
-package funkin.scripting;
+package;
 
 #if FEATURE_LUA_SCRIPTS
 import funkin.save.Save;
@@ -7,30 +7,6 @@ import funkin.ui.options.OptionsState;
 import funkin.ui.options.OptionsState.OptionsMenu;
 import funkin.ui.options.PreferencesMenu;
 import haxe.Json;
-#end
-
-#if FEATURE_LUA_SCRIPTS
-typedef LuaOptionPage =
-{
-  var id:String;
-  var title:String;
-  var position:Int;
-  var items:Array<LuaOptionItem>;
-}
-
-typedef LuaOptionItem =
-{
-  var kind:String;
-  var key:String;
-  var label:String;
-  var description:String;
-  var defaultValue:Dynamic;
-  var min:Float;
-  var max:Float;
-  var step:Float;
-  var precision:Int;
-  var values:Dynamic;
-}
 #end
 
 @:access(funkin.ui.Codex)

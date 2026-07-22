@@ -3,6 +3,7 @@ package funkin.data.song;
 import funkin.ui.debug.charting.ChartEditorState;
 import funkin.data.event.SongEventRegistry;
 import funkin.play.event.SongEvent;
+import funkin.play.event.ShaderSongEvent;
 import funkin.data.event.SongEventSchema;
 import funkin.data.song.SongRegistry;
 import thx.semver.Version;
@@ -953,6 +954,7 @@ class SongEventDataRaw implements ICloneable<SongEventDataRaw>
 
     for (fieldName in eventSchema.listAllFieldNames())
     {
+      if (!shouldDisplayTooltipField(fieldName, valueStruct)) continue;
       var fieldValue:Dynamic = valueStruct.exists(fieldName) ? valueStruct.get(fieldName) : eventSchema.getDefaultFieldValue(fieldName);
 
       var title:String = eventSchema.getByName(fieldName)?.title ?? 'UnknownField';
@@ -976,6 +978,61 @@ class SongEventDataRaw implements ICloneable<SongEventDataRaw>
     }
 
     return result;
+  }
+
+  function shouldDisplayTooltipField(fieldName:String, valueStruct:haxe.DynamicAccess<Dynamic>):Bool
+  {
+    if (this.eventKind != 'Shader') return true;
+    final action = Std.string(valueStruct.get('action') ?? 'apply');
+    final targetType = Std.string(valueStruct.get('targetType') ?? 'camera');
+    final shader = Std.string(valueStruct.get('shader') ?? '');
+    final applying = action == 'apply';
+    for (base in ['property', 'valueType', 'value', 'boolValue', 'color', 'valueX', 'valueY'])
+    {
+      final slot = shaderTooltipSlot(fieldName, base);
+      if (slot == 0) continue;
+      final suffix = slot == 1 ? '' : Std.string(slot);
+      final property = Std.string(valueStruct.get('property${suffix}') ?? '');
+      final valueType = Std.string(valueStruct.get('valueType${suffix}') ?? ShaderSongEvent.getUniformValueTypeForShader(shader, property));
+      if (base == 'property') return applying && property != '';
+      if (base == 'valueType') return false;
+      if (!applying || property == '') return false;
+      return switch (base)
+      {
+        case 'value': valueType == 'number' || valueType == 'integer';
+        case 'boolValue': valueType == 'bool';
+        case 'color': valueType == 'color';
+        case 'valueX', 'valueY': valueType == 'position';
+        default: false;
+      };
+    }
+    var hasNumericProperty = false;
+    for (slot in 1...(ShaderSongEvent.MAX_PROPERTY_SLOTS + 1))
+    {
+      final suffix = slot == 1 ? '' : Std.string(slot);
+      final property = Std.string(valueStruct.get('property${suffix}') ?? '');
+      if (property == '') continue;
+      final valueType = Std.string(valueStruct.get('valueType${suffix}') ?? ShaderSongEvent.getUniformValueTypeForShader(shader, property));
+      if (valueType == 'number' || valueType == 'integer') hasNumericProperty = true;
+    }
+    return switch (fieldName)
+    {
+      case 'characterTarget': targetType == 'character';
+      case 'cameraTarget': targetType == 'camera';
+      case 'target': targetType == 'stageobject' || targetType == 'overlay';
+      case 'ignoreTransparentPixels': applying && targetType != 'camera' && shader.startsWith('frag:');
+      case 'fadeIn': applying && hasNumericProperty;
+      case 'fadeOut': !applying || hasNumericProperty;
+      default: true;
+    }
+  }
+
+  static function shaderTooltipSlot(fieldName:String, base:String):Int
+  {
+    if (fieldName == base) return 1;
+    if (!fieldName.startsWith(base)) return 0;
+    final parsed = Std.parseInt(fieldName.substr(base.length));
+    return parsed != null && parsed >= 2 && parsed <= ShaderSongEvent.MAX_PROPERTY_SLOTS ? parsed : 0;
   }
 }
 
