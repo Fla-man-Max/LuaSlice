@@ -1,0 +1,565 @@
+package funkin.ui.title;
+
+import flixel.group.FlxGroup;
+import flixel.input.gamepad.FlxGamepad;
+import funkin.ui.FullScreenScaleMode;
+import flixel.tweens.FlxEase;
+import flixel.tweens.FlxTween;
+import flixel.util.FlxColor;
+import flixel.util.FlxDirectionFlags;
+import flixel.util.FlxTimer;
+import funkin.util.HapticUtil;
+import funkin.graphics.shaders.ColorSwap;
+import funkin.graphics.shaders.LeftMaskShader;
+import funkin.graphics.FunkinSprite;
+import funkin.ui.MusicBeatState;
+import funkin.audio.FunkinSound;
+import funkin.ui.AtlasText;
+import openfl.Assets;
+import funkin.ui.mainmenu.MainMenuState;
+#if FEATURE_NEWGROUNDS
+import funkin.api.newgrounds.Medals;
+#end
+#if mobile
+import funkin.util.TouchUtil;
+import funkin.util.SwipeUtil;
+import openfl.events.MouseEvent;
+import openfl.events.TouchEvent;
+#end
+
+class TitleState extends MusicBeatState
+{
+  public static var initialized:Bool = false;
+
+  public static final LUASLICE_VERSION:String = '0.0.6.5';
+  public static var updateVersion:String = '';
+  public static var mustUpdate:Bool = false;
+
+  var blackScreen:FunkinSprite;
+  var credGroup:FlxGroup;
+  var textGroup:FlxGroup;
+  var ngSpr:FunkinSprite;
+
+  var curWacky:Array<String> = [];
+  var lastBeat:Int = 0;
+  var swagShader:ColorSwap;
+
+  override public function create():Void
+  {
+    super.create();
+    swagShader = new ColorSwap();
+
+    curWacky = FlxG.random.getObject(getIntroTextShit());
+    funkin.FunkinMemory.cacheSound(Paths.music('girlfriendsRingtone/girlfriendsRingtone'));
+
+    #if desktop
+    checkForUpdate();
+    #end
+
+    if (!initialized) new FlxTimer().start(1, function(tmr:FlxTimer)
+    {
+      startIntro();
+    });
+    else
+      startIntro();
+
+    #if mobile
+    if (FlxG.stage != null)
+    {
+      FlxG.stage.addEventListener(MouseEvent.MOUSE_UP, onRawTitleMouse);
+      FlxG.stage.addEventListener(TouchEvent.TOUCH_END, onRawTitleTouch);
+    }
+    #end
+  }
+
+  #if desktop
+  function checkForUpdate():Void
+  {
+    var http:haxe.Http = new haxe.Http('https://raw.githubusercontent.com/Fla-man-Max/LuaSlice/main/.github/gitVersion.txt');
+
+    http.onData = function(data:String):Void
+    {
+      updateVersion = data.split('\n')[0].trim();
+      var curVersion:String = LUASLICE_VERSION.trim();
+      trace('LuaSlice update check — online: $updateVersion | local: $curVersion');
+      if (updateVersion != curVersion)
+      {
+        mustUpdate = true;
+        trace('LuaSlice update available!');
+      }
+    }
+
+    http.onError = function(error:String):Void
+    {
+      trace('LuaSlice update check failed: $error');
+    }
+
+    http.request();
+  }
+  #end
+
+  var logoBl:FunkinSprite;
+  var gfDance:FunkinSprite;
+  var danceLeft:Bool = false;
+  var titleText:FunkinSprite;
+  var maskShader = new LeftMaskShader();
+  #if mobile
+  var rawTitlePress:Bool = false;
+  #end
+
+  #if FEATURE_VIDEO_PLAYBACK
+  var attractTimer:FlxTimer;
+  #end
+
+  function startIntro():Void
+  {
+    if (!initialized || FlxG.sound.music == null) playMenuMusic();
+
+    persistentUpdate = true;
+
+    var bg:FunkinSprite = new FunkinSprite(-1).makeSolidColor(FlxG.width + 2, FlxG.height, FlxColor.BLACK);
+    bg.screenCenter();
+    add(bg);
+
+    logoBl = new FunkinSprite(-150 + (FullScreenScaleMode.gameCutoutSize.x / 2.5), -100);
+    var logoFrames = try Paths.getSparrowAtlas('logoBumpin') catch (_:Dynamic) null;
+    if (logoFrames != null)
+    {
+      logoBl.frames = logoFrames;
+      logoBl.animation.addByPrefix('bump', 'logo bumpin', 24);
+      logoBl.animation.play('bump');
+    }
+    else
+    {
+      logoBl.makeSolidColor(700, 220, FlxColor.TRANSPARENT);
+    }
+    logoBl.shader = swagShader.shader;
+    logoBl.updateHitbox();
+
+    gfDance = new FunkinSprite((FlxG.width * 0.4) + FullScreenScaleMode.gameCutoutSize.x / 2.5, FlxG.height * 0.07);
+    var gfFrames = try Paths.getSparrowAtlas('gfDanceTitle') catch (_:Dynamic) null;
+    if (gfFrames != null)
+    {
+      gfDance.frames = gfFrames;
+      gfDance.animation.addByIndices('danceLeft', 'gfDance', [30, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14], "", 24, false);
+      gfDance.animation.addByIndices('danceRight', 'gfDance', [15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29], "", 24, false);
+    }
+    else
+    {
+      gfDance.makeSolidColor(360, 360, FlxColor.TRANSPARENT);
+    }
+
+    gfDance.shader = swagShader.shader;
+
+    add(logoBl);
+    add(gfDance);
+
+    var titleTextPath:String = 'title-screen-text' #if mobile + '-mobile' #end;
+
+    titleText = try FunkinSprite.createTextureAtlas(#if mobile 50 #else 100 #end + (FullScreenScaleMode.gameCutoutSize.x / 2), FlxG.height * 0.8, titleTextPath, {
+      cacheOnLoad: true
+    }) catch (_:Dynamic) null;
+    if (titleText == null)
+    {
+      titleText = new FunkinSprite(#if mobile 50 #else 100 #end + (FullScreenScaleMode.gameCutoutSize.x / 2), FlxG.height * 0.8).makeSolidColor(520, 80, FlxColor.TRANSPARENT);
+    }
+    else
+    {
+      titleText.anim.addByFrameLabel('idle', "Idle", 24);
+      titleText.anim.addByFrameLabel('press', "Confirm", 24);
+      titleText.animation.play('idle');
+    }
+    titleText.updateHitbox();
+    titleText.shader = swagShader.shader;
+
+    add(titleText);
+
+    if (!initialized)
+    {
+      credGroup = new FlxGroup();
+      add(credGroup);
+    }
+
+    textGroup = new FlxGroup();
+
+    blackScreen = bg.clone();
+
+    ngSpr = new FunkinSprite(0, FlxG.height * 0.52);
+
+    if (FlxG.random.bool(1))
+    {
+      try ngSpr.loadGraphic(Paths.image('newgrounds_logo_classic')) catch (_:Dynamic) ngSpr.makeSolidColor(300, 120, FlxColor.TRANSPARENT);
+    }
+    else if (FlxG.random.bool(30))
+    {
+      try ngSpr.loadGraphic(Paths.image('newgrounds_logo_animated'), true, 600) catch (_:Dynamic) ngSpr.makeSolidColor(300, 120, FlxColor.TRANSPARENT);
+      if (ngSpr.frames != null)
+      {
+        ngSpr.animation.add('idle', [0, 1], 4);
+        ngSpr.animation.play('idle');
+      }
+      ngSpr.setGraphicSize(Std.int(ngSpr.width * 0.55));
+      ngSpr.y += 25;
+    }
+    else
+    {
+      try ngSpr.loadGraphic(Paths.image('newgrounds_logo')) catch (_:Dynamic) ngSpr.makeSolidColor(300, 120, FlxColor.TRANSPARENT);
+      ngSpr.setGraphicSize(Std.int(ngSpr.width * 0.8));
+    }
+
+    ngSpr.visible = false;
+    if (credGroup != null)
+    {
+      credGroup.add(blackScreen);
+      credGroup.add(ngSpr);
+      credGroup.add(textGroup);
+    }
+
+    ngSpr.updateHitbox();
+    ngSpr.screenCenter(X);
+
+    FlxG.mouse.visible = false;
+
+    if (initialized) skipIntro();
+    else
+      initialized = true;
+
+    #if (FEATURE_VIDEO_PLAYBACK && !android)
+    trace('Opening Attract state in ${Constants.TITLE_ATTRACT_DELAY} seconds...');
+    attractTimer = new FlxTimer().start(Constants.TITLE_ATTRACT_DELAY, (_:FlxTimer) -> moveToAttract());
+    #end
+  }
+
+  function moveToAttract():Void
+  {
+    if (FlxG.sound.music != null) FlxG.sound.music.fadeOut(2.0, 0);
+    FlxG.camera.fade(FlxColor.BLACK, 2.0, false, function()
+    {
+      FlxG.switchState(() -> new AttractState());
+    });
+  }
+
+  function playMenuMusic():Void
+  {
+    var shouldFadeIn:Bool = (FlxG.sound.music == null);
+    FunkinSound.playMusic('freakyMenu', {
+      startingVolume: 0.0,
+      overrideExisting: true,
+      restartTrack: false,
+      persist: true
+    });
+    if (shouldFadeIn) FlxG.sound.music.fadeIn(4.0, 0.0, 1.0);
+  }
+
+  function getIntroTextShit():Array<Array<String>>
+  {
+    var fullText:String = Assets.getText(Paths.txt('introText'));
+
+    var firstArray:Array<String> = fullText.split('\n').filter(function(s:String) return s != '');
+    var swagGoodArray:Array<Array<String>> = [];
+
+    for (i in firstArray)
+    {
+      swagGoodArray.push(i.split('--'));
+    }
+
+    return swagGoodArray;
+  }
+
+  var transitioning:Bool = false;
+  var acceptInputDelay:Float = 0;
+
+  override function update(elapsed:Float):Void
+  {
+    if (acceptInputDelay > 0) acceptInputDelay = Math.max(0, acceptInputDelay - elapsed);
+
+    #if (desktop || android)
+    if (#if android FlxG.android.justReleased.BACK || #end controls.BACK_P)
+    {
+      openfl.Lib.application.window.close();
+    }
+    #end
+
+    if (FlxG.sound.music != null) Conductor.instance.update(FlxG.sound.music.time);
+    else Conductor.instance.update();
+
+    if (FlxG.mouse.visible || funkin.input.Cursor.cursorMode != null) funkin.input.Cursor.hide();
+
+    if (FlxG.keys.justPressed.Y)
+    {
+      FlxTween.cancelTweensOf(FlxG.stage.window, ['x', 'y']);
+      FlxTween.tween(FlxG.stage.window, {x: FlxG.stage.window.x + 300}, 1.4, {ease: FlxEase.quadInOut, type: PINGPONG, startDelay: 0.35});
+      FlxTween.tween(FlxG.stage.window, {y: FlxG.stage.window.y + 100}, 0.7, {ease: FlxEase.quadInOut, type: PINGPONG});
+    }
+
+    var pressedEnter:Bool = FlxG.keys.justPressed.ENTER #if mobile || anyTitleTouchPressed() #end;
+
+    var gamepad:FlxGamepad = FlxG.gamepads.lastActive;
+
+    if (gamepad != null)
+    {
+      if (gamepad.justPressed.START || gamepad.justPressed.ACCEPT) pressedEnter = true;
+    }
+
+    if (pressedEnter && acceptInputDelay <= 0 && !transitioning && skippedIntro)
+    {
+      if (FlxG.sound.music != null) FlxG.sound.music.onComplete = null;
+      if (titleText != null && titleText.animation != null) titleText.animation.play('press');
+      FlxG.camera.flash(FlxColor.WHITE, 1);
+      FunkinSound.playOnce(Paths.sound('confirmMenu'), 0.7);
+      transitioning = true;
+
+      #if FEATURE_HAPTICS
+      HapticUtil.vibrate(0.1, 0.5, 0.5);
+      #end
+
+      #if FEATURE_NEWGROUNDS
+      Medals.award(Medal.StartGame);
+      funkin.api.newgrounds.Events.logStartGame();
+      #end
+
+      new FlxTimer().start(2, function(tmr:FlxTimer)
+      {
+        moveToMainMenu();
+      });
+    }
+    if (pressedEnter && !skippedIntro && initialized) skipIntro();
+
+    if ((FlxG.sound.music?.volume ?? 1.0) < 0.8 && initialized)
+    {
+      FlxG.sound.music.volume += 0.5 * elapsed;
+    }
+
+    if (controls.UI_LEFT #if mobile || SwipeUtil.justSwipedLeft #end) swagShader.update(-elapsed * 0.1);
+    if (controls.UI_RIGHT #if mobile || SwipeUtil.justSwipedRight #end) swagShader.update(elapsed * 0.1);
+    if (!cheatActive && skippedIntro) cheatCodeShit();
+    super.update(elapsed);
+  }
+
+  function moveToMainMenu():Void
+  {
+    #if FEATURE_VIDEO_PLAYBACK
+    if (attractTimer != null)
+    {
+      attractTimer.cancel();
+      attractTimer = null;
+    }
+    #end
+
+    #if desktop
+    if (mustUpdate)
+    {
+      FlxG.switchState(() -> new funkin.ui.OutdatedState());
+      return;
+    }
+    #end
+
+    FlxG.switchState(() -> new MainMenuState());
+  }
+
+  override public function destroy():Void
+  {
+    #if mobile
+    if (FlxG.stage != null)
+    {
+      FlxG.stage.removeEventListener(MouseEvent.MOUSE_UP, onRawTitleMouse);
+      FlxG.stage.removeEventListener(TouchEvent.TOUCH_END, onRawTitleTouch);
+    }
+    #end
+
+    super.destroy();
+  }
+
+  #if mobile
+  function anyTitleTouchPressed():Bool
+  {
+    if (SwipeUtil.justSwipedAny) return false;
+    if (rawTitlePress)
+    {
+      rawTitlePress = false;
+      return true;
+    }
+
+    for (touch in FlxG.touches.list)
+    {
+      if (touch != null && (touch.justPressed || touch.justReleased)) return true;
+    }
+
+    return TouchUtil.justPressed || TouchUtil.justReleased || FlxG.mouse.justPressed || FlxG.mouse.justReleased;
+  }
+
+  function onRawTitleMouse(_:MouseEvent):Void
+  {
+    rawTitlePress = true;
+  }
+
+  function onRawTitleTouch(_:TouchEvent):Void
+  {
+    rawTitlePress = true;
+  }
+  #end
+
+  var cheatArray:Array<Int> = [0x0001, 0x0010, 0x0001, 0x0010, 0x0100, 0x1000, 0x0100, 0x1000];
+  var curCheatPos:Int = 0;
+  var cheatActive:Bool = false;
+
+  function cheatCodeShit():Void
+  {
+    if (controls.NOTE_DOWN_P || controls.UI_DOWN_P #if mobile || SwipeUtil.justSwipedUp #end) codePress(FlxDirectionFlags.DOWN.toInt());
+    if (controls.NOTE_UP_P || controls.UI_UP_P #if mobile || SwipeUtil.justSwipedDown #end) codePress(FlxDirectionFlags.UP.toInt());
+    if (controls.NOTE_LEFT_P || controls.UI_LEFT_P #if mobile || SwipeUtil.justSwipedLeft #end) codePress(FlxDirectionFlags.LEFT.toInt());
+    if (controls.NOTE_RIGHT_P || controls.UI_RIGHT_P #if mobile || SwipeUtil.justSwipedRight #end) codePress(FlxDirectionFlags.RIGHT.toInt());
+  }
+
+  function codePress(input:Int):Void
+  {
+    if (input == cheatArray[curCheatPos])
+    {
+      curCheatPos += 1;
+      if (curCheatPos >= cheatArray.length) startCheat();
+    }
+    else
+      curCheatPos = 0;
+  }
+
+  function startCheat():Void
+  {
+    cheatActive = true;
+
+    FunkinSound.playMusic('girlfriendsRingtone', {
+      startingVolume: 0.0,
+      overrideExisting: true,
+      restartTrack: true
+    });
+
+    FlxG.sound.music.fadeIn(4.0, 0.0, 1.0);
+
+    FlxG.camera.flash(FlxColor.WHITE, 1);
+    FunkinSound.playOnce(Paths.sound('confirmMenu'), 0.7);
+
+    #if FEATURE_VIDEO_PLAYBACK
+    if (attractTimer != null) attractTimer.cancel();
+    #end
+  }
+
+  function createCoolText(textArray:Array<String>):Void
+  {
+    if (credGroup == null || textGroup == null) return;
+
+    for (i in 0...textArray.length)
+    {
+      var money:AtlasText = new AtlasText(0, 0, textArray[i], AtlasFont.BOLD);
+      money.screenCenter(X);
+      money.y += (i * 60) + 200;
+      textGroup.add(money);
+    }
+  }
+
+  function addMoreText(text:String):Void
+  {
+    if (credGroup == null || textGroup == null) return;
+
+    HapticUtil.vibrate();
+
+    var coolText:AtlasText = new AtlasText(0, 0, text.trim(), AtlasFont.BOLD);
+    coolText.screenCenter(X);
+    coolText.y += (textGroup.length * 60) + 200;
+    textGroup.add(coolText);
+  }
+
+  function deleteCoolText():Void
+  {
+    if (credGroup == null || textGroup == null) return;
+
+    while (textGroup.members.length > 0)
+    {
+      var member = textGroup.members[0];
+      textGroup.remove(member, true);
+      if (member != null) member.destroy();
+    }
+  }
+
+  var isRainbow:Bool = false;
+  var skippedIntro:Bool = false;
+
+  override function beatHit():Bool
+  {
+    if (!super.beatHit()) return false;
+
+    if (!skippedIntro)
+    {
+      if (Conductor.instance.currentBeat > lastBeat)
+      {
+        for (i in lastBeat...Conductor.instance.currentBeat)
+        {
+          switch (i + 1)
+          {
+            case 1:
+              createCoolText(['The', 'Funkin Crew Inc']);
+            case 3:
+              addMoreText('presents');
+            case 4:
+              deleteCoolText();
+            case 5:
+              createCoolText(['In association', 'with']);
+            case 7:
+              addMoreText('newgrounds');
+              if (ngSpr != null) ngSpr.visible = true;
+            case 8:
+              deleteCoolText();
+              if (ngSpr != null) ngSpr.visible = false;
+            case 9:
+              createCoolText([curWacky[0]]);
+            case 11:
+              addMoreText(curWacky[1]);
+            case 12:
+              deleteCoolText();
+            case 13:
+              addMoreText('Friday');
+            case 14:
+              if (curWacky[0] == "trending") addMoreText('Nigth');
+              else
+                addMoreText('Night');
+            case 15:
+              addMoreText('Funkin');
+            case 16:
+              skipIntro();
+          }
+        }
+      }
+      lastBeat = Conductor.instance.currentBeat;
+    }
+
+    if (skippedIntro)
+    {
+      if (cheatActive && Conductor.instance.currentBeat % 2 == 0) swagShader.update(0.125);
+
+      if (logoBl != null && logoBl.animation != null) logoBl.animation.play('bump', true);
+
+      danceLeft = !danceLeft;
+
+      if (gfDance != null && gfDance.animation != null)
+      {
+        if (danceLeft) gfDance.animation.play('danceRight');
+        else
+          gfDance.animation.play('danceLeft');
+      }
+    }
+
+    return true;
+  }
+
+  function skipIntro(?flash:Bool = true):Void
+  {
+    if (!skippedIntro)
+    {
+      remove(ngSpr);
+
+      if (flash) FlxG.camera.flash(FlxColor.WHITE, initialized ? 1 : 4);
+
+      if (credGroup != null) remove(credGroup);
+      skippedIntro = true;
+      acceptInputDelay = 0.5;
+    }
+  }
+}
