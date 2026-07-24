@@ -1922,10 +1922,9 @@ class PlayState extends MusicBeatSubState
   {
     performCleanup();
 
-    // `performCleanup()` clears the static reference to this state.
-    // Since PlayState is a SubState, it stays alive on screen for a few frames 
-    // while LoadingState prepares. We must restore the instance so scripts/hooks 
-    // don't crash from accessing a null PlayState.instance during the transition.
+    // `performCleanup()` clears the static reference to this state
+    // Since PlayState is a SubState, it stays alive on screen for a few frames
+    // don't crash from accessing a null PlayState.instance during the transition
     instance = this;
 
     funkin.modding.PolymodHandler.forceReloadAssets();
