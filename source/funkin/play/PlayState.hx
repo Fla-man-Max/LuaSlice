@@ -645,7 +645,7 @@ class PlayState extends MusicBeatSubState
   public var debugUnbindCameraZoom:Bool = false;
 
   /**
-   * The camera which contains, and controls visibility of, a video cutscene, dialogue.
+   * The camera which contains, and controls visibility of a video cutscene, dialogue.
    */
   public var camCutscene:FunkinCamera;
 
@@ -1922,8 +1922,10 @@ class PlayState extends MusicBeatSubState
   {
     performCleanup();
 
-    // `performCleanup()` clears the static reference to this state
-    // scripts might still need it, so we set it back to `this`
+    // `performCleanup()` clears the static reference to this state.
+    // Since PlayState is a SubState, it stays alive on screen for a few frames 
+    // while LoadingState prepares. We must restore the instance so scripts/hooks 
+    // don't crash from accessing a null PlayState.instance during the transition.
     instance = this;
 
     funkin.modding.PolymodHandler.forceReloadAssets();
