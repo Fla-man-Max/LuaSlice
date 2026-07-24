@@ -829,7 +829,7 @@ class Strumline extends FlxSpriteGroup
    */
   public function onBeatHit():Void
   {
-    // why are we doing this every beat? >:(
+    // why are we doing this every beat? >:( 
     if (notes.members.length > 1) notes.members.insertionSort(compareNoteSprites.bind(FlxSort.ASCENDING));
 
     if (holdNotes.members.length > 1) holdNotes.members.insertionSort(compareHoldNoteSprites.bind(FlxSort.ASCENDING));
@@ -1093,6 +1093,10 @@ class Strumline extends FlxSpriteGroup
       splash.x += INITIAL_OFFSET;
       splash.x += noteStyle.getSplashOffsets()[0] * splash.scale.x;
 
+      splash.x -= splash.width / 2;
+      splash.y -= splash.height / 2;
+      splash.alpha = targetAlpha;
+
       splash.y = this.y;
       splash.y -= INITIAL_OFFSET;
       splash.y += noteStyle.getSplashOffsets()[1] * splash.scale.y;
@@ -1124,6 +1128,8 @@ class Strumline extends FlxSpriteGroup
       cover.x += getXPos(holdNote.noteDirection);
       cover.x += STRUMLINE_SIZE / 2;
       cover.x -= cover.width / 2;
+      cover.y = -9999;
+      cover.alpha = targetAlpha;
       cover.x += noteStyle.getHoldCoverOffsets()[0] * cover.scale.x;
       cover.x += -12; // hardcoded adjustment, because we are evil.
 
@@ -1174,6 +1180,7 @@ class Strumline extends FlxSpriteGroup
       noteSprite.x -= (noteSprite.width - Strumline.STRUMLINE_SIZE) / 2; // Center it
       noteSprite.x -= NUDGE;
       noteSprite.y = -9999;
+      noteSprite.alpha = targetAlpha;
 
       noteSprite.graphic.destroyOnNoUse = false;
 
@@ -1210,7 +1217,7 @@ class Strumline extends FlxSpriteGroup
       holdNoteSprite.missedNote = false;
       holdNoteSprite.hitNote = false;
       holdNoteSprite.visible = true;
-      holdNoteSprite.alpha = 1.0;
+      holdNoteSprite.alpha = targetAlpha;
 
       holdNoteSprite.x = this.x;
       holdNoteSprite.x += getXPos(DIRECTIONS[note.getDirection() % KEY_COUNT]);
@@ -1352,18 +1359,35 @@ class Strumline extends FlxSpriteGroup
     #if mobile
     if (inArrowControlSchemeMode && isPlayer) pos = 35 * (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
     #end
+    
+    var middleScrollGap:Float = 0;
+    if (Preferences.middleScroll && !isPlayer && (direction == NoteDirection.UP || direction == NoteDirection.RIGHT))
+    {
+      middleScrollGap = FlxG.width / 2;
+    }
+
     return switch (direction)
     {
       case NoteDirection.LEFT: -pos * 2;
       case NoteDirection.DOWN:
         -(pos * 2) + (1 * Strumline.NOTE_SPACING) * (noteSpacingScale * strumlineScale.x);
       case NoteDirection.UP:
-        pos + (2 * Strumline.NOTE_SPACING) * (noteSpacingScale * strumlineScale.x);
+        pos + (2 * Strumline.NOTE_SPACING) * (noteSpacingScale * strumlineScale.x) + middleScrollGap;
       case NoteDirection.RIGHT:
-        pos + (3 * Strumline.NOTE_SPACING) * (noteSpacingScale * strumlineScale.x);
+        pos + (3 * Strumline.NOTE_SPACING) * (noteSpacingScale * strumlineScale.x) + middleScrollGap;
       default: -pos * 2;
     }
   }
+
+  /**
+   * Apply a small animation which moves the arrow down and fades it in.
+   * Only plays at the start of Free Play songs.
+   *
+   * Note that modifying the offset of the whole strumline won't have the
+   * @param arrow The arrow to animate.
+   * @param index The index of the arrow in the strumline.
+   */
+  public var targetAlpha:Float = 1.0;
 
   /**
    * Apply a small animation which moves the arrow down and fades it in.
@@ -1377,7 +1401,7 @@ class Strumline extends FlxSpriteGroup
   {
     arrow.y -= 10;
     arrow.alpha = 0.0;
-    FlxTween.tween(arrow, {y: arrow.y + 10, alpha: 1}, 1, {ease: FlxEase.circOut, startDelay: 0.5 + (0.2 * index)});
+    FlxTween.tween(arrow, {y: arrow.y + 10, alpha: targetAlpha}, 1, {ease: FlxEase.circOut, startDelay: 0.5 + (0.2 * index)});
   }
 
   /**
