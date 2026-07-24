@@ -363,17 +363,52 @@ class FunkinHitbox extends FlxTypedSpriteGroup<FunkinHint>
           }
         }
       case FunkinHitboxControlSchemes.Arrows:
-        final hintWidth:Int = 146;
-        final hintHeight:Int = 149;
-        final noteSpacing:Int = 80;
-
-        final xPos:Int = Math.floor((FlxG.width - (hintWidth + noteSpacing) * hintsNoteDirections.length) / 2);
-        final yPos:Int = Math.floor(FlxG.height - hintHeight * 2 - 24);
-
-        for (i in 0...hintsNoteDirections.length)
+        if (Preferences.arrowBoxLayout == "Hitbox")
         {
-          add(createHintTransparentNote(xPos + i * hintWidth + noteSpacing * i, yPos, hintsNoteDirections[i % hintsNoteDirections.length], hintWidth,
-            hintHeight));
+          final hintWidth:Int = Math.floor(FlxG.width / hintsNoteDirections.length);
+          for (i in 0...hintsNoteDirections.length)
+          {
+            final defaultColors:Array<FlxColor> = [0xFFC34B9A, 0xFF00FFFF, 0xFF12FB06, 0xFFF9393F];
+            final color:FlxColor = Preferences.arrowRGB ? hintsColors[i % hintsColors.length] : defaultColors[i % defaultColors.length];
+            
+            final hint = createHintLane(i * hintWidth, 0, hintsNoteDirections[i % hintsNoteDirections.length], hintWidth, FlxG.height, color, true, true);
+            final baseAlpha = Preferences.arrowTransparency / 100.0;
+            
+            hint.onDown.removeAll();
+            hint.onUp.removeAll();
+            hint.onOut.removeAll();
+            
+            hint.onDown.add(function() {
+              if (@:privateAccess hint.alphaTween != null) @:privateAccess hint.alphaTween.cancel();
+              @:privateAccess hint.alphaTween = flixel.tweens.FlxTween.tween(hint, {alpha: Math.min(1.0, baseAlpha + 0.4)}, 0.01, {ease: flixel.tweens.FlxEase.circInOut});
+            });
+            hint.onUp.add(function() {
+              if (@:privateAccess hint.alphaTween != null) @:privateAccess hint.alphaTween.cancel();
+              @:privateAccess hint.alphaTween = flixel.tweens.FlxTween.tween(hint, {alpha: baseAlpha}, 0.01, {ease: flixel.tweens.FlxEase.circInOut});
+            });
+            hint.onOut.add(function() {
+              if (@:privateAccess hint.alphaTween != null) @:privateAccess hint.alphaTween.cancel();
+              @:privateAccess hint.alphaTween = flixel.tweens.FlxTween.tween(hint, {alpha: baseAlpha}, 0.01, {ease: flixel.tweens.FlxEase.circInOut});
+            });
+            
+            hint.alpha = baseAlpha;
+            add(hint);
+          }
+        }
+        else
+        {
+          final hintWidth:Int = 146;
+          final hintHeight:Int = 149;
+          final noteSpacing:Int = 80;
+
+          final xPos:Int = Math.floor((FlxG.width - (hintWidth + noteSpacing) * hintsNoteDirections.length) / 2);
+          final yPos:Int = Math.floor(FlxG.height - hintHeight * 2 - 24);
+
+          for (i in 0...hintsNoteDirections.length)
+          {
+            add(createHintTransparentNote(xPos + i * hintWidth + noteSpacing * i, yPos, hintsNoteDirections[i % hintsNoteDirections.length], hintWidth,
+              hintHeight));
+          }
         }
     }
     #end

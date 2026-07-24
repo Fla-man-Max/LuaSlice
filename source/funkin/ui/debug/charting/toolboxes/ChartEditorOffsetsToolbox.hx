@@ -207,7 +207,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
         playheadRelativePos = playheadRelativePos.clamp(0, waveformScrollview.width - PLAYHEAD_RIGHT_PAD);
         var diff = playheadRelativePos - prevPlayheadRelativePos;
 
-        if (diff != 0)
+        if (diff != 0 && waveformPlayer.waveform.waveformData != null)
         {
           // We have to change the song time to match the playhead position when we move it.
           var currentWaveformIndex:Int = Std.int(playheadAbsolutePos * (waveformScale / BASE_SCALE * waveformMagicFactor));
@@ -320,10 +320,12 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
 
     var numberOfTicks:Int = Math.floor(waveformInstrumental.waveform.width / chartEditorState.offsetTickBitmap.width * 2) + 1;
 
+    var pointsPerSecond = (waveformInstrumental.waveform.waveformData != null) ? waveformInstrumental.waveform.waveformData.pointsPerSecond() : 100.0;
+
     for (index in 0...numberOfTicks)
     {
       var tickPos = chartEditorState.offsetTickBitmap.width / 2 * index;
-      var tickTime = tickPos * (waveformScale / BASE_SCALE * waveformMagicFactor) / waveformInstrumental.waveform.waveformData.pointsPerSecond();
+      var tickTime = tickPos * (waveformScale / BASE_SCALE * waveformMagicFactor) / pointsPerSecond;
 
       var tickLabel:Label = new Label();
       tickLabel.text = formatTime(tickTime);
@@ -395,9 +397,12 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     playheadAbsolutePos = targetPlayheadPos;
 
     // Move the audio preview to the playhead position.
-    var currentWaveformIndex:Int = Std.int(playheadAbsolutePos * (waveformScale / BASE_SCALE * waveformMagicFactor));
-    var targetSongTimeSeconds:Float = waveformPlayer.waveform.waveformData.indexToSeconds(currentWaveformIndex);
-    audioPreviewTracks.time = targetSongTimeSeconds * Constants.MS_PER_SEC;
+    if (waveformPlayer.waveform.waveformData != null)
+    {
+      var currentWaveformIndex:Int = Std.int(playheadAbsolutePos * (waveformScale / BASE_SCALE * waveformMagicFactor));
+      var targetSongTimeSeconds:Float = waveformPlayer.waveform.waveformData.indexToSeconds(currentWaveformIndex);
+      audioPreviewTracks.time = targetSongTimeSeconds * Constants.MS_PER_SEC;
+    }
   }
 
   public function onStartDragWaveform(waveform:Waveform):Void
@@ -419,6 +424,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     var deltaMousePosition = newDragMousePosition - dragMousePosition;
 
     if (deltaMousePosition == 0) return;
+    if (dragWaveform != null && getWaveform(dragWaveform).waveformData == null) return;
 
     var deltaPixels:Float = deltaMousePosition * (waveformScale / BASE_SCALE * waveformMagicFactor);
     var deltaMilliseconds:Float = switch (dragWaveform)
@@ -450,6 +456,16 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     dragMousePosition = newDragMousePosition;
 
     refresh();
+  }
+  
+  function getWaveform(target:Waveform):WaveformPlayer
+  {
+    return switch (target)
+    {
+      case PLAYER: waveformPlayer;
+      case OPPONENT: waveformOpponent;
+      case INSTRUMENTAL: waveformInstrumental;
+    }
   }
 
   public function onStopDragWaveform(event:MouseEvent):Void
@@ -732,7 +748,12 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     {
       trace('Playback time: ${audioPreviewTracks.time}');
 
-      var targetScrollPos:Float = waveformInstrumental.waveform.waveformData.secondsToIndex(audioPreviewTracks.time / Constants.MS_PER_SEC) / (waveformScale / BASE_SCALE * waveformMagicFactor);
+      var targetScrollPos:Float = 0;
+      if (waveformInstrumental.waveform.waveformData != null)
+      {
+        targetScrollPos = waveformInstrumental.waveform.waveformData.secondsToIndex(audioPreviewTracks.time / Constants.MS_PER_SEC) / (waveformScale / BASE_SCALE * waveformMagicFactor);
+      }
+      
       // waveformScrollview.hscrollPos = targetScrollPos;
       var prevPlayheadAbsolutePos = playheadAbsolutePos;
       playheadAbsolutePos = targetScrollPos;
@@ -805,7 +826,8 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
   {
     super.refresh();
 
-    waveformMagicFactor = MAGIC_SCALE_BASE_TIME / (chartEditorState.offsetTickBitmap.width / waveformInstrumental.waveform.waveformData.pointsPerSecond());
+    var pointsPerSecond = (waveformInstrumental.waveform.waveformData != null) ? waveformInstrumental.waveform.waveformData.pointsPerSecond() : 100.0;
+    waveformMagicFactor = MAGIC_SCALE_BASE_TIME / (chartEditorState.offsetTickBitmap.width / pointsPerSecond);
 
     var currentZoomFactor = waveformScale / BASE_SCALE * waveformMagicFactor;
 

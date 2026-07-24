@@ -100,12 +100,17 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
 
   var _waveformData:Null<WaveformData> = null;
 
+  @:nullSafety(Off)
   function get_waveformData():WaveformData
   {
     if (_waveformData == null)
     {
       _waveformData = WaveformDataParser.interpretFlxSound(this);
-      if (_waveformData == null) throw 'Could not interpret waveform data!';
+      if (_waveformData == null)
+      {
+        // Don't crash the game, just warn that MP3s aren't supported for waveforms.
+        FlxG.log.warn('Could not interpret waveform data! MP3 files are not supported for waveforms.');
+      }
     }
     return _waveformData;
   }

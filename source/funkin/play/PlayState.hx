@@ -11,13 +11,14 @@ import flixel.FlxObject;
 import flixel.FlxSprite;
 import flixel.FlxSubState;
 import flixel.group.FlxSpriteGroup;
+import flixel.math.FlxEase;
 import flixel.math.FlxMath;
 import flixel.math.FlxPoint;
 import flixel.sound.FlxSound;
 import flixel.text.FlxBitmapFont;
 import flixel.text.FlxBitmapText;
-import flixel.tweens.FlxTween;
 import flixel.tweens.FlxEase;
+import flixel.tweens.FlxTween;
 import flixel.ui.FlxBar;
 import flixel.util.FlxColor;
 import flixel.util.FlxStringUtil;
@@ -644,7 +645,7 @@ class PlayState extends MusicBeatSubState
   public var debugUnbindCameraZoom:Bool = false;
 
   /**
-   * The camera which contains, and controls visibility of, a video cutscene, dialogue.
+   * The camera which contains, and controls visibility of a video cutscene, dialogue.
    */
   public var camCutscene:FunkinCamera;
 
@@ -659,7 +660,7 @@ class PlayState extends MusicBeatSubState
   public var camSubtitles:FunkinCamera;
 
   /**
-   * The camera which contains, and controls visibility of, pause menu.
+   * The camera which contains, and controls visibility of pause menu.
    */
   public var camPause:FunkinCamera;
 
@@ -1921,8 +1922,10 @@ class PlayState extends MusicBeatSubState
   {
     performCleanup();
 
-    // `performCleanup()` clears the static reference to this state
-    // scripts might still need it, so we set it back to `this`
+    // `performCleanup()` clears the static reference to this state.
+    // Since PlayState is a SubState, it stays alive on screen for a few frames 
+    // while LoadingState prepares. We must restore the instance so scripts/hooks 
+    // don't crash from accessing a null PlayState.instance during the transition.
     instance = this;
 
     funkin.modding.PolymodHandler.forceReloadAssets();
@@ -2221,8 +2224,6 @@ class PlayState extends MusicBeatSubState
       }
       scriptPaths.push('${modPath}/scripts/song-${currentSong.id}.lua');
       scriptPaths.push('${modPath}/scripts/${currentSong.id}.lua');
-      scriptPaths.push('${modPath}/scripts/${currentStageId}.luag');
-      scriptPaths.push('${modPath}/scripts/${currentStageId}.lua');
       scriptPaths.push('${modPath}/scripts/stage-${currentStageId}.luag');
       scriptPaths.push('${modPath}/scripts/stage-${currentStageId}.lua');
       scriptPaths.push('${modPath}/scripts/stages/${currentStageId}.luag');
@@ -2996,6 +2997,17 @@ class PlayState extends MusicBeatSubState
     opponentStrumline.zIndex = 1000;
     opponentStrumline.cameras = [camHUD];
 
+    if (Preferences.middleScroll)
+    {
+      final strumlineWidth:Float = Strumline.NOTE_SPACING * 4;
+      playerStrumline.x = (FlxG.width / 2) - (strumlineWidth / 2);
+      
+      opponentStrumline.x = 96; 
+      
+      opponentStrumline.alpha = 0.9;
+      opponentStrumline.targetAlpha = 0.9;
+    }
+
     #if mobile
     if (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows && !ControlsHandler.hasExternalInputDevice)
     {
@@ -3038,6 +3050,15 @@ class PlayState extends MusicBeatSubState
     }
     opponentStrumline.y = Constants.STRUMLINE_Y_OFFSET * 0.3;
     opponentStrumline.x -= 30;
+    
+    // Update hitbox layout to match the newly configured strumline
+    if (hitbox != null)
+    {
+      for (direction in Strumline.DIRECTIONS)
+      {
+        hitbox.getFirstHintByDirection(direction).follow(playerStrumline.getByDirection(direction));
+      }
+    }
   }
 
   function initPauseSprites()
@@ -3786,29 +3807,29 @@ class PlayState extends MusicBeatSubState
         playerStrumline.playPress(input.noteDirection);
         trace('PENALTY Score: ${songScore}');
       }
-    else if (notesInDirection.length == 0)
-    {
-      // Press a key with no penalty.
+      else if (notesInDirection.length == 0)
+      {
+        // Press a key with no penalty.
 
-      // Play the strumline animation.
-      playerStrumline.playPress(input.noteDirection);
-      trace('NO PENALTY Score: ${songScore}');
-    }
-    else
-    {
-      // Choose the first note, deprioritizing low priority notes.
-      var targetNote:Null<NoteSprite> = notesInDirection.find((note) -> !note.lowPriority);
-      if (targetNote == null) targetNote = notesInDirection[0];
-      if (targetNote == null) continue;
+        // Play the strumline animation.
+        playerStrumline.playPress(input.noteDirection);
+        trace('NO PENALTY Score: ${songScore}');
+      }
+      else
+      {
+        // Choose the first note, deprioritizing low priority notes.
+        var targetNote:Null<NoteSprite> = notesInDirection.find((note) -> !note.lowPriority);
+        if (targetNote == null) targetNote = notesInDirection[0];
+        if (targetNote == null) continue;
 
-      // Judge and hit the note.
-      goodNoteHit(targetNote, input);
+        // Judge and hit the note.
+        goodNoteHit(targetNote, input);
 
-      notesInDirection.remove(targetNote);
+        notesInDirection.remove(targetNote);
 
-      // Play the strumline animation.
-      playerStrumline.playConfirm(input.noteDirection);
-    }
+        // Play the strumline animation.
+        playerStrumline.playConfirm(input.noteDirection);
+      }
     }
 
     while (inputReleaseQueue.length > 0)
@@ -4621,7 +4642,7 @@ class PlayState extends MusicBeatSubState
             {
               ease: FlxEase.expoIn,
             });
-         */
+       */
     });
   }
 
