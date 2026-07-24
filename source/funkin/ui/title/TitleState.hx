@@ -1,3 +1,4 @@
+Set-Content -Path "source\funkin\ui\title\TitleState.hx" -Value @"
 package funkin.ui.title;
 
 import flixel.group.FlxGroup;
@@ -29,9 +30,6 @@ import openfl.events.TouchEvent;
 
 class TitleState extends MusicBeatState
 {
-  /**
-   * Only play the credits once per session.
-   */
   public static var initialized:Bool = false;
 
   var blackScreen:FunkinSprite;
@@ -50,8 +48,6 @@ class TitleState extends MusicBeatState
 
     curWacky = FlxG.random.getObject(getIntroTextShit());
     funkin.FunkinMemory.cacheSound(Paths.music('girlfriendsRingtone/girlfriendsRingtone'));
-
-    // DEBUG BULLSHIT
 
     if (!initialized) new FlxTimer().start(1, function(tmr:FlxTimer)
     {
@@ -127,7 +123,6 @@ class TitleState extends MusicBeatState
 
     var titleTextPath:String = 'title-screen-text' #if mobile + '-mobile' #end;
 
-    // On mobile, the text is shifted more to the left to center it properly.
     titleText = try FunkinSprite.createTextureAtlas(#if mobile 50 #else 100 #end + (FullScreenScaleMode.gameCutoutSize.x / 2), FlxG.height * 0.8, titleTextPath, {
       cacheOnLoad: true
     }) catch (_:Dynamic) null;
@@ -146,7 +141,7 @@ class TitleState extends MusicBeatState
 
     add(titleText);
 
-    if (!initialized) // Fix an issue where returning to the credits would play a black screen.
+    if (!initialized)
     {
       credGroup = new FlxGroup();
       add(credGroup);
@@ -202,9 +197,6 @@ class TitleState extends MusicBeatState
     #end
   }
 
-  /**
-   * After sitting on the title screen for a while, transition to the attract screen.
-   */
   function moveToAttract():Void
   {
     if (FlxG.sound.music != null) FlxG.sound.music.fadeOut(2.0, 0);
@@ -217,15 +209,12 @@ class TitleState extends MusicBeatState
   function playMenuMusic():Void
   {
     var shouldFadeIn:Bool = (FlxG.sound.music == null);
-    // Load music. Includes logic to handle BPM changes.
     FunkinSound.playMusic('freakyMenu', {
       startingVolume: 0.0,
       overrideExisting: true,
       restartTrack: false,
-      // Continue playing this music between states, until a different music track gets played.
       persist: true
     });
-    // Fade from 0.0 to 1 over 4 seconds
     if (shouldFadeIn) FlxG.sound.music.fadeIn(4.0, 0.0, 1.0);
   }
 
@@ -233,7 +222,6 @@ class TitleState extends MusicBeatState
   {
     var fullText:String = Assets.getText(Paths.txt('introText'));
 
-    // Split into lines and remove empty lines
     var firstArray:Array<String> = fullText.split('\n').filter(function(s:String) return s != '');
     var swagGoodArray:Array<Array<String>> = [];
 
@@ -253,9 +241,6 @@ class TitleState extends MusicBeatState
     if (acceptInputDelay > 0) acceptInputDelay = Math.max(0, acceptInputDelay - elapsed);
 
     #if (desktop || android)
-    // Pressing BACK on the title screen should close the game.
-    // This lets you exit without leaving fullscreen mode.
-    // Only applicable on desktop and Android.
     if (#if android FlxG.android.justReleased.BACK || #end controls.BACK_P)
     {
       openfl.Lib.application.window.close();
@@ -274,7 +259,6 @@ class TitleState extends MusicBeatState
       FlxTween.tween(FlxG.stage.window, {y: FlxG.stage.window.y + 100}, 0.7, {ease: FlxEase.quadInOut, type: PINGPONG});
     }
 
-    // do controls.PAUSE | controls.ACCEPT instead?
     var pressedEnter:Bool = FlxG.keys.justPressed.ENTER #if mobile || anyTitleTouchPressed() #end;
 
     var gamepad:FlxGamepad = FlxG.gamepads.lastActive;
@@ -297,7 +281,6 @@ class TitleState extends MusicBeatState
       #end
 
       #if FEATURE_NEWGROUNDS
-      // Award the "Start Game" medal.
       Medals.award(Medal.StartGame);
       funkin.api.newgrounds.Events.logStartGame();
       #end
@@ -314,7 +297,6 @@ class TitleState extends MusicBeatState
       FlxG.sound.music.volume += 0.5 * elapsed;
     }
 
-    // TODO: Maybe use the dxdy method for swiping instead.
     if (controls.UI_LEFT #if mobile || SwipeUtil.justSwipedLeft #end) swagShader.update(-elapsed * 0.1);
     if (controls.UI_RIGHT #if mobile || SwipeUtil.justSwipedRight #end) swagShader.update(elapsed * 0.1);
     if (!cheatActive && skippedIntro) cheatCodeShit();
@@ -428,7 +410,6 @@ class TitleState extends MusicBeatState
       var money:AtlasText = new AtlasText(0, 0, textArray[i], AtlasFont.BOLD);
       money.screenCenter(X);
       money.y += (i * 60) + 200;
-      // credGroup.add(money);
       textGroup.add(money);
     }
   }
@@ -462,17 +443,12 @@ class TitleState extends MusicBeatState
 
   override function beatHit():Bool
   {
-    // super.beatHit() returns false if a module cancelled the event.
     if (!super.beatHit()) return false;
 
     if (!skippedIntro)
     {
-      // FlxG.log.add(Conductor.instance.currentBeat);
-      // if the user is draggin the window some beats will
-      // be missed so this is just to compensate
       if (Conductor.instance.currentBeat > lastBeat)
       {
-        // TODO: Why does it perform ALL the previous steps each beat?
         for (i in lastBeat...Conductor.instance.currentBeat)
         {
           switch (i + 1)
@@ -500,9 +476,6 @@ class TitleState extends MusicBeatState
             case 13:
               addMoreText('Friday');
             case 14:
-              // easter egg for when the game is trending with the wrong spelling
-              // the random intro text would be "trending--only on x"
-
               if (curWacky[0] == "trending") addMoreText('Nigth');
               else
                 addMoreText('Night');
@@ -549,3 +522,4 @@ class TitleState extends MusicBeatState
     }
   }
 }
+"@
