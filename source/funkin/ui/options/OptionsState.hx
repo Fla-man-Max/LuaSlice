@@ -91,6 +91,9 @@ class OptionsState extends MusicBeatState
     var offsets:OffsetMenu = optionsCodex.addPage(Offsets, new OffsetMenu());
     #end
     var saveData:SaveDataMenu = optionsCodex.addPage(SaveData, new SaveDataMenu());
+    #if mobile
+    var arrows:ArrowsMenu = optionsCodex.addPage(Arrows, new ArrowsMenu());
+    #end
 
     luaPauseExitTargetForThisState = luaPauseExitTarget;
     var hideExitForThisState = luaPauseHideExit;
@@ -110,6 +113,9 @@ class OptionsState extends MusicBeatState
       offsets.onExit.add(exitOffsets);
       #end
       saveData.onExit.add(optionsCodex.switchPage.bind(Options));
+      #if mobile
+      arrows.onExit.add(optionsCodex.switchPage.bind(Options));
+      #end
     }
     else
     {
@@ -291,6 +297,9 @@ class OptionsMenu extends Page<OptionsMenuPageName>
     createItem("PREFERENCES", function() codex.switchPage(Preferences));
     createItem("PERFORMANCE", function() codex.switchPage(Performance));
     #if mobile
+    createItem("ARROWS", function() codex.switchPage(Arrows));
+    #end
+    #if mobile
     if (ControlsHandler.hasExternalInputDevice)
     #end
     createItem("CONTROLS", function() codex.switchPage(Controls));
@@ -326,22 +335,16 @@ class OptionsMenu extends Page<OptionsMenuPageName>
       }
     });
     #end
-    #if FEATURE_MOBILE_IAP
-    createItem("RESTORE PURCHASES", function()
+    #if (mobile && FEATURE_CHART_EDITOR)
+    createItem("CHART EDITOR", function()
     {
-      InAppPurchasesUtil.restorePurchases();
+      FlxG.switchState(() -> new ChartEditorState());
     });
     #end
     #if android
     createItem("OPEN DATA FOLDER", function()
     {
       funkin.external.android.DataFolderUtil.openDataFolder();
-    });
-    #end
-    #if (mobile && FEATURE_CHART_EDITOR)
-    createItem("CHART EDITOR", function()
-    {
-      FlxG.switchState(() -> new ChartEditorState());
     });
     #end
     #if FEATURE_NEWGROUNDS
@@ -521,4 +524,5 @@ enum abstract OptionsMenuPageName(String) to PageName
   var Performance = "performance";
   var Offsets = "offsets";
   var SaveData = "saveData";
+  var Arrows = "arrows";
 }
