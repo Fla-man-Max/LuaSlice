@@ -16,7 +16,6 @@ Download LuaSlice or view its source code here:
 ---
 
 # LuaSlice Lua API
-
 LuaSlice supports isolated `.lua` scripts and global `.luag` scripts. Lua is enabled by default on native C++ builds. Use `-DNO_LUA` only if you need a build without Lua.
 
 ## Script Types
@@ -25,62 +24,38 @@ LuaSlice supports isolated `.lua` scripts and global `.luag` scripts. Lua is ena
 - `.luag` is best for shared modules, global toggles, and compatibility helpers.
 
 ## Main Script Folders
-- `mods/global.lua`
-- `mods/global.luag`
-- `mods/scripts/global.lua`
-- `mods/scripts/global.luag`
-- `mods/scripts/*.lua`
-- `mods/scripts/*.luag`
-- `mods/scripts/lua/*.lua`
-- `mods/scripts/luag/*.luag`
-- `mods/scripts/menu/*.lua`
-- `mods/scripts/menu/*.luag`
-- `mods/scripts/options/*.lua`
-- `mods/scripts/options/*.luag`
-- `mods/scripts/pause/*.lua`
-- `mods/scripts/pause/*.luag`
-- `mods/scripts/freeplay/*.lua`
-- `mods/scripts/freeplay/*.luag`
-- `mods/scripts/story/*.lua`
-- `mods/scripts/story/*.luag`
-- `mods/scripts/results/*.lua`
-- `mods/scripts/results/*.luag`
-- `mods/scripts/characters/CharacterId.lua`
-- `mods/scripts/characters/CharacterId.luag`
-- `mods/scripts/song-SongId.lua`
-- `mods/scripts/song-SongId.luag`
+- `mods/global.lua(g)`
+- `mods/scripts/global.lua(g)`
+- `mods/scripts/*.lua(g)`
+- `mods/scripts/lua(g)/*.lua(g)`
+- `mods/scripts/menu/*.lua(g)`
+- `mods/scripts/options/*.lua(g)`
+- `mods/scripts/pause/*.lua(g)`
+- `mods/scripts/freeplay/*.lua(g)`
+- `mods/scripts/story/*.lua(g)`
+- `mods/scripts/results/*.lua(g)`
+- `mods/scripts/characters/CharacterId.lua(g)`
+- `mods/scripts/song-SongId.lua(g)`
 - `mods/scripts/stage-StageId.lua`
 - `mods/scripts/stages/StageId.lua`
-- `mods/<mod name>/scripts/*.lua`
-- `mods/<mod name>/scripts/*.luag`
-- `mods/<mod name>/scripts/lua/*.lua`
-- `mods/<mod name>/scripts/luag/*.luag`
+- `mods/<mod name>/scripts/*.lua(g)`
+- `mods/<mod name>/scripts/lua(g)/*.lua(g)`
 - `mods/<mod name>/scripts/menu/*.lua`
 - `mods/<mod name>/scripts/options/*.luag`
 - `mods/<mod name>/scripts/pause/*.luag`
-- `mods/<mod name>/songs/SongId/script.lua`
-- `mods/<mod name>/songs/SongId/script.luag`
-- `mods/<mod name>/data/songs/SongId/script.lua`
-- `mods/<mod name>/data/songs/SongId/script.luag`
+- `mods/<mod name>/songs/SongId/script.lua(g)`
+- `mods/<mod name>/data/songs/SongId/script.lua(g)`
 - `mods/<mod name>/stages/StageId.lua`
 
 ## Require Paths
-- `mods/?.lua`
-- `mods/?.luag`
-- `mods/?/init.lua`
-- `mods/?/init.luag`
-- `mods/scripts/?.lua`
-- `mods/scripts/?.luag`
-- `mods/scripts/?/init.lua`
-- `mods/scripts/?/init.luag`
-- `mods/<mod name>/?.lua`
-- `mods/<mod name>/?.luag`
-- `mods/<mod name>/?/init.lua`
-- `mods/<mod name>/?/init.luag`
-- `mods/<mod name>/script/?.lua`
-- `mods/<mod name>/script/?.luag`
-- `mods/<mod name>/scripts/?.lua`
-- `mods/<mod name>/scripts/?.luag`
+- `mods/?.lua(g)`
+- `mods/?/init.lua(g)`
+- `mods/scripts/?.lua(g)`
+- `mods/scripts/?/init.lua(g)`
+- `mods/<mod name>/?.lua(g)`
+- `mods/<mod name>/?/init.lua(g)`
+- `mods/<mod name>/script/?.lua(g)`
+- `mods/<mod name>/scripts/?.lua(g)`
 
 ## Hot Reload
 - `F5` reloads Lua in PlayState.
@@ -567,6 +542,9 @@ LuaSlice warns once when some old aliases are used, then keeps the script runnin
 - Error windows include the script path, hook or API, Lua line number when available, report path, suggestions, and a performance warning only when repeated errors could affect FPS or memory.
 - `-DFEATURE_LOGGER` enables the live Lua logger and writes logger builds to `export/logger/<target>/bin`.
 - `-DNO_LUA` disables Lua support. Lua is enabled by default on native C++ builds.
+
+## Current Limits
+- HTML5 does not use hxlua.
 
 ## Current Limits
 - HTML5 does not use hxlua.
