@@ -545,6 +545,3 @@ LuaSlice warns once when some old aliases are used, then keeps the script runnin
 
 ## Current Limits
 - HTML5 does not use hxlua.
-
-## Current Limits
-- HTML5 does not use hxlua.
