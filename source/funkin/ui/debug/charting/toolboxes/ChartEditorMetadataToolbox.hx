@@ -77,7 +77,11 @@ class ChartEditorMetadataToolbox extends ChartEditorBaseToolbox
       if (valid)
       {
         inputSongId.removeClass('invalid-value');
-        chartEditorState.songManifestData.songId = event.target.text;
+        if (chartEditorState.songManifestData.songId != event.target.text)
+        {
+          chartEditorState.songManifestData.songId = event.target.text;
+          chartEditorState.saveDataDirty = true;
+        }
       }
       else
       {
@@ -89,14 +93,12 @@ class ChartEditorMetadataToolbox extends ChartEditorBaseToolbox
     {
       var valid:Bool = event.target.text != null && event.target.text != '';
 
-      if (valid)
+      var newValue:String = valid ? event.target.text : '';
+      if (chartEditorState.currentSongMetadata.songName != newValue)
       {
-        inputSongName.removeClass('invalid-value');
-        chartEditorState.currentSongMetadata.songName = event.target.text;
-      }
-      else
-      {
-        chartEditorState.currentSongMetadata.songName = '';
+        if (valid) inputSongName.removeClass('invalid-value');
+        chartEditorState.currentSongMetadata.songName = newValue;
+        chartEditorState.saveDataDirty = true;
       }
     };
 
@@ -104,14 +106,12 @@ class ChartEditorMetadataToolbox extends ChartEditorBaseToolbox
     {
       var valid:Bool = event.target.text != null && event.target.text != '';
 
-      if (valid)
+      var newValue:String = valid ? event.target.text : '';
+      if (chartEditorState.currentSongMetadata.artist != newValue)
       {
-        inputSongArtist.removeClass('invalid-value');
-        chartEditorState.currentSongMetadata.artist = event.target.text;
-      }
-      else
-      {
-        chartEditorState.currentSongMetadata.artist = '';
+        if (valid) inputSongArtist.removeClass('invalid-value');
+        chartEditorState.currentSongMetadata.artist = newValue;
+        chartEditorState.saveDataDirty = true;
       }
     };
 
@@ -119,14 +119,12 @@ class ChartEditorMetadataToolbox extends ChartEditorBaseToolbox
     {
       var valid:Bool = event.target.text != null && event.target.text != '';
 
-      if (valid)
+      var newValue:Null<String> = valid ? event.target.text : null;
+      if (chartEditorState.currentSongMetadata.charter != newValue)
       {
-        inputSongCharter.removeClass('invalid-value');
-        chartEditorState.currentSongMetadata.charter = event.target.text;
-      }
-      else
-      {
-        chartEditorState.currentSongMetadata.charter = null;
+        if (valid) inputSongCharter.removeClass('invalid-value');
+        chartEditorState.currentSongMetadata.charter = newValue;
+        chartEditorState.saveDataDirty = true;
       }
     };
 
@@ -134,9 +132,10 @@ class ChartEditorMetadataToolbox extends ChartEditorBaseToolbox
     {
       var valid:Bool = event.data != null && event.data.id != null;
 
-      if (valid)
+      if (valid && chartEditorState.currentSongMetadata.playData.stage != event.data.id)
       {
         chartEditorState.currentSongMetadata.playData.stage = event.data.id;
+        chartEditorState.saveDataDirty = true;
       }
     };
     var startingValueStage = ChartEditorDropdowns.populateDropdownWithStages(inputStage, chartEditorState.currentSongMetadata.playData.stage);
@@ -146,9 +145,10 @@ class ChartEditorMetadataToolbox extends ChartEditorBaseToolbox
     {
       var valid:Bool = event.data != null && event.data.id != null;
 
-      if (valid)
+      if (valid && chartEditorState.currentSongNoteStyle != event.data.id)
       {
         chartEditorState.currentSongNoteStyle = event.data.id;
+        chartEditorState.saveDataDirty = true;
       }
     };
     var startingValueNoteStyle = ChartEditorDropdowns.populateDropdownWithNoteStyles(inputNoteStyle, chartEditorState.currentSongMetadata.playData.noteStyle);
@@ -264,18 +264,27 @@ class ChartEditorMetadataToolbox extends ChartEditorBaseToolbox
       if (valid)
       {
         inputScrollSpeed.removeClass('invalid-value');
-        chartEditorState.currentSongChartScrollSpeed = event.target.value;
+        if (chartEditorState.currentSongChartScrollSpeed != event.target.value)
+        {
+          chartEditorState.currentSongChartScrollSpeed = event.target.value;
+          chartEditorState.saveDataDirty = true;
+        }
       }
-      else
+      else if (chartEditorState.currentSongChartScrollSpeed != 1.0)
       {
         chartEditorState.currentSongChartScrollSpeed = 1.0;
+        chartEditorState.saveDataDirty = true;
       }
       labelScrollSpeed.text = 'Scroll Speed: ${chartEditorState.currentSongChartScrollSpeed}x';
     };
 
     inputDifficultyRating.onChange = function(event:UIEvent)
     {
-      chartEditorState.currentSongChartDifficultyRating = event.target.value;
+      if (chartEditorState.currentSongChartDifficultyRating != event.target.value)
+      {
+        chartEditorState.currentSongChartDifficultyRating = event.target.value;
+        chartEditorState.saveDataDirty = true;
+      }
     };
 
     buttonCharacterOpponent.onClick = function(_)

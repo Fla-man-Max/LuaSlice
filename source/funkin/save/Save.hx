@@ -47,7 +47,7 @@ class Save implements ConsoleClass
 
   public static function load():Save
   {
-    trace(' SAVE '.bold().bg_note_down() + ' Loading save...');
+    trace(' SAVE '.bold().bg_note_down() + ' Loading save......');
 
     // Bind save data.
     final loadedSave:Save = loadFromSlot(Constants.BASE_SAVE_SLOT);
@@ -135,6 +135,7 @@ class Save implements ConsoleClass
         framerate: #if mobile refreshRate #else 60 #end,
         naughtyness: true,
         downscroll: false,
+        middleScroll: false,
         flashingLights: true,
         zoomCamera: true,
         songShaders: true,
@@ -177,6 +178,9 @@ class Save implements ConsoleClass
         // Reasonable defaults.
         screenTimeout: false,
         controlsScheme: FunkinHitboxControlSchemes.Arrows,
+        arrowBoxLayout: "Arrow",
+        arrowRGB: false,
+        arrowTransparency: 10,
         touchPointers: true,
         noAds: false
       },
@@ -1191,6 +1195,12 @@ typedef SaveDataOptions =
   var downscroll:Bool;
 
   /**
+   * If enabled, player strumline is centered and opponent strumline is split/hidden.
+   * @default `false`
+   */
+  var middleScroll:Bool;
+
+  /**
    * If disabled, flashing lights in the main menu and other areas will be less intense.
    * @default `true`
    */
@@ -1328,6 +1338,12 @@ typedef SaveDataMobileOptions =
    * @default `Arrows`
    */
   var controlsScheme:String;
+
+  var arrowBoxLayout:String;
+
+  var arrowRGB:Bool;
+
+  var arrowTransparency:Int;
 
   var touchPointers:Bool;
 

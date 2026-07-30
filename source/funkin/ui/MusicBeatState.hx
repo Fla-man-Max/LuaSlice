@@ -91,7 +91,7 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
       camControls.bgColor = 0x0;
     }
 
-    hitbox = new FunkinHitbox(schemeOverride, directionsOverride, colorsOverride);
+    hitbox = new FunkinHitbox(schemeOverride, true, directionsOverride, colorsOverride);
     hitbox.cameras = [camControls];
     hitbox.visible = visible;
     add(hitbox);

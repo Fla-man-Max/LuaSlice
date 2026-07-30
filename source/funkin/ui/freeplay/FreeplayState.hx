@@ -3210,8 +3210,8 @@ class FreeplayState extends MusicBeatSubState
     if (!Preferences.isLowQualityMinimal()) return;
 
     hideLowQuality(ostName);
-    hideLowQuality(grpDifficulties);
-    hideLowQuality(difficultyDots);
+    hideLowQuality(diffSelLeft, false);
+    hideLowQuality(diffSelRight, false);
 
     if (!Preferences.isLowQualityMax()) return;
 
@@ -3219,8 +3219,6 @@ class FreeplayState extends MusicBeatSubState
     hideLowQuality(txtCompletion);
     hideLowQuality(letterSort);
     hideLowQuality(albumRoll);
-    hideLowQuality(diffSelLeft, false);
-    hideLowQuality(diffSelRight, false);
     hideLowQuality(fnfHighscoreSpr);
     hideLowQuality(clearBoxSprite);
   }

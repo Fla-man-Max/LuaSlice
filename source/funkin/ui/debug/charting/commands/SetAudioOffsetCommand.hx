@@ -52,6 +52,7 @@ class SetAudioOffsetCommand implements ChartEditorCommand
       state.refreshToolbox(ChartEditorState.CHART_EDITOR_TOOLBOX_OFFSETS_LAYOUT);
       state.refreshToolbox(ChartEditorState.CHART_EDITOR_TOOLBOX_FREEPLAY_LAYOUT);
     }
+    if (newOffset != oldOffset) state.saveDataDirty = true;
   }
 
   public function undo(state:ChartEditorState):Void
@@ -78,6 +79,7 @@ class SetAudioOffsetCommand implements ChartEditorCommand
 
     // Update the offsets toolbox.
     state.refreshToolbox(ChartEditorState.CHART_EDITOR_TOOLBOX_OFFSETS_LAYOUT);
+    state.saveDataDirty = true;
   }
 
   public function shouldAddToHistory(state:ChartEditorState):Bool

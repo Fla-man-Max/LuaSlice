@@ -361,7 +361,8 @@ class CharacterDataParser
 
     if (isAnimated)
     {
-      var frames = Paths.getSparrowAtlas(charPath);
+      var frames:Null<flixel.graphics.frames.FlxAtlasFrames> = Paths.getSparrowAtlas(charPath);
+      if (frames == null) return null;
 
       var idleFrame:Null<FlxFrame> = frames.frames.find(function(frame:FlxFrame):Bool
       {

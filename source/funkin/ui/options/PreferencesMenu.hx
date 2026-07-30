@@ -119,6 +119,10 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     },
       Preferences.downscroll, #if mobile ControlsHandler.hasExternalInputDevice
       || Preferences.controlsScheme != FunkinHitboxControlSchemes.Arrows #end);
+    createPrefItemCheckbox('Middlescroll', 'Center the Player notes and split the Opponent notes along the sides of the screen.', function(value:Bool):Void
+    {
+      Preferences.middleScroll = value;
+    }, Preferences.middleScroll);
     createPrefItemPercentage('Strumline Background', 'Show a semi-transparent background behind the strumline.', function(value:Int):Void
     {
       Preferences.strumlineBackgroundOpacity = value;

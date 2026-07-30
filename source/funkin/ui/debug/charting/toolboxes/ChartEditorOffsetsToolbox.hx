@@ -286,7 +286,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     var opponentVoice = chartEditorState.audioVocalTrackGroup.getOpponentVoice();
     if (opponentVoice != null) audioPreviewTracks.add(opponentVoice.clone());
 
-    // Build player waveform.
+    // Build player waveform. Building.......... Done! loll
     // waveformPlayer.waveform.forceUpdate = true;
     waveformPlayer.waveform.waveformData = playerVoice?.waveformData;
     // Set the width and duration to render the full waveform, with the clipRect applied we only render a segment of it.
@@ -294,8 +294,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
 
     // Build opponent waveform.
     // waveformOpponent.waveform.forceUpdate = true;
-    // note: if song only has one set of vocals (Vocals.ogg/mp3) then this is null and crashes charting editor
-    // so we null check
+    // so we null check. ANDDD null check. Null check. yes yes!
     waveformOpponent.waveform.waveformData = opponentVoice?.waveformData;
     waveformOpponent.waveform.duration = (opponentVoice?.length ?? 1000.0) / Constants.MS_PER_SEC;
 
@@ -424,7 +423,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     var deltaMousePosition = newDragMousePosition - dragMousePosition;
 
     if (deltaMousePosition == 0) return;
-    if (dragWaveform != null && getWaveform(dragWaveform).waveformData == null) return;
+    if (dragWaveform != null && getWaveform(dragWaveform).waveform.waveformData == null) return;
 
     var deltaPixels:Float = deltaMousePosition * (waveformScale / BASE_SCALE * waveformMagicFactor);
     var deltaMilliseconds:Float = switch (dragWaveform)

@@ -4,6 +4,7 @@ import flixel.FlxG;
 import flixel.graphics.FlxGraphic;
 import flixel.group.FlxSpriteGroup;
 import flixel.input.actions.FlxActionInput;
+import flixel.math.FlxMath;
 import flixel.tweens.FlxEase;
 import flixel.tweens.FlxTween;
 import flixel.util.FlxColor;
@@ -79,6 +80,10 @@ class FunkinHint extends FunkinButton
   var followTarget:Null<FunkinSprite>;
 
   var followTargetSize:Bool = false;
+
+  var hitboxRestAlpha:Null<Float>;
+
+  var hitboxPressAlpha:Float = 0;
 
   /**
    * Creates a new `FunkinHint` object.
@@ -170,9 +175,24 @@ class FunkinHint extends FunkinButton
     hsvShader.hue = hue;
   }
 
+  public function configureHitboxAlpha(restAlpha:Float):Void
+  {
+    alphaTween?.cancel();
+    final boundedRestAlpha:Float = FlxMath.bound(restAlpha, 0, 1);
+    hitboxRestAlpha = boundedRestAlpha;
+    hitboxPressAlpha = FlxMath.bound(boundedRestAlpha + 0.2, 0, 1);
+    alpha = boundedRestAlpha;
+  }
+
   public override function update(elapsed:Float):Void
   {
     super.update(elapsed);
+
+    final restAlpha:Null<Float> = hitboxRestAlpha;
+    if (restAlpha != null)
+    {
+      alpha = FlxMath.lerp(alpha, pressed ? hitboxPressAlpha : restAlpha, 0.2);
+    }
 
     if (followTarget != null)
     {
@@ -365,33 +385,17 @@ class FunkinHitbox extends FlxTypedSpriteGroup<FunkinHint>
       case FunkinHitboxControlSchemes.Arrows:
         if (Preferences.arrowBoxLayout == "Hitbox")
         {
-          final hintWidth:Int = Math.floor(FlxG.width / hintsNoteDirections.length);
+          final defaultColors:Array<FlxColor> = [0xFFC24B99, 0xFF00FFFF, 0xFF12FA05, 0xFFF9393F];
+          final baseAlpha:Float = FlxMath.bound(Preferences.arrowTransparency / 100.0, 0, 1);
+
           for (i in 0...hintsNoteDirections.length)
           {
-            final defaultColors:Array<FlxColor> = [0xFFC34B9A, 0xFF00FFFF, 0xFF12FB06, 0xFFF9393F];
-            final color:FlxColor = Preferences.arrowRGB ? hintsColors[i % hintsColors.length] : defaultColors[i % defaultColors.length];
-            
-            final hint = createHintLane(i * hintWidth, 0, hintsNoteDirections[i % hintsNoteDirections.length], hintWidth, FlxG.height, color, true, true);
-            final baseAlpha = Preferences.arrowTransparency / 100.0;
-            
-            hint.onDown.removeAll();
-            hint.onUp.removeAll();
-            hint.onOut.removeAll();
-            
-            hint.onDown.add(function() {
-              if (@:privateAccess hint.alphaTween != null) @:privateAccess hint.alphaTween.cancel();
-              @:privateAccess hint.alphaTween = flixel.tweens.FlxTween.tween(hint, {alpha: Math.min(1.0, baseAlpha + 0.4)}, 0.01, {ease: flixel.tweens.FlxEase.circInOut});
-            });
-            hint.onUp.add(function() {
-              if (@:privateAccess hint.alphaTween != null) @:privateAccess hint.alphaTween.cancel();
-              @:privateAccess hint.alphaTween = flixel.tweens.FlxTween.tween(hint, {alpha: baseAlpha}, 0.01, {ease: flixel.tweens.FlxEase.circInOut});
-            });
-            hint.onOut.add(function() {
-              if (@:privateAccess hint.alphaTween != null) @:privateAccess hint.alphaTween.cancel();
-              @:privateAccess hint.alphaTween = flixel.tweens.FlxTween.tween(hint, {alpha: baseAlpha}, 0.01, {ease: flixel.tweens.FlxEase.circInOut});
-            });
-            
-            hint.alpha = baseAlpha;
+            final xPos:Int = Math.floor(i * FlxG.width / hintsNoteDirections.length);
+            final nextX:Int = Math.floor((i + 1) * FlxG.width / hintsNoteDirections.length);
+            final direction:NoteDirection = hintsNoteDirections[i % hintsNoteDirections.length];
+            final color:FlxColor = Preferences.arrowRGB ? direction.color : defaultColors[i % defaultColors.length];
+            final hint:FunkinHint = createHintLane(xPos, 0, direction, nextX - xPos, FlxG.height, color, false, false, false);
+            hint.configureHitboxAlpha(baseAlpha);
             add(hint);
           }
         }
@@ -443,14 +447,14 @@ class FunkinHitbox extends FlxTypedSpriteGroup<FunkinHint>
    * @return A new `FunkinHint` object.
    */
   function createHintLane(x:Float, y:Float, noteDirection:NoteDirection, width:Int, height:Int, color:FlxColor = 0xFFFFFFFF, label:Bool = true,
-      gradient:Bool = true):FunkinHint
+      gradient:Bool = true, tweenAlpha:Bool = true):FunkinHint
   {
     final hint:FunkinHint = new FunkinHint(x, y, noteDirection, label ? createHintLaneLabelGraphic(width, height, Math.floor(height * 0.035), color) : null);
     hint.loadGraphic(createHintLaneGraphic(width, height, color, gradient));
     hint.onDown.add(onHintDown.dispatch.bind(hint));
     hint.onUp.add(onHintUp.dispatch.bind(hint));
     hint.onOut.add(onHintUp.dispatch.bind(hint));
-    hint.initTween(INVISIBLE_TILL_PRESS);
+    if (tweenAlpha) hint.initTween(INVISIBLE_TILL_PRESS);
     return hint;
   }
 

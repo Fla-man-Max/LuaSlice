@@ -75,6 +75,7 @@ class ModifyTimeChangeCommand implements ChartEditorCommand
     state.updateSongTime();
     state.updateGridHeight();
     state.updateTimeSignature();
+    state.saveDataDirty = true;
   }
 
   public function undo(state:ChartEditorState):Void
@@ -108,6 +109,7 @@ class ModifyTimeChangeCommand implements ChartEditorCommand
     state.updateSongTime();
     state.updateGridHeight();
     state.updateTimeSignature();
+    state.saveDataDirty = true;
   }
 
   public function shouldAddToHistory(state:ChartEditorState):Bool

@@ -6,6 +6,10 @@
     width: 160px;
     }
   </style>
+  <menu text="Convert" id="menubarMenuConvert">
+    <menu-item id="menubarItemOpenConverter" text="Open Stage Converter..." />
+  </menu>
+  <spacer width="28" />
   <menu text="File" id="menubarMenuFile">
     <menu-item id="menubarItemNewStage" text="New Stage" shortcutText="Ctrl+N" />
     <menu-separator />

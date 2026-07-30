@@ -300,7 +300,9 @@ class StoryMenuState extends MusicBeatState
         }
         catch (_:Dynamic)
         {
-          difficultySprite.makeGraphic(160, 64, FlxColor.TRANSPARENT);
+          var difficultyText:FlxText = new FlxText(difficultySprite.x, difficultySprite.y, 240, diff.toUpperCase(), 32);
+          difficultyText.setFormat(Paths.font('vcr.ttf'), 32, FlxColor.WHITE, CENTER);
+          difficultySprite = difficultyText;
         }
       }
 
@@ -545,10 +547,20 @@ class StoryMenuState extends MusicBeatState
   {
     // "For now, NO erect in story mode" -Dave
 
-    var difficultyList:Array<String> = currentLevel.getDifficulties().filter(e -> Constants.DEFAULT_DIFFICULTY_LIST.contains(e));
-    // Use this line to displays all difficulties
-    // var difficultyList:Array<String> = currentLevel.getDifficulties();
+    var difficultyList:Array<String> = currentLevel.getDifficulties();
+
+    var nonErectDifficulties:Array<String> = difficultyList.filter(e -> !Constants.DEFAULT_DIFFICULTY_LIST_ERECT.contains(e));
+    if (nonErectDifficulties.length > 0) difficultyList = nonErectDifficulties;
+
+    if (difficultyList.length == 0) difficultyList = [Constants.DEFAULT_DIFFICULTY];
+
     var currentIndex:Int = difficultyList.indexOf(currentDifficultyId);
+
+    if (currentIndex < 0)
+    {
+      currentIndex = difficultyList.indexOf(Constants.DEFAULT_DIFFICULTY);
+      if (currentIndex < 0) currentIndex = 0;
+    }
 
     currentIndex += change;
 

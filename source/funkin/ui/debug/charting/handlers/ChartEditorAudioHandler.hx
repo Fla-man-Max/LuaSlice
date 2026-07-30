@@ -200,7 +200,7 @@ class ChartEditorAudioHandler
       case BF:
         state.audioVocalTrackGroup.addPlayerVoice(vocalTrack);
 
-        var waveformData:Null<WaveformData> = vocalTrack.waveformData;
+        var waveformData:Null<WaveformData> = SoundUtil.isMP3(vocalTrackData) ? null : vocalTrack.waveformData;
 
         if (waveformData != null)
         {
@@ -209,7 +209,8 @@ class ChartEditorAudioHandler
         }
         else
         {
-          trace(' WARNING '.warning() + ' Failed to parse waveform data for vocal track.');
+          trace(' WARNING '.warning()
+            + (SoundUtil.isMP3(vocalTrackData) ? ' Waveform display is disabled for MP3 vocal tracks.' : ' Failed to parse waveform data for vocal track.'));
         }
 
         state.audioVocalTrackGroup.playerVoicesOffset = state.currentVocalOffsetPlayer;
@@ -217,7 +218,7 @@ class ChartEditorAudioHandler
       case DAD:
         state.audioVocalTrackGroup.addOpponentVoice(vocalTrack);
 
-        var waveformData:Null<WaveformData> = vocalTrack.waveformData;
+        var waveformData:Null<WaveformData> = SoundUtil.isMP3(vocalTrackData) ? null : vocalTrack.waveformData;
 
         if (waveformData != null)
         {
@@ -226,7 +227,8 @@ class ChartEditorAudioHandler
         }
         else
         {
-          trace(' WARNING '.warning() + ' Failed to parse waveform data for vocal track.');
+          trace(' WARNING '.warning()
+            + (SoundUtil.isMP3(vocalTrackData) ? ' Waveform display is disabled for MP3 vocal tracks.' : ' Failed to parse waveform data for vocal track.'));
         }
 
         state.audioVocalTrackGroup.opponentVoicesOffset = state.currentVocalOffsetOpponent;

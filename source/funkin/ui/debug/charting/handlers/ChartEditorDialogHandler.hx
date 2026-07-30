@@ -1456,6 +1456,7 @@ class ChartEditorDialogHandler
       state.songMetadata.set(pendingVariation.variation, pendingVariation);
       state.refreshPlayDataVariations();
       state.difficultySelectDirty = true; // Force the Difficulty toolbox to update.
+      state.saveDataDirty = true;
 
       // Don't update conductor since we haven't switched to the new variation yet.
 

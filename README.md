@@ -1,10 +1,7 @@
 # LuaSlice
 LuaSlice is a fork of Friday Night Funkin' V-Slice that adds built-in Lua modding support and small tweaks to the engine itself. It is made for people who want to create gameplay scripts, events, menus, options and other mod features without having to write everything in Haxe.
 
-# It dose `NOT` have Psych API, P-slice API or anything else. It's The base game (with haxe support) and luaslice api `(the lua api is built around the games code)`
-
----
-LuaSlice supports isolated `.lua` scripts and shared `.luag` scripts. It also includes F5 hot reloading, Lua error reports, persistent save data, custom Chart Editor events, and Lua hooks for gameplay, menus and MORE! Existing `.hx` and `.hxc` modding still works, so Lua can be used by itself or alongside Haxe scripts.
+LuaSlice supports isolated `.lua` scripts and shared `.luag` scripts. It also includes F5 hot reloading, Lua error reports, persistent save data, custom Chart Editor events, and Lua hooks for gameplay and menus. Existing `.hx` and `.hxc` modding still works, so Lua can be used by itself or alongside Haxe scripts.
 
 The engine is based on V-Slice 0.8.5 and is still being worked on. Lua compatibility is the main focus, along with making mod creation easier on Windows and Android. And maybe other builds....
 
@@ -19,6 +16,7 @@ Download LuaSlice or view its source code here:
 ---
 
 # LuaSlice Lua API
+
 LuaSlice supports isolated `.lua` scripts and global `.luag` scripts. Lua is enabled by default on native C++ builds. Use `-DNO_LUA` only if you need a build without Lua.
 
 ## Script Types
@@ -27,38 +25,62 @@ LuaSlice supports isolated `.lua` scripts and global `.luag` scripts. Lua is ena
 - `.luag` is best for shared modules, global toggles, and compatibility helpers.
 
 ## Main Script Folders
-- `mods/global.lua(g)`
-- `mods/scripts/global.lua(g)`
-- `mods/scripts/*.lua(g)`
-- `mods/scripts/lua(g)/*.lua(g)`
-- `mods/scripts/menu/*.lua(g)`
-- `mods/scripts/options/*.lua(g)`
-- `mods/scripts/pause/*.lua(g)`
-- `mods/scripts/freeplay/*.lua(g)`
-- `mods/scripts/story/*.lua(g)`
-- `mods/scripts/results/*.lua(g)`
-- `mods/scripts/characters/CharacterId.lua(g)`
-- `mods/scripts/song-SongId.lua(g)`
+- `mods/global.lua`
+- `mods/global.luag`
+- `mods/scripts/global.lua`
+- `mods/scripts/global.luag`
+- `mods/scripts/*.lua`
+- `mods/scripts/*.luag`
+- `mods/scripts/lua/*.lua`
+- `mods/scripts/luag/*.luag`
+- `mods/scripts/menu/*.lua`
+- `mods/scripts/menu/*.luag`
+- `mods/scripts/options/*.lua`
+- `mods/scripts/options/*.luag`
+- `mods/scripts/pause/*.lua`
+- `mods/scripts/pause/*.luag`
+- `mods/scripts/freeplay/*.lua`
+- `mods/scripts/freeplay/*.luag`
+- `mods/scripts/story/*.lua`
+- `mods/scripts/story/*.luag`
+- `mods/scripts/results/*.lua`
+- `mods/scripts/results/*.luag`
+- `mods/scripts/characters/CharacterId.lua`
+- `mods/scripts/characters/CharacterId.luag`
+- `mods/scripts/song-SongId.lua`
+- `mods/scripts/song-SongId.luag`
 - `mods/scripts/stage-StageId.lua`
 - `mods/scripts/stages/StageId.lua`
-- `mods/<mod name>/scripts/*.lua(g)`
-- `mods/<mod name>/scripts/lua(g)/*.lua(g)`
+- `mods/<mod name>/scripts/*.lua`
+- `mods/<mod name>/scripts/*.luag`
+- `mods/<mod name>/scripts/lua/*.lua`
+- `mods/<mod name>/scripts/luag/*.luag`
 - `mods/<mod name>/scripts/menu/*.lua`
 - `mods/<mod name>/scripts/options/*.luag`
 - `mods/<mod name>/scripts/pause/*.luag`
-- `mods/<mod name>/songs/SongId/script.lua(g)`
-- `mods/<mod name>/data/songs/SongId/script.lua(g)`
+- `mods/<mod name>/songs/SongId/script.lua`
+- `mods/<mod name>/songs/SongId/script.luag`
+- `mods/<mod name>/data/songs/SongId/script.lua`
+- `mods/<mod name>/data/songs/SongId/script.luag`
 - `mods/<mod name>/stages/StageId.lua`
 
 ## Require Paths
-- `mods/?.lua(g)`
-- `mods/?/init.lua(g)`
-- `mods/scripts/?.lua(g)`
-- `mods/scripts/?/init.lua(g)`
-- `mods/<mod name>/?.lua(g)`
-- `mods/<mod name>/?/init.lua(g)`
-- `mods/<mod name>/script/?.lua(g)`
-- `mods/<mod name>/scripts/?.lua(g)`
+- `mods/?.lua`
+- `mods/?.luag`
+- `mods/?/init.lua`
+- `mods/?/init.luag`
+- `mods/scripts/?.lua`
+- `mods/scripts/?.luag`
+- `mods/scripts/?/init.lua`
+- `mods/scripts/?/init.luag`
+- `mods/<mod name>/?.lua`
+- `mods/<mod name>/?.luag`
+- `mods/<mod name>/?/init.lua`
+- `mods/<mod name>/?/init.luag`
+- `mods/<mod name>/script/?.lua`
+- `mods/<mod name>/script/?.luag`
+- `mods/<mod name>/scripts/?.lua`
+- `mods/<mod name>/scripts/?.luag`
 
 ## Hot Reload
 - `F5` reloads Lua in PlayState.

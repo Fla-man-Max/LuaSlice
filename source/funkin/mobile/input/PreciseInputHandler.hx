@@ -1,6 +1,5 @@
 package funkin.mobile.input;
 
-import flixel.input.FlxInput;
 import funkin.input.PreciseInputManager;
 import funkin.mobile.ui.FunkinHitbox;
 import funkin.play.notes.NoteDirection;
@@ -10,6 +9,7 @@ import haxe.Int64;
  * Handles setting up and managing precise input controls for the game.
  */
 @:access(funkin.input.PreciseInputManager)
+@:access(funkin.mobile.ui.FunkinHint)
 class PreciseInputHandler
 {
   /**
@@ -31,12 +31,8 @@ class PreciseInputHandler
   static function handleHintDown(hint:FunkinHint):Void
   {
     final timestamp:Int64 = PreciseInputManager.getCurrentTimestamp();
-    @:privateAccess
-    if (hint.input?.justPressed ?? false)
-    {
-      PreciseInputManager.instance.onInputPressed.dispatch({noteDirection: hint.noteDirection, timestamp: timestamp, keyCode: 0});
-      PreciseInputManager.instance._dirPressTimestamps.set(hint.noteDirection, timestamp);
-    }
+    PreciseInputManager.instance.onInputPressed.dispatch({noteDirection: hint.noteDirection, timestamp: timestamp, keyCode: 0});
+    PreciseInputManager.instance._dirPressTimestamps.set(hint.noteDirection, timestamp);
   }
 
   /**
@@ -47,11 +43,7 @@ class PreciseInputHandler
   static function handleHintUp(hint:FunkinHint):Void
   {
     final timestamp:Int64 = PreciseInputManager.getCurrentTimestamp();
-    @:privateAccess
-    if (hint.input?.justReleased ?? false)
-    {
-      PreciseInputManager.instance.onInputReleased.dispatch({noteDirection: hint.noteDirection, timestamp: timestamp, keyCode: 0});
-      PreciseInputManager.instance._dirPressTimestamps.set(hint.noteDirection, timestamp);
-    }
+    PreciseInputManager.instance.onInputReleased.dispatch({noteDirection: hint.noteDirection, timestamp: timestamp, keyCode: 0});
+    PreciseInputManager.instance._dirReleaseTimestamps.set(hint.noteDirection, timestamp);
   }
 }

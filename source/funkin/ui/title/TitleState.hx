@@ -1,4 +1,3 @@
-Set-Content -Path "source\funkin\ui\title\TitleState.hx" -Value @"
 package funkin.ui.title;
 
 import flixel.group.FlxGroup;
@@ -454,13 +453,13 @@ class TitleState extends MusicBeatState
           switch (i + 1)
           {
             case 1:
-              createCoolText(['The', 'Funkin Crew Inc']);
+              createCoolText(['The', 'LuaSlice Team']);
             case 3:
               addMoreText('presents');
             case 4:
               deleteCoolText();
             case 5:
-              createCoolText(['In association', 'with']);
+              createCoolText(['NOT in association', 'with']);
             case 7:
               addMoreText('newgrounds');
               if (ngSpr != null) ngSpr.visible = true;
@@ -474,13 +473,11 @@ class TitleState extends MusicBeatState
             case 12:
               deleteCoolText();
             case 13:
-              addMoreText('Friday');
+              addMoreText('Lua');
             case 14:
-              if (curWacky[0] == "trending") addMoreText('Nigth');
-              else
-                addMoreText('Night');
+              addMoreText('Slice');
             case 15:
-              addMoreText('Funkin');
+              addMoreText('Engine');
             case 16:
               skipIntro();
           }
@@ -522,4 +519,3 @@ class TitleState extends MusicBeatState
     }
   }
 }
-"@

@@ -13,7 +13,6 @@ import haxe.ui.components.DropDown;
 import haxe.ui.components.HorizontalSlider;
 import funkin.util.VersionUtil;
 import funkin.util.FileUtil;
-import openfl.net.FileReference;
 import haxe.ui.containers.dialogs.MessageBox.MessageBoxType;
 import haxe.ui.components.Label;
 import haxe.ui.components.NumberStepper;
@@ -133,45 +132,39 @@ class ChartEditorDifficultyToolbox extends ChartEditorBaseToolbox
     difficultyToolboxSaveMetadata.onClick = function(_:UIEvent)
     {
       var vari:String = chartEditorState.selectedVariation != Constants.DEFAULT_VARIATION ? '-${chartEditorState.selectedVariation}' : '';
-      FileUtil.writeFileReference('${chartEditorState.currentSongId}$vari-metadata.json', chartEditorState.currentSongMetadata.serialize(),
-        function(notification:String)
+      final filename:String = '${chartEditorState.currentSongId}$vari-metadata.json';
+      FileUtil.saveFile(haxe.io.Bytes.ofString(chartEditorState.currentSongMetadata.serialize()), [FileUtil.FILE_FILTER_JSON],
+        function(_)
         {
-          switch (notification)
-          {
-            case "success":
-              chartEditorState.success("Saved Metadata", 'Successfully wrote file (${chartEditorState.currentSongId}$vari-metadata.json).');
-            case "info":
-              chartEditorState.info("Canceled Save Metadata", '(${chartEditorState.currentSongId}$vari-metadata.json)');
-            case "error":
-              chartEditorState.error("Failure", 'Failed to write file (${chartEditorState.currentSongId}$vari-metadata.json).');
-          }
-        });
+          chartEditorState.success("Saved Metadata", 'Successfully wrote file ($filename).');
+        },
+        function()
+        {
+          chartEditorState.info("Canceled Save Metadata", '($filename)');
+        }, filename, "Save Metadata");
     };
 
     difficultyToolboxSaveChart.onClick = function(_:UIEvent)
     {
       var vari:String = chartEditorState.selectedVariation != Constants.DEFAULT_VARIATION ? '-${chartEditorState.selectedVariation}' : '';
-      FileUtil.writeFileReference('${chartEditorState.currentSongId}$vari-chart.json', chartEditorState.currentSongChartData.serialize(),
-        function(notification:String)
+      final filename:String = '${chartEditorState.currentSongId}$vari-chart.json';
+      FileUtil.saveFile(haxe.io.Bytes.ofString(chartEditorState.currentSongChartData.serialize()), [FileUtil.FILE_FILTER_JSON],
+        function(_)
         {
-          switch (notification)
-          {
-            case "success":
-              chartEditorState.success("Saved Chart Data", 'Successfully wrote file (${chartEditorState.currentSongId}$vari-chart.json).');
-            case "info":
-              chartEditorState.info("Canceled Save Chart Data", '(${chartEditorState.currentSongId}$vari-chart.json)');
-            case "error":
-              chartEditorState.error("Failure", 'Failed to write file (${chartEditorState.currentSongId}$vari-chart.json).');
-          }
-        });
+          chartEditorState.success("Saved Chart Data", 'Successfully wrote file ($filename).');
+        },
+        function()
+        {
+          chartEditorState.info("Canceled Save Chart Data", '($filename)');
+        }, filename, "Save Chart Data");
     };
 
     difficultyToolboxLoadMetadata.onClick = function(_:UIEvent)
     {
       // Replace metadata for current variation.
-      FileUtil.browseFileReference(function(fileReference:FileReference)
+      FileUtil.browseForTextFile("Load Metadata", null, function(fileInfo)
       {
-        var data = fileReference.data.toString();
+        var data = fileInfo.text;
 
         if (data == null) return;
 
@@ -179,7 +172,7 @@ class ChartEditorDifficultyToolbox extends ChartEditorBaseToolbox
 
         var songMetadata:Null<SongMetadata> = null;
         if (VersionUtil.validateVersion(songMetadataVersion,
-          SongRegistry.SONG_METADATA_VERSION_RULE)) songMetadata = SongRegistry.instance.parseEntryMetadataRawWithMigration(data, fileReference.name,
+          SongRegistry.SONG_METADATA_VERSION_RULE)) songMetadata = SongRegistry.instance.parseEntryMetadataRawWithMigration(data, fileInfo.name,
             songMetadataVersion);
 
         if (songMetadata != null)
@@ -190,11 +183,11 @@ class ChartEditorDifficultyToolbox extends ChartEditorBaseToolbox
           chartEditorState.opponentPreviewDirty = true;
 
           chartEditorState.refreshToolbox(ChartEditorState.CHART_EDITOR_TOOLBOX_METADATA_LAYOUT);
-          chartEditorState.success('Replaced Metadata', 'Replaced metadata with file (${fileReference.name})');
+          chartEditorState.success('Replaced Metadata', 'Replaced metadata with file (${fileInfo.name})');
         }
         else
         {
-          chartEditorState.error('Failure', 'Failed to load metadata file (${fileReference.name})');
+          chartEditorState.error('Failure', 'Failed to load metadata file (${fileInfo.name})');
         }
       });
     };
@@ -202,9 +195,9 @@ class ChartEditorDifficultyToolbox extends ChartEditorBaseToolbox
     difficultyToolboxLoadChart.onClick = function(_:UIEvent)
     {
       // Replace chart data for current variation.
-      FileUtil.browseFileReference(function(fileReference:FileReference)
+      FileUtil.browseForTextFile("Load Chart Data", null, function(fileInfo)
       {
-        var data = fileReference.data.toString();
+        var data = fileInfo.text;
 
         if (data == null) return;
 
@@ -212,7 +205,7 @@ class ChartEditorDifficultyToolbox extends ChartEditorBaseToolbox
 
         var songChartData:Null<SongChartData> = null;
         if (VersionUtil.validateVersion(songChartDataVersion,
-          SongRegistry.SONG_CHART_DATA_VERSION_RULE)) songChartData = SongRegistry.instance.parseEntryChartDataRawWithMigration(data, fileReference.name,
+          SongRegistry.SONG_CHART_DATA_VERSION_RULE)) songChartData = SongRegistry.instance.parseEntryChartDataRawWithMigration(data, fileInfo.name,
             songChartDataVersion);
 
         if (songChartData != null)
@@ -221,7 +214,7 @@ class ChartEditorDifficultyToolbox extends ChartEditorBaseToolbox
           chartEditorState.refreshToolbox(ChartEditorState.CHART_EDITOR_TOOLBOX_METADATA_LAYOUT);
           updateTree();
           refresh();
-          chartEditorState.success('Loaded Chart Data', 'Loaded chart data file (${fileReference.name})');
+          chartEditorState.success('Loaded Chart Data', 'Loaded chart data file (${fileInfo.name})');
           if (chartEditorState.currentNoteSelection != []) chartEditorState.currentNoteSelection = [];
           if (chartEditorState.currentEventSelection != []) chartEditorState.currentEventSelection = [];
           chartEditorState.noteDisplayDirty = true;
@@ -231,7 +224,7 @@ class ChartEditorDifficultyToolbox extends ChartEditorBaseToolbox
         }
         else
         {
-          chartEditorState.error('Failure', 'Failed to load chart data file (${fileReference.name})');
+          chartEditorState.error('Failure', 'Failed to load chart data file (${fileInfo.name})');
         }
       });
     };

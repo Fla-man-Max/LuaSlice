@@ -3,6 +3,57 @@
 Important LuaSlice engine updates are tracked here.
 I'm making it as simple, professional, FNF style. (non-AI!!)
 
+## [0.0.7] - 2026-07-29 | Story Mode and Chart Editor Bugfixes
+
+### Added
+
+- Added a Automatic update system before the title intro when a newer LuaSlice version comes out.
+- Added a Stage Editor conversion window for converting stage layout data between the Base Game, Psych Engine v1.0.4, and Codename Engine.
+- Added support for Base Game `.fnfs` packages and JSON, Psych Engine JSON, and Codename Engine XML stage files in the converter.
+- Added a Middle Scroll gameplay preference that centers the Player strumline and splits the Opponent notes along the sides.
+- Added a one-click Windows setup and build batch file that installs everything you need to build the engine, before running `lime test windows`.
+
+### Changed
+
+- Moved judgement ratings and combo numbers farther right when Middlescroll is enabled on desktop, or when Strumline Background is between 90% and 100% on all builds.
+- Split the Opponent strumline background across its left and right lanes when Middlescroll is enabled.
+- Replaced the unreleased trace only GitHub version check with an in-game release check that quietly continues when offline.
+- Updated the main menu and Lua API version to `0.0.7`.
+
+### Fixed
+
+- Fixed Chart Editor auto-save only counting from the first edit instead of restarting after each new change.
+- Fixed Chart Editor metadata, BPM, time-signature, difficulty, audio-offset, and Freeplay-preview changes not consistently activating auto-save.
+- Fixed a failed Chart Editor backup clearing the unsaved state instead of keeping the chart dirty and scheduling another auto-save attempt.
+- Fixed a fatal crash in the Chart Editor when importing or loading `.mp3` files due to waveform generation failure.
+- Fixed a fatal crash on Mobile devices when single or double-clicking notes and events in the Chart Editor.
+- Fixed the Chart Editor Auto-Save preferences having overly restrictive minute bounds and failing to update the timer in some cases.
+- Fixed Story Mode rejecting weeks that use only one or two custom difficulties instead of Easy, Normal, and Hard.
+- Fixed Story Mode selecting an invalid remembered difficulty when changing to a week with a different difficulty list.
+- Fixed the mobile Chart Editor requiring mouse hover to open Mirror Notes, Note Snapping, and Live Input Mode.
+- Fixed Live Input Mode touch selections not reliably updating the active input style.
+- Fixed F5 bypassing the Chart Editor reload path and failing to hot-reload a PlayState opened as a Chart Editor playtest substate.
+- Fixed F5 only rescanning Lua scripts during normal gameplay instead of reloading the current song and its assets.
+- Fixed note splashes being shifted left by an extra half-sprite offset.
+- Fixed the Chart Editor character selector crashing when a character has a missing or invalid animated Freeplay icon.
+- Fixed the Chart Editor character selector opening below the health icons and becoming hidden while using Downscroll.
+- Fixed the Stage Editor converter accepting files that do not match the selected source engine.
+- Fixed the Stage Editor Test Stage button being blocked by its own UI focus.
+- Fixed the mobile Hitbox layout removing the press and release events required to hit notes.
+- Repositioned and resized the mobile Hitbox layout into a safe lower-screen touch pad, with the receptor line kept above it instead of overlapping the notes.
+- Fixed mobile Hitbox touches lighting up without reaching the gameplay note input queue.
+- Kept Freeplay difficulty names and dots visible in Minimal and Max low-quality modes while hiding the difficulty selector arrows.
+- Fixed the split Opponent receptors and incoming notes staying at the top of the screen when using Downscroll with Middlescroll.
+- Fixed the split Opponent strumline backgrounds not lining up with their receptor pairs.
+- Fixed Chart Editor Instrumental, Player Vocals, Opponent Vocals, and playback-speed preferences sometimes being overwritten by temporary minimum UI values.
+- Restored the glowing selected song text in Freeplay on Android. HAPPY LEN?? HUH???
+- Replaced the broken mobile Hitbox layout with four full-screen touch lanes that keep the normal strumline and Up/Downscroll layout.
+- Fixed mobile Arrow and Hitbox controls changing the gameplay strumline layout, and force Arrow controls while an external keyboard or controller is connected. ops
+- Fixed Chart Editor audio, playback, note snapping, input mode, Downscroll, theme, hitsound, and subtitle preferences not saving immediately on mobile.
+- Fixed the Difficulty toolbox Load Metadata, Load Chart, Save Metadata, and Save Chart buttons doing nothing on mobile.
+- Added 0% to the mobile Hitbox Transparency range so its resting lanes can be completely invisible.
+- Fixed the mobile Chart Editor Metadata toolbox crashing when opened before an instrumental was loaded.
+
 ## [0.0.6.5] - 2026-07-23 | Small Bugfix Update
 
 ### Added

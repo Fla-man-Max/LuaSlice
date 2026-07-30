@@ -118,6 +118,9 @@ class StageEditorState extends UIState
   var menubarItemWindowCharacter:MenuCheckBox;
   var menubarItemWindowStage:MenuCheckBox;
 
+  var menubarMenuConvert:Menu;
+  var menubarItemOpenConverter:MenuItem;
+
   var menubarMenuHelp:Menu;
   var menubarItemUserGuide:MenuItem;
   var menubarItemGoToBackupsFolder:MenuItem;
@@ -590,7 +593,7 @@ class StageEditorState extends UIState
     if (FlxG.mouse.justReleased || FlxG.mouse.justReleasedRight) FunkinSound.playOnce(Paths.sound("chartingSounds/ClickUp"));
 
     // testmode
-    menubarMenuFile.disabled = menubarMenuEdit.disabled = bottomBarModeText.disabled = menubarMenuWindow.disabled = testingMode;
+    menubarMenuFile.disabled = menubarMenuEdit.disabled = bottomBarModeText.disabled = menubarMenuWindow.disabled = menubarMenuConvert.disabled = testingMode;
 
     if (testingMode)
     {
@@ -1058,6 +1061,7 @@ class StageEditorState extends UIState
     menubarItemCreateSolidBlock.onClick = function(_) onMenuItemClick("create solid block");
     menubarItemSelectNone.onClick = function(_) onMenuItemClick("select none");
     menubarButtonText.onClick = function(_) onMenuItemClick("test stage");
+    menubarItemOpenConverter.onClick = function(_) openStageConverter();
     menubarItemUserGuide.onClick = function(_) onMenuItemClick("user guide");
     menubarItemGoToBackupsFolder.onClick = function(_) onMenuItemClick("open folder");
     menubarItemAbout.onClick = function(_) onMenuItemClick("about");
@@ -1245,6 +1249,7 @@ class StageEditorState extends UIState
   public var userGuideDialog:UserGuideDialog;
   public var aboutDialog:AboutDialog;
   public var loadUrlDialog:LoadFromUrlDialog;
+  public var conversionDialog:StageConversionDialog;
   public var exitConfirmDialog:Dialog;
 
   public function onMenuItemClick(item:String):Void
@@ -1459,8 +1464,6 @@ class StageEditorState extends UIState
         #end
 
       case "test stage":
-        if (!allowInput) return;
-
         camFollow.velocity.set();
 
         for (a in spriteArray)
@@ -1684,6 +1687,17 @@ class StageEditorState extends UIState
     }
 
     loadUrlDialog.showDialog();
+  }
+
+  public function openStageConverter():Void
+  {
+    if (conversionDialog != null) return;
+    conversionDialog = new StageConversionDialog(this);
+    conversionDialog.onDialogClosed = function(_)
+    {
+      conversionDialog = null;
+    }
+    conversionDialog.showDialog();
   }
 }
 #end

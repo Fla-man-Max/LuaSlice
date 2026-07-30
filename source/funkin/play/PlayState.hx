@@ -11,7 +11,7 @@ import flixel.FlxObject;
 import flixel.FlxSprite;
 import flixel.FlxSubState;
 import flixel.group.FlxSpriteGroup;
-import flixel.math.FlxEase;
+import flixel.tweens.FlxEase;
 import flixel.math.FlxMath;
 import flixel.math.FlxPoint;
 import flixel.sound.FlxSound;
@@ -976,11 +976,11 @@ class PlayState extends MusicBeatSubState
       {
         hitbox.isPixel = currentChart.noteStyle == "pixel";
 
-        if (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows)
+        if (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows && Preferences.arrowBoxLayout == "Arrow")
         {
           for (direction in Strumline.DIRECTIONS)
           {
-            hitbox.getFirstHintByDirection(direction).follow(playerStrumline.getByDirection(direction));
+            hitbox.getFirstHintByDirection(direction)?.follow(playerStrumline.getByDirection(direction));
           }
         }
       }
@@ -2367,9 +2367,7 @@ class PlayState extends MusicBeatSubState
      */
   function initHealthBar():Void
   {
-    final isDownscroll:Bool = #if mobile (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows
-      && !ControlsHandler.hasExternalInputDevice)
-      || #end Preferences.downscroll;
+    final isDownscroll:Bool = Preferences.downscroll;
 
     var healthBarYPos:Float = isDownscroll ? FlxG.height * 0.1 : FlxG.height * 0.9;
 
@@ -2415,9 +2413,7 @@ class PlayState extends MusicBeatSubState
     // Create subtitles if they are enabled.
     if (Preferences.subtitles)
     {
-      final isDownscroll:Bool = #if mobile (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows
-        && !ControlsHandler.hasExternalInputDevice)
-        || #end Preferences.downscroll;
+      final isDownscroll:Bool = Preferences.downscroll;
 
       final subtitlesAlignment:SubtitlesAlignment = isDownscroll ? SubtitlesAlignment.SUBTITLES_TOP : SubtitlesAlignment.SUBTITLES_BOTTOM;
       subtitles = new Subtitles(0, 139, subtitlesAlignment);
@@ -2996,13 +2992,13 @@ class PlayState extends MusicBeatSubState
     opponentStrumline.zIndex = 1000;
     opponentStrumline.cameras = [camHUD];
 
-    if (Preferences.middleScroll)
+    if (Preferences.shouldUseMiddleScroll())
     {
       final strumlineWidth:Float = Strumline.NOTE_SPACING * 4;
       playerStrumline.x = (FlxG.width / 2) - (strumlineWidth / 2);
-      
-      opponentStrumline.x = 96; 
-      
+
+      opponentStrumline.x = 96;
+
       opponentStrumline.alpha = 0.9;
       opponentStrumline.targetAlpha = 0.9;
     }
@@ -3010,19 +3006,15 @@ class PlayState extends MusicBeatSubState
     #if mobile
     if (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows && !ControlsHandler.hasExternalInputDevice)
     {
-      initNoteHitbox();
+      initMobileTouchStrumlineLayout();
     }
     #end
 
     playerStrumline.fadeInArrows();
     opponentStrumline.fadeInArrows();
   }
-
-  /**
-     * Configures the position of strumline for the default control scheme
-     */
   #if mobile
-  function initNoteHitbox()
+  function initMobileTouchStrumlineLayout():Void
   {
     final amplification:Float = (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
     final playerStrumlineScale:Float = ((FlxG.height / FlxG.width) * 1.95) * amplification;
@@ -3030,7 +3022,7 @@ class PlayState extends MusicBeatSubState
 
     playerStrumline.strumlineScale.set(playerStrumlineScale, playerStrumlineScale);
     playerStrumline.setNoteSpacing(playerNoteSpacing);
-    @:nullSafety(Off) // Who thought it'd be a good idea to make the iterator nullable?
+    @:nullSafety(Off)
     for (strum in playerStrumline)
     {
       strum.width *= 2;
@@ -3041,7 +3033,9 @@ class PlayState extends MusicBeatSubState
     playerStrumline.y = (FlxG.height - playerStrumline.height) * 0.95 - Constants.STRUMLINE_Y_OFFSET;
     if (currentChart?.noteStyle != "pixel")
     {
-      #if android playerStrumline.y += 10; #end
+      #if android
+      playerStrumline.y += 10;
+      #end
     }
     else
     {
@@ -3049,15 +3043,6 @@ class PlayState extends MusicBeatSubState
     }
     opponentStrumline.y = Constants.STRUMLINE_Y_OFFSET * 0.3;
     opponentStrumline.x -= 30;
-    
-    // Update hitbox layout to match the newly configured strumline
-    if (hitbox != null)
-    {
-      for (direction in Strumline.DIRECTIONS)
-      {
-        hitbox.getFirstHintByDirection(direction).follow(playerStrumline.getByDirection(direction));
-      }
-    }
   }
 
   function initPauseSprites()

@@ -1,13 +1,17 @@
 package;
 
 #if FEATURE_LUA_SCRIPTS
+import funkin.util.Constants;
+
 class LuaApiPrelude
 {
   public static function source():String
   {
+    final luaSliceVersion:String = Constants.LUASLICE_VERSION.charAt(0) == 'v' ? Constants.LUASLICE_VERSION.substr(1) : Constants.LUASLICE_VERSION;
+
     return [
       "LuaSlice = LuaSlice or {}",
-      "LuaSlice.version = '0.0.6.5'",
+      'LuaSlice.version = \'${luaSliceVersion}\'',
       "luaslice = LuaSlice",
       "function LuaSlice.versionAtLeast(version) local function parts(v) local a,b,c = tostring(v):match('(%d+)%.(%d+)%.(%d+)'); return tonumber(a) or 0, tonumber(b) or 0, tonumber(c) or 0 end; local a,b,c = parts(LuaSlice.version); local x,y,z = parts(version); if a ~= x then return a > x end; if b ~= y then return b > y end; return c >= z end",
       "function requiresLuaSlice(version) if not LuaSlice.versionAtLeast(version) then debugPrint('This script needs LuaSlice ' .. tostring(version) .. '+') return false end return true end",

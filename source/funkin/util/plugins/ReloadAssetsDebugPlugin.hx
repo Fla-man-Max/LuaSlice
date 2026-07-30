@@ -9,6 +9,9 @@ import funkin.ui.MusicBeatSubState;
 import funkin.play.PlayState;
 import funkin.play.GameOverSubState;
 #end
+#if FEATURE_CHART_EDITOR
+import funkin.ui.debug.charting.ChartEditorState;
+#end
 #if android
 import funkin.external.android.CallbackUtil;
 #end
@@ -67,9 +70,23 @@ class ReloadAssetsDebugPlugin extends FlxBasic
   {
     var state:Dynamic = FlxG.state;
     #if FEATURE_LUA_SCRIPTS
-    if (luaHotReload && state is PlayState && !(cast state : PlayState).isGameOverState && GameOverSubState.instance == null)
+    var playState:Null<PlayState> = null;
+    if (!(state is PlayState) && state?.subState is PlayState)
     {
-      (cast state : PlayState).reloadLuaScriptsFromDisk();
+      playState = cast state.subState;
+    }
+
+    if (luaHotReload && playState != null && !playState.isGameOverState && GameOverSubState.instance == null)
+    {
+      playState.reloadLuaScriptsFromDisk();
+      return;
+    }
+    #end
+
+    #if FEATURE_CHART_EDITOR
+    if (state is ChartEditorState)
+    {
+      (cast state : ChartEditorState).reloadAssets();
       return;
     }
     #end

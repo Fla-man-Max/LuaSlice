@@ -5,6 +5,7 @@ import funkin.external.android.DisplayUtil;
 #end
 
 #if mobile
+import funkin.mobile.input.ControlsHandler;
 import funkin.mobile.ui.FunkinHitbox;
 import funkin.mobile.util.InAppPurchasesUtil;
 import funkin.util.plugins.TouchPointerPlugin;
@@ -111,6 +112,33 @@ class Preferences
     save.options.downscroll = value;
     Save.system.flush();
     return value;
+  }
+
+  /**
+   * If enabled, player strumline is centered and opponent strumline is split/hidden.
+   * @default `false`
+   */
+  public static var middleScroll(get, set):Bool;
+
+  static function get_middleScroll():Bool
+  {
+    return Save?.instance?.options?.middleScroll ?? false;
+  }
+
+  static function set_middleScroll(value:Bool):Bool
+  {
+    var save:Save = Save.instance;
+    save.options.middleScroll = value;
+    Save.system.flush();
+    return value;
+  }
+
+  public static function shouldUseMiddleScroll():Bool
+  {
+    #if mobile
+    if (controlsScheme == FunkinHitboxControlSchemes.Arrows && !ControlsHandler.hasExternalInputDevice) return false;
+    #end
+    return middleScroll;
   }
 
   /**
@@ -728,6 +756,64 @@ class Preferences
   {
     var save:Save = Save.instance;
     save.mobileOptions.controlsScheme = value;
+    Save.system.flush();
+    return value;
+  }
+
+  /**
+   * Arrow box layout: 'Arrow' or 'Hitbox'.
+   * @default `Arrow`
+   */
+  public static var arrowBoxLayout(get, set):String;
+
+  static function get_arrowBoxLayout():String
+  {
+    if (ControlsHandler.hasExternalInputDevice) return 'Arrow';
+    return Save?.instance?.mobileOptions?.arrowBoxLayout ?? 'Arrow';
+  }
+
+  static function set_arrowBoxLayout(value:String):String
+  {
+    var save:Save = Save.instance;
+    save.mobileOptions.arrowBoxLayout = value;
+    Save.system.flush();
+    return value;
+  }
+
+  /**
+   * Whether to use RGB colors from notes for the hitbox.
+   * @default `false`
+   */
+  public static var arrowRGB(get, set):Bool;
+
+  static function get_arrowRGB():Bool
+  {
+    return Save?.instance?.mobileOptions?.arrowRGB ?? false;
+  }
+
+  static function set_arrowRGB(value:Bool):Bool
+  {
+    var save:Save = Save.instance;
+    save.mobileOptions.arrowRGB = value;
+    Save.system.flush();
+    return value;
+  }
+
+  /**
+   * Hitbox transparency percentage (0 to 90).
+   * @default `10`
+   */
+  public static var arrowTransparency(get, set):Int;
+
+  static function get_arrowTransparency():Int
+  {
+    return Save?.instance?.mobileOptions?.arrowTransparency ?? 10;
+  }
+
+  static function set_arrowTransparency(value:Int):Int
+  {
+    var save:Save = Save.instance;
+    save.mobileOptions.arrowTransparency = value;
     Save.system.flush();
     return value;
   }

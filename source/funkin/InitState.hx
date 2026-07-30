@@ -30,7 +30,7 @@ import funkin.play.notes.notekind.NoteKindManager;
 import funkin.play.PlayStatePlaylist;
 import funkin.ui.debug.charting.ChartEditorState;
 import funkin.ui.debug.stageeditor.StageEditorState;
-import funkin.ui.title.TitleState;
+import funkin.ui.title.LuaSliceUpdateState;
 import funkin.ui.transition.LoadingState;
 import funkin.util.CLIUtil;
 import funkin.util.CLIUtil.CLIParams;
@@ -451,7 +451,7 @@ class InitState extends FlxState
         fnfcTargetPath: params.chart.chartPath,
       }));
       #else
-      FlxG.switchState(() -> new TitleState());
+      openTitle();
       #end
     }
     else if (params.stage.shouldLoadStage)
@@ -461,7 +461,7 @@ class InitState extends FlxState
         fnfsTargetPath: params.stage.stagePath,
       }));
       #else
-      FlxG.switchState(() -> new TitleState());
+      openTitle();
       #end
     }
     else if (params.song.shouldLoadSong && params.song.songPath != null)
@@ -469,7 +469,7 @@ class InitState extends FlxState
       #if sys
       FlxG.switchState(() -> new ChartPlaytestMenu(params.song.songPath));
       #else
-      FlxG.switchState(() -> new TitleState());
+      openTitle();
       #end
     }
     else
@@ -498,12 +498,17 @@ class InitState extends FlxState
       }
       else
       {
-        FlxG.switchState(() -> new TitleState());
+        openTitle();
       }
       #else
-      FlxG.switchState(() -> new TitleState());
+      openTitle();
       #end
     }
+  }
+
+  function openTitle():Void
+  {
+    FlxG.switchState(() -> new LuaSliceUpdateState());
   }
 
   /**

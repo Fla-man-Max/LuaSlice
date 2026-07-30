@@ -138,6 +138,7 @@ class Strumline extends FlxSpriteGroup
   public var onNoteIncoming:FlxTypedSignal<NoteSprite->Void>;
 
   var background:FunkinSprite;
+  var middleScrollBackground:Null<FunkinSprite>;
 
   /**
    * The strumline notes (the receptors) themselves.
@@ -172,15 +173,14 @@ class Strumline extends FlxSpriteGroup
    */
   public var noteVibrations:NoteVibrationsHandler = new NoteVibrationsHandler();
 
-  final inArrowControlSchemeMode:Bool = #if mobile (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows
+  final inMobileTouchLayout:Bool = #if mobile (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows
     && !ControlsHandler.hasExternalInputDevice) #else false #end;
 
   /**
    * Whether the strumline is downscroll.
    */
   public var isDownscroll:Bool = #if mobile (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows
-    && !ControlsHandler.hasExternalInputDevice)
-    || #end Preferences.downscroll;
+    && !ControlsHandler.hasExternalInputDevice) || #end Preferences.downscroll;
 
   /**
    * The note data for the song. Should NOT be altered after the song starts (but we alter it in OffsetState :DDD),
@@ -240,22 +240,31 @@ class Strumline extends FlxSpriteGroup
     this.noteSplashes.zIndex = 50;
     this.add(this.noteSplashes);
 
-    var backgroundWidth:Float = KEY_COUNT * Strumline.NOTE_SPACING + BACKGROUND_PAD * 2;
+    final splitOpponentBackground:Bool = Preferences.shouldUseMiddleScroll() && !isPlayer;
+    var backgroundWidth:Float = (splitOpponentBackground ? KEY_COUNT / 2 : KEY_COUNT) * Strumline.NOTE_SPACING + BACKGROUND_PAD * 2;
     #if mobile
-    if (inArrowControlSchemeMode && isPlayer)
+    if (inMobileTouchLayout && isPlayer)
     {
-      backgroundWidth = backgroundWidth * 1.84;
+      backgroundWidth *= 1.84;
     }
     #end
     this.background = new FunkinSprite(0, 0).makeSolidColor(Std.int(backgroundWidth), FlxG.height, 0xFF000000);
     // Convert the percent to a number between 0 and 1.
     this.background.alpha = Preferences.strumlineBackgroundOpacity / 100.0;
     this.background.scrollFactor.set(0, 0);
-    this.background.x = -BACKGROUND_PAD;
+    this.background.x = splitOpponentBackground ? INITIAL_OFFSET - BACKGROUND_PAD : -BACKGROUND_PAD;
     #if mobile
-    if (inArrowControlSchemeMode && isPlayer) this.background.x -= 100;
+    if (inMobileTouchLayout && isPlayer) this.background.x -= 100;
     #end
     this.add(this.background);
+    if (splitOpponentBackground)
+    {
+      this.middleScrollBackground = new FunkinSprite(0, 0).makeSolidColor(Std.int(backgroundWidth), FlxG.height, 0xFF000000);
+      this.middleScrollBackground.alpha = Preferences.strumlineBackgroundOpacity / 100.0;
+      this.middleScrollBackground.scrollFactor.set(0, 0);
+      this.middleScrollBackground.x = FlxG.width / 2 + (KEY_COUNT / 2) * Strumline.NOTE_SPACING + INITIAL_OFFSET - BACKGROUND_PAD;
+      this.add(this.middleScrollBackground);
+    }
 
     strumlineScale = new FlxCallbackPoint(strumlineScaleCallback);
 
@@ -292,6 +301,7 @@ class Strumline extends FlxSpriteGroup
 
     // Keep the background on the screen.
     if (this.background != null) this.background.y = 0;
+    if (this.middleScrollBackground != null) this.middleScrollBackground.y = 0;
 
     return value;
   }
@@ -301,6 +311,7 @@ class Strumline extends FlxSpriteGroup
     super.set_alpha(value);
 
     this.background.alpha = Preferences.strumlineBackgroundOpacity / 100.0 * alpha;
+    if (this.middleScrollBackground != null) this.middleScrollBackground.alpha = Preferences.strumlineBackgroundOpacity / 100.0 * alpha;
 
     return value;
   }
@@ -478,7 +489,8 @@ class Strumline extends FlxSpriteGroup
   {
     forEach(function(obj:flixel.FlxObject):Void
     {
-      if (obj != strumlineNotes) obj.visible = false;
+      if (obj != strumlineNotes
+        && !(Preferences.shouldUseMiddleScroll() && !isPlayer && (obj == background || obj == middleScrollBackground))) obj.visible = false;
     });
 
     this.strumlineScale.set(scale, scale);
@@ -515,6 +527,27 @@ class Strumline extends FlxSpriteGroup
       note.y = this.strumlineNotes.y;
       noteStyle.applyStrumlineOffsets(note);
     }
+
+    alignMiddleScrollBackgrounds();
+  }
+
+  function alignMiddleScrollBackgrounds():Void
+  {
+    if (!Preferences.shouldUseMiddleScroll() || isPlayer || middleScrollBackground == null || strumlineNotes == null) return;
+
+    alignBackgroundToNotes(background, getByDirection(NoteDirection.LEFT), getByDirection(NoteDirection.DOWN));
+    alignBackgroundToNotes(middleScrollBackground, getByDirection(NoteDirection.UP), getByDirection(NoteDirection.RIGHT));
+  }
+
+  function alignBackgroundToNotes(target:FunkinSprite, first:StrumlineNote, second:StrumlineNote):Void
+  {
+    if (target == null || first == null || second == null) return;
+
+    final left:Float = Math.min(first.x, second.x) - BACKGROUND_PAD;
+    final right:Float = Math.max(first.x + first.width, second.x + second.width) + BACKGROUND_PAD;
+    target.setGraphicSize(Math.ceil(right - left), FlxG.height);
+    target.updateHitbox();
+    target.setPosition(left, 0);
   }
 
   /**
@@ -829,7 +862,7 @@ class Strumline extends FlxSpriteGroup
    */
   public function onBeatHit():Void
   {
-    // why are we doing this every beat? >:( 
+    // why are we doing this every beat? >:(
     if (notes.members.length > 1) notes.members.insertionSort(compareNoteSprites.bind(FlxSort.ASCENDING));
 
     if (holdNotes.members.length > 1) holdNotes.members.insertionSort(compareHoldNoteSprites.bind(FlxSort.ASCENDING));
@@ -1093,8 +1126,6 @@ class Strumline extends FlxSpriteGroup
       splash.x += INITIAL_OFFSET;
       splash.x += noteStyle.getSplashOffsets()[0] * splash.scale.x;
 
-      splash.x -= splash.width / 2;
-      splash.y -= splash.height / 2;
       splash.alpha = targetAlpha;
 
       splash.y = this.y;
@@ -1161,7 +1192,7 @@ class Strumline extends FlxSpriteGroup
 
       var trueScale = new FlxPoint(strumlineScale.x, strumlineScale.y);
       #if mobile
-      if (inArrowControlSchemeMode)
+      if (inMobileTouchLayout)
       {
         final amplification:Float = (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
         trueScale.set(strumlineScale.x - ((FlxG.height / FlxG.width) * 0.2) * amplification,
@@ -1357,11 +1388,10 @@ class Strumline extends FlxSpriteGroup
   {
     var pos:Float = 0;
     #if mobile
-    if (inArrowControlSchemeMode && isPlayer) pos = 35 * (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
+    if (inMobileTouchLayout && isPlayer) pos = 35 * (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
     #end
-    
     var middleScrollGap:Float = 0;
-    if (Preferences.middleScroll && !isPlayer && (direction == NoteDirection.UP || direction == NoteDirection.RIGHT))
+    if (Preferences.shouldUseMiddleScroll() && !isPlayer && (direction == NoteDirection.UP || direction == NoteDirection.RIGHT))
     {
       middleScrollGap = FlxG.width / 2;
     }
@@ -1488,7 +1518,7 @@ class Strumline extends FlxSpriteGroup
     {
       if (member == null) continue;
       // SKIP THE BACKGROUND
-      if (member == this.background) continue;
+      if (member == this.background || member == this.middleScrollBackground) continue;
 
       var minY:Float;
       if (member.flixelType == SPRITEGROUP)
@@ -1517,7 +1547,7 @@ class Strumline extends FlxSpriteGroup
     {
       if (member == null) continue;
       // SKIP THE BACKGROUND
-      if (member == this.background) continue;
+      if (member == this.background || member == this.middleScrollBackground) continue;
 
       var maxY:Float;
       if (member.flixelType == SPRITEGROUP)

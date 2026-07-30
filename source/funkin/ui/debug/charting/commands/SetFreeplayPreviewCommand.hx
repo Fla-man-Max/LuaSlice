@@ -29,12 +29,17 @@ class SetFreeplayPreviewCommand implements ChartEditorCommand
 
     if (newStartTime != null) state.currentSongFreeplayPreviewStart = newStartTime;
     if (newEndTime != null) state.currentSongFreeplayPreviewEnd = newEndTime;
+    if ((newStartTime != null && newStartTime != previousStartTime) || (newEndTime != null && newEndTime != previousEndTime))
+    {
+      state.saveDataDirty = true;
+    }
   }
 
   public function undo(state:ChartEditorState):Void
   {
     state.currentSongFreeplayPreviewStart = previousStartTime;
     state.currentSongFreeplayPreviewEnd = previousEndTime;
+    state.saveDataDirty = true;
   }
 
   public function shouldAddToHistory(state:ChartEditorState):Bool

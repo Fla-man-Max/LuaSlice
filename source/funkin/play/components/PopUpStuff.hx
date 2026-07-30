@@ -2,6 +2,7 @@ package funkin.play.components;
 
 import flixel.group.FlxGroup.FlxTypedGroup;
 import flixel.tweens.FlxTween;
+import funkin.Preferences;
 import funkin.graphics.FunkinSprite;
 import funkin.util.EaseUtil;
 import funkin.play.notes.notestyle.NoteStyle;
@@ -37,7 +38,7 @@ class PopUpStuff extends FlxTypedGroup<FunkinSprite>
 
     rating.zIndex = 1000;
 
-    rating.x = (FlxG.width * 0.474);
+    rating.x = getPopupAnchorX();
     rating.x -= rating.width / 2;
     rating.y = (FlxG.camera.height * 0.45 - 60);
     rating.y -= rating.height / 2;
@@ -85,12 +86,13 @@ class PopUpStuff extends FlxTypedGroup<FunkinSprite>
     // seperatedScore.reverse();
 
     var daLoop:Int = 1;
+    var popupAnchorX:Float = getPopupAnchorX();
     for (digit in seperatedScore)
     {
       var numScore:Null<FunkinSprite> = noteStyle.buildComboNumSprite(digit);
       if (numScore == null) continue;
 
-      numScore.x = (FlxG.width * 0.507) - (36 * daLoop) - 65;
+      numScore.x = popupAnchorX + (FlxG.width * 0.033) - (36 * daLoop) - 65;
       numScore.y = (FlxG.camera.height * 0.44);
 
       numScore.x += offsets[0];
@@ -121,5 +123,14 @@ class PopUpStuff extends FlxTypedGroup<FunkinSprite>
 
       daLoop++;
     }
+  }
+
+  function getPopupAnchorX():Float
+  {
+    var shiftRight:Bool = Preferences.strumlineBackgroundOpacity >= 90;
+    #if !mobile
+    shiftRight = shiftRight || Preferences.middleScroll;
+    #end
+    return FlxG.width * (shiftRight ? 0.84 : 0.474);
   }
 }
