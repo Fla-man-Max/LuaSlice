@@ -12,6 +12,6 @@ Download LuaSlice or view its source code here:
 - [Versions](https://github.com/Fla-man-Max/LuaSlice/releases)
 - [Source Code](https://github.com/Fla-man-Max/LuaSlice)
 - [Gamebanana](https://gamebanana.com/tools/23050)
-- 
+  
 - Can't find the Lua API?
 - [Click here to go to the WIKI](https://github.com/Fla-man-Max/LuaSlice/wiki/LuaSlice-Lua-API)
