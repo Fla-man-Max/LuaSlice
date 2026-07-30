@@ -5,7 +5,7 @@ LuaSlice supports isolated `.lua` scripts and shared `.luag` scripts. It also in
 
 The engine is based on V-Slice 0.8.5 and is still being worked on. Lua compatibility is the main focus, along with making mod creation easier on Windows and Android. And maybe other builds....
 
-- Can't find the Lua API?
+Can't find the Lua API?
 - [Click here to go to the WIKI](https://github.com/Fla-man-Max/LuaSlice/wiki/LuaSlice-Lua-API)
 
 Join the LuaSlice Discord server:
