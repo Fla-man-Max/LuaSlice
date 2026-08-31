@@ -44,7 +44,6 @@ class Strumline extends FlxSpriteGroup
   // Positional fixes for new strumline graphics.
   static final INITIAL_OFFSET:Float = -0.275 * STRUMLINE_SIZE;
   static final NUDGE:Float = 2.0;
-
   public static final KEY_COUNT:Int = 4;
   static final NOTE_SPLASH_CAP:Int = 6;
 
@@ -154,9 +153,7 @@ class Strumline extends FlxSpriteGroup
 
   var notesVwoosh:FlxTypedSpriteGroup<NoteSprite>;
   var holdNotesVwoosh:FlxTypedSpriteGroup<SustainTrail>;
-
   final noteStyle:NoteStyle;
-
   var noteSpacingScale:Float = 1;
 
   /**
@@ -173,14 +170,15 @@ class Strumline extends FlxSpriteGroup
    */
   public var noteVibrations:NoteVibrationsHandler = new NoteVibrationsHandler();
 
-  final inMobileTouchLayout:Bool = #if mobile (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows
+  final inArrowControlSchemeMode:Bool = #if mobile (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows
     && !ControlsHandler.hasExternalInputDevice) #else false #end;
+
+  final inMobileTouchMode:Bool = #if mobile !ControlsHandler.hasExternalInputDevice #else false #end;
 
   /**
    * Whether the strumline is downscroll.
    */
-  public var isDownscroll:Bool = #if mobile (Preferences.controlsScheme == FunkinHitboxControlSchemes.Arrows
-    && !ControlsHandler.hasExternalInputDevice) || #end Preferences.downscroll;
+  public var isDownscroll:Bool = Preferences.downscroll;
 
   /**
    * The note data for the song. Should NOT be altered after the song starts (but we alter it in OffsetState :DDD),
@@ -232,7 +230,7 @@ class Strumline extends FlxSpriteGroup
     this.notesVwoosh.zIndex = 31;
     this.add(this.notesVwoosh);
 
-    this.noteHoldCovers = new FlxTypedSpriteGroup<NoteHoldCover>(0, 0, 4);
+    this.noteHoldCovers = new FlxTypedSpriteGroup<NoteHoldCover>();
     this.noteHoldCovers.zIndex = 40;
     this.add(this.noteHoldCovers);
 
@@ -243,18 +241,18 @@ class Strumline extends FlxSpriteGroup
     final splitOpponentBackground:Bool = Preferences.shouldUseMiddleScroll() && !isPlayer;
     var backgroundWidth:Float = (splitOpponentBackground ? KEY_COUNT / 2 : KEY_COUNT) * Strumline.NOTE_SPACING + BACKGROUND_PAD * 2;
     #if mobile
-    if (inMobileTouchLayout && isPlayer)
+    if (inMobileTouchMode && isPlayer)
     {
-      backgroundWidth *= 1.84;
+      backgroundWidth = backgroundWidth * 1.84;
     }
     #end
     this.background = new FunkinSprite(0, 0).makeSolidColor(Std.int(backgroundWidth), FlxG.height, 0xFF000000);
     // Convert the percent to a number between 0 and 1.
     this.background.alpha = Preferences.strumlineBackgroundOpacity / 100.0;
     this.background.scrollFactor.set(0, 0);
-    this.background.x = splitOpponentBackground ? INITIAL_OFFSET - BACKGROUND_PAD : -BACKGROUND_PAD;
+    this.background.x = -BACKGROUND_PAD;
     #if mobile
-    if (inMobileTouchLayout && isPlayer) this.background.x -= 100;
+    if (inMobileTouchMode && isPlayer) this.background.x -= 100;
     #end
     this.add(this.background);
     if (splitOpponentBackground)
@@ -262,7 +260,6 @@ class Strumline extends FlxSpriteGroup
       this.middleScrollBackground = new FunkinSprite(0, 0).makeSolidColor(Std.int(backgroundWidth), FlxG.height, 0xFF000000);
       this.middleScrollBackground.alpha = Preferences.strumlineBackgroundOpacity / 100.0;
       this.middleScrollBackground.scrollFactor.set(0, 0);
-      this.middleScrollBackground.x = FlxG.width / 2 + (KEY_COUNT / 2) * Strumline.NOTE_SPACING + INITIAL_OFFSET - BACKGROUND_PAD;
       this.add(this.middleScrollBackground);
     }
 
@@ -331,9 +328,11 @@ class Strumline extends FlxSpriteGroup
     return KEY_COUNT * Strumline.NOTE_SPACING * noteSpacingScale * strumlineScale.x;
   }
 
-  public override function update(elapsed:Float):Void
+  override public function update(elapsed:Float):Void
   {
     super.update(elapsed);
+
+    if (!isPlayer && Preferences.shouldUseMiddleScroll() && alpha != 0.9) alpha = 0.9;
 
     updateNotes();
 
@@ -809,7 +808,7 @@ class Strumline extends FlxSpriteGroup
 
     for (dir in DIRECTIONS)
     {
-      if (isKeyHeld(dir) && getByDirection(dir).getCurrentAnimation() == "static")
+      if (isKeyHeld(dir) && getByDirection(dir).getCurrentAnimation() == 'static')
       {
         playPress(dir);
       }
@@ -959,7 +958,7 @@ class Strumline extends FlxSpriteGroup
   {
     this.notes.clear();
 
-    this.noteData = data;
+    this.noteData = data.copy();
     this.nextNoteIndex = 0;
 
     // Sort the notes by strumtime.
@@ -1111,7 +1110,6 @@ class Strumline extends FlxSpriteGroup
    */
   public function playNoteSplash(direction:NoteDirection):Void
   {
-    if (Preferences.isLowQualityMax()) return;
     if (!showNotesplash) return;
     if (!noteStyle.isNoteSplashEnabled()) return;
 
@@ -1125,8 +1123,6 @@ class Strumline extends FlxSpriteGroup
       splash.x += getXPos(direction);
       splash.x += INITIAL_OFFSET;
       splash.x += noteStyle.getSplashOffsets()[0] * splash.scale.x;
-
-      splash.alpha = targetAlpha;
 
       splash.y = this.y;
       splash.y -= INITIAL_OFFSET;
@@ -1142,7 +1138,6 @@ class Strumline extends FlxSpriteGroup
    */
   public function playNoteHoldCover(holdNote:SustainTrail):Void
   {
-    if (Preferences.isLowQualityMax()) return;
     if (!showNotesplash) return;
     if (!noteStyle.isHoldNoteCoverEnabled()) return;
 
@@ -1150,7 +1145,8 @@ class Strumline extends FlxSpriteGroup
 
     if (cover != null)
     {
-      cover.attachToHoldNote(holdNote);
+      cover.holdNote = holdNote;
+      holdNote.cover = cover;
       cover.visible = true;
 
       cover.playStart();
@@ -1159,8 +1155,6 @@ class Strumline extends FlxSpriteGroup
       cover.x += getXPos(holdNote.noteDirection);
       cover.x += STRUMLINE_SIZE / 2;
       cover.x -= cover.width / 2;
-      cover.y = -9999;
-      cover.alpha = targetAlpha;
       cover.x += noteStyle.getHoldCoverOffsets()[0] * cover.scale.x;
       cover.x += -12; // hardcoded adjustment, because we are evil.
 
@@ -1192,7 +1186,7 @@ class Strumline extends FlxSpriteGroup
 
       var trueScale = new FlxPoint(strumlineScale.x, strumlineScale.y);
       #if mobile
-      if (inMobileTouchLayout)
+      if (inMobileTouchMode)
       {
         final amplification:Float = (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
         trueScale.set(strumlineScale.x - ((FlxG.height / FlxG.width) * 0.2) * amplification,
@@ -1211,7 +1205,6 @@ class Strumline extends FlxSpriteGroup
       noteSprite.x -= (noteSprite.width - Strumline.STRUMLINE_SIZE) / 2; // Center it
       noteSprite.x -= NUDGE;
       noteSprite.y = -9999;
-      noteSprite.alpha = targetAlpha;
 
       noteSprite.graphic.destroyOnNoUse = false;
 
@@ -1248,7 +1241,7 @@ class Strumline extends FlxSpriteGroup
       holdNoteSprite.missedNote = false;
       holdNoteSprite.hitNote = false;
       holdNoteSprite.visible = true;
-      holdNoteSprite.alpha = targetAlpha;
+      holdNoteSprite.alpha = 1.0;
 
       holdNoteSprite.x = this.x;
       holdNoteSprite.x += getXPos(DIRECTIONS[note.getDirection() % KEY_COUNT]);
@@ -1303,30 +1296,18 @@ class Strumline extends FlxSpriteGroup
    */
   function constructNoteHoldCover():NoteHoldCover
   {
-    var result:NoteHoldCover = null;
+    var result:NoteHoldCover = this.noteHoldCovers.getFirstAvailable();
 
-    // If we haven't filled the pool yet...
-    if (noteHoldCovers.length < noteHoldCovers.maxSize)
+    if (result != null)
     {
-      // Create a new note hold cover.
-      result = new NoteHoldCover(noteStyle);
-      this.noteHoldCovers.add(result);
+      result.revive();
     }
     else
     {
-      // Else, find a note splash which is inactive so we can revive it.
-      result = this.noteHoldCovers.getFirstAvailable();
-
-      if (result != null)
-      {
-        result.revive();
-      }
-      else
-      {
-        // The note hold cover pool is full and all note hold covers are active,
-        // so we just pick one at random to destroy and restart.
-        result = FlxG.random.getObject(this.noteHoldCovers.members);
-      }
+      // The note hold cover pool is full and all note hold covers are active,
+      // We have to create a new note hold cover.
+      result = new NoteHoldCover(noteStyle);
+      this.noteHoldCovers.add(result);
     }
 
     return result;
@@ -1388,36 +1369,27 @@ class Strumline extends FlxSpriteGroup
   {
     var pos:Float = 0;
     #if mobile
-    if (inMobileTouchLayout && isPlayer) pos = 35 * (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
+    if (inArrowControlSchemeMode && isPlayer) pos = 35 * (FlxG.width / FlxG.height) / (FlxG.initialWidth / FlxG.initialHeight);
     #end
     var middleScrollGap:Float = 0;
     if (Preferences.shouldUseMiddleScroll() && !isPlayer && (direction == NoteDirection.UP || direction == NoteDirection.RIGHT))
     {
       middleScrollGap = FlxG.width / 2;
     }
-
     return switch (direction)
     {
-      case NoteDirection.LEFT: -pos * 2;
+      case NoteDirection.LEFT:
+        -pos * 2;
       case NoteDirection.DOWN:
         -(pos * 2) + (1 * Strumline.NOTE_SPACING) * (noteSpacingScale * strumlineScale.x);
       case NoteDirection.UP:
         pos + (2 * Strumline.NOTE_SPACING) * (noteSpacingScale * strumlineScale.x) + middleScrollGap;
       case NoteDirection.RIGHT:
         pos + (3 * Strumline.NOTE_SPACING) * (noteSpacingScale * strumlineScale.x) + middleScrollGap;
-      default: -pos * 2;
+      default:
+        -pos * 2;
     }
   }
-
-  /**
-   * Apply a small animation which moves the arrow down and fades it in.
-   * Only plays at the start of Free Play songs.
-   *
-   * Note that modifying the offset of the whole strumline won't have the
-   * @param arrow The arrow to animate.
-   * @param index The index of the arrow in the strumline.
-   */
-  public var targetAlpha:Float = 1.0;
 
   /**
    * Apply a small animation which moves the arrow down and fades it in.
@@ -1431,7 +1403,7 @@ class Strumline extends FlxSpriteGroup
   {
     arrow.y -= 10;
     arrow.alpha = 0.0;
-    FlxTween.tween(arrow, {y: arrow.y + 10, alpha: targetAlpha}, 1, {ease: FlxEase.circOut, startDelay: 0.5 + (0.2 * index)});
+    FlxTween.tween(arrow, {y: arrow.y + 10, alpha: 1}, 1, {ease: FlxEase.circOut, startDelay: 0.5 + (0.2 * index)});
   }
 
   /**

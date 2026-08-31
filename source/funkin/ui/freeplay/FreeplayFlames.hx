@@ -21,22 +21,17 @@ class FreeplayFlames extends FlxSpriteGroup
   {
     super(x, y);
 
-    if (Preferences.isLowQualityMax())
-    {
-      for (i in 0...5)
-      {
-        var flame = new FlxSprite();
-        flame.makeGraphic(1, 1, 0x00000000);
-        flame.visible = false;
-        flame.active = false;
-        add(flame);
-      }
-      active = false;
-      return;
-    }
-
     for (i in 0...5)
     {
+      if (Preferences.isLowQualityMinimal())
+      {
+        var hiddenFlame = new FlxSprite().makeGraphic(1, 1, 0x00000000);
+        hiddenFlame.visible = false;
+        hiddenFlame.active = false;
+        add(hiddenFlame);
+        continue;
+      }
+
       var flame:FlxSprite = new FlxSprite(flameX + (flameSpreadX * i), flameY + (flameSpreadY * i));
       flame.frames = Paths.getSparrowAtlas("freeplay/freeplayFlame");
       flame.animation.addByPrefix("flame", "fire loop full instance 1", FlxG.random.int(23, 25), false);
@@ -57,6 +52,7 @@ class FreeplayFlames extends FlxSpriteGroup
 
   override public function update(elapsed:Float):Void
   {
+    if (Preferences.isLowQualityMinimal()) return;
     super.update(elapsed);
     // doesn't work in create()/new() for some reason
     // so putting it here bwah!
@@ -71,6 +67,7 @@ class FreeplayFlames extends FlxSpriteGroup
 
   function set_flameCount(value:Int):Int
   {
+    if (Preferences.isLowQualityMinimal()) return this.flameCount = 0;
     // Stop all existing timers.
     // This fixes a bug where quickly switching difficulties would show flames.
     for (timer in timers)

@@ -9,6 +9,7 @@ import flixel.text.FlxText;
 import flixel.text.FlxText.FlxTextAlign;
 import flixel.util.FlxColor;
 import flixel.util.FlxTimer;
+import funkin.Assets;
 import funkin.Paths;
 import funkin.util.Constants;
 import funkin.util.TouchUtil;
@@ -21,7 +22,7 @@ using StringTools;
 
 class LuaSliceUpdateState extends FlxState
 {
-  static final RELEASE_API:String = 'https://api.github.com/repos/Fla-man-Max/LuaSlice/releases/latest';
+  static final RELEASE_API:String = 'https://api.github.com/repos/Fla-man-Max/LuaSlice/releases?per_page=20';
   static final RELEASES_URL:String = 'https://github.com/Fla-man-Max/LuaSlice/releases';
 
   var request:Null<HTTPRequest<String>>;
@@ -35,6 +36,7 @@ class LuaSliceUpdateState extends FlxState
   var leaving:Bool = false;
   var waitingForBrowser:Bool = false;
   var browserTookFocus:Bool = false;
+  var installedVersion:String = Constants.LUASLICE_VERSION;
 
   public override function create():Void
   {
@@ -44,9 +46,10 @@ class LuaSliceUpdateState extends FlxState
     background.makeGraphic(FlxG.width, FlxG.height, FlxColor.BLACK);
     add(background);
 
+    installedVersion = readInstalledVersion();
     request = new HTTPRequest<String>();
     request.timeout = 5000;
-    request.userAgent = 'LuaSlice/${Constants.LUASLICE_VERSION}';
+    request.userAgent = 'LuaSlice/$installedVersion';
     request.headers = [new HTTPRequestHeader('Accept', 'application/vnd.github+json')];
 
     checkTimer = new FlxTimer().start(6, function(_)
@@ -78,25 +81,29 @@ class LuaSliceUpdateState extends FlxState
 
     try
     {
-      var release:Dynamic = Json.parse(response);
-      var latestVersion:Null<String> = Reflect.field(release, 'tag_name');
-      if (latestVersion != null && isNewer(latestVersion, Constants.LUASLICE_VERSION))
+      var parsed:Dynamic = Json.parse(response);
+      var releases:Array<Dynamic> = Std.isOfType(parsed, Array) ? cast parsed : [parsed];
+      var latestVersion:Null<String> = null;
+      for (release in releases)
+      {
+        if (Reflect.field(release, 'draft') == true) continue;
+        var tag:Null<String> = Reflect.field(release, 'tag_name');
+        if (tag != null && (latestVersion == null || isNewer(tag, latestVersion))) latestVersion = tag;
+      }
+      if (latestVersion != null && isNewer(latestVersion, installedVersion))
       {
         showPrompt(displayVersion(latestVersion));
         return;
       }
     }
-    catch (_)
-    {
-    }
+    catch (_) {}
 
     openTitle();
   }
 
   function showPrompt(latestVersion:String):Void
   {
-    message = new FlxText(60, 230, FlxG.width - 120,
-      'Please Update to the newest version of LuaSlice Engine ($latestVersion)!', 32);
+    message = new FlxText(60, 230, FlxG.width - 120, 'Please Update to the newest version of LuaSlice Engine ($latestVersion)!', 32);
     message.setFormat(Paths.font('vcr.ttf'), 32, FlxColor.WHITE, FlxTextAlign.CENTER);
     message.antialiasing = false;
     add(message);
@@ -144,14 +151,12 @@ class LuaSliceUpdateState extends FlxState
       refreshSelection();
     }
 
-    if (FlxG.keys.anyJustPressed([LEFT, A])
-      || FlxG.gamepads.anyJustPressed(FlxGamepadInputID.DPAD_LEFT))
+    if (FlxG.keys.anyJustPressed([LEFT, A]) || FlxG.gamepads.anyJustPressed(FlxGamepadInputID.DPAD_LEFT))
     {
       selected = 0;
       refreshSelection();
     }
-    else if (FlxG.keys.anyJustPressed([RIGHT, D])
-      || FlxG.gamepads.anyJustPressed(FlxGamepadInputID.DPAD_RIGHT))
+    else if (FlxG.keys.anyJustPressed([RIGHT, D]) || FlxG.gamepads.anyJustPressed(FlxGamepadInputID.DPAD_RIGHT))
     {
       selected = 1;
       refreshSelection();
@@ -172,14 +177,12 @@ class LuaSliceUpdateState extends FlxState
     {
       openReleases();
     }
-    else if (FlxG.keys.anyJustPressed([ENTER, SPACE])
-      || FlxG.gamepads.anyJustPressed(FlxGamepadInputID.ACCEPT))
+    else if (FlxG.keys.anyJustPressed([ENTER, SPACE]) || FlxG.gamepads.anyJustPressed(FlxGamepadInputID.ACCEPT))
     {
       if (selected == 0) openTitle();
       else openReleases();
     }
-    else if (FlxG.keys.justPressed.ESCAPE
-      || FlxG.gamepads.anyJustPressed(FlxGamepadInputID.BACK))
+    else if (FlxG.keys.justPressed.ESCAPE || FlxG.gamepads.anyJustPressed(FlxGamepadInputID.BACK))
     {
       openTitle();
     }
@@ -188,8 +191,8 @@ class LuaSliceUpdateState extends FlxState
   function refreshSelection():Void
   {
     if (nahButton == null || okayButton == null) return;
-    nahButton.color = selected == 0 ? FlxColor.CYAN : FlxColor.WHITE;
-    okayButton.color = selected == 1 ? FlxColor.CYAN : FlxColor.WHITE;
+    nahButton.color = selected == 0 ? FlxColor.PURPLE : FlxColor.WHITE;
+    okayButton.color = selected == 1 ? FlxColor.PURPLE : FlxColor.WHITE;
   }
 
   function openReleases():Void
@@ -244,9 +247,24 @@ class LuaSliceUpdateState extends FlxState
     var clean:String = version.trim();
     if (clean == '') return 'v?';
     if (clean.charAt(0).toLowerCase() == 'v') clean = 'v${clean.substr(1)}';
-    else
-      clean = 'v$clean';
+    else clean = 'v$clean';
     return clean;
+  }
+
+  static function readInstalledVersion():String
+  {
+    try
+    {
+      var lines:Array<String> = Assets.getText(Paths.txt('VersionUpdater')).replace('\r', '').split('\n');
+      if (lines.length > 1)
+      {
+        var version:String = lines[1].trim();
+        if (version != '') return version;
+      }
+    }
+    catch (_) {}
+
+    return Constants.LUASLICE_VERSION;
   }
 
   static function isNewer(latest:String, current:String):Bool

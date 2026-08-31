@@ -5,11 +5,13 @@
     // The width of the individual menu items
     width: 160px;
     }
+    #menubarOpenRecent {
+      width: auto;
+      initial-width: none;
+      min-width: 160px;
+      max-width: 800px;
+    }
   </style>
-  <menu text="Convert" id="menubarMenuConvert">
-    <menu-item id="menubarItemOpenConverter" text="Open Stage Converter..." />
-  </menu>
-  <spacer width="28" />
   <menu text="File" id="menubarMenuFile">
     <menu-item id="menubarItemNewStage" text="New Stage" shortcutText="Ctrl+N" />
     <menu-separator />
@@ -34,7 +36,6 @@
     <menu-separator />
     <menu-item id="menubarItemNewObj" text="New Object" />
     <menu-item id="menubarItemFindObj" text="Find Object" shortcutText="Ctrl + F" />
-    <menu-item id="menubarItemCreateSolidBlock" text="Create Solid Block" />
     <menu-item id="menubarItemSelectNone" text="Select None" shortcutText="Ctrl + D" />
   </menu>
   <menu text="View" id="menubarMenuView">

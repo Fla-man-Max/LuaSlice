@@ -1,19 +1,17 @@
 package funkin;
 
-#if android
-import funkin.external.android.DisplayUtil;
-#end
-
 #if mobile
-import funkin.mobile.input.ControlsHandler;
 import funkin.mobile.ui.FunkinHitbox;
+import funkin.mobile.input.ControlsHandler;
 import funkin.mobile.util.InAppPurchasesUtil;
-import funkin.util.plugins.TouchPointerPlugin;
 #end
 import funkin.save.Save;
 import funkin.util.WindowUtil;
 import funkin.util.HapticUtil.HapticsMode;
 import funkin.ui.debug.FunkinDebugDisplay.DebugDisplayMode;
+#if FEATURE_DISCORD_RPC
+import funkin.api.discord.DiscordClient;
+#end
 
 /**
  * A core class which provides a store of user-configurable, globally relevant values.
@@ -114,10 +112,6 @@ class Preferences
     return value;
   }
 
-  /**
-   * If enabled, player strumline is centered and opponent strumline is split/hidden.
-   * @default `false`
-   */
   public static var middleScroll(get, set):Bool;
 
   static function get_middleScroll():Bool
@@ -127,8 +121,7 @@ class Preferences
 
   static function set_middleScroll(value:Bool):Bool
   {
-    var save:Save = Save.instance;
-    save.options.middleScroll = value;
+    Save.instance.options.middleScroll = value;
     Save.system.flush();
     return value;
   }
@@ -136,9 +129,24 @@ class Preferences
   public static function shouldUseMiddleScroll():Bool
   {
     #if mobile
-    if (controlsScheme == FunkinHitboxControlSchemes.Arrows && !ControlsHandler.hasExternalInputDevice) return false;
-    #end
+    return false;
+    #else
     return middleScroll;
+    #end
+  }
+
+  public static var pauseButton(get, set):Bool;
+
+  static function get_pauseButton():Bool
+  {
+    return Save?.instance?.options?.pauseButton ?? true;
+  }
+
+  static function set_pauseButton(value:Bool):Bool
+  {
+    Save.instance.options.pauseButton = value;
+    Save.system.flush();
+    return value;
   }
 
   /**
@@ -156,6 +164,20 @@ class Preferences
   {
     var save:Save = Save.instance;
     save.options.flashingLights = value;
+    Save.system.flush();
+    return value;
+  }
+
+  public static var loadingScreens(get, set):Bool;
+
+  static function get_loadingScreens():Bool
+  {
+    return Save?.instance?.options?.loadingScreens ?? true;
+  }
+
+  static function set_loadingScreens(value:Bool):Bool
+  {
+    Save.instance.options.loadingScreens = value;
     Save.system.flush();
     return value;
   }
@@ -179,11 +201,6 @@ class Preferences
     return value;
   }
 
-  /**
-   * If enabled, song gameplay may use stage and character shaders.
-   * Low Quality Minimal/Max forces this off.
-   * @default `true`
-   */
   public static var songShaders(get, set):Bool;
 
   static function get_songShaders():Bool
@@ -193,40 +210,25 @@ class Preferences
 
   static function set_songShaders(value:Bool):Bool
   {
-    var save:Save = Save.instance;
-    save.options.songShaders = value;
+    Save.instance.options.songShaders = value;
     Save.system.flush();
     return value;
   }
 
-  /**
-   * `None`, `Minimal`, or `Max`.
-   * @default `None`
-   */
   public static var lowQualityMode(get, set):String;
 
   static function get_lowQualityMode():String
   {
-    var value = Save?.instance?.options?.lowQualityMode ?? 'None';
-    return switch (value)
-    {
-      case 'Minimal' | 'Max': value;
-      default: 'None';
-    };
+    final value = Save?.instance?.options?.lowQualityMode ?? 'None';
+    return value == 'Minimal' || value == 'Max' ? value : 'None';
   }
 
   static function set_lowQualityMode(value:String):String
   {
-    var cleanValue = switch (value)
-    {
-      case 'Minimal' | 'Max': value;
-      default: 'None';
-    };
-
-    var save:Save = Save.instance;
-    save.options.lowQualityMode = cleanValue;
+    final result = value == 'Minimal' || value == 'Max' ? value : 'None';
+    Save.instance.options.lowQualityMode = result;
     Save.system.flush();
-    return cleanValue;
+    return result;
   }
 
   public static function isLowQualityMinimal():Bool
@@ -241,26 +243,8 @@ class Preferences
 
   public static function allowSongShaders():Bool
   {
-    return songShaders && !isLowQualityMinimal();
+    return songShaders && !isLowQualityMax();
   }
-
-  #if mobile
-  public static var touchPointers(get, set):Bool;
-
-  static function get_touchPointers():Bool
-  {
-    return Save?.instance?.mobileOptions?.touchPointers ?? true;
-  }
-
-  static function set_touchPointers(value:Bool):Bool
-  {
-    var save:Save = Save.instance;
-    save.mobileOptions.touchPointers = value;
-    TouchPointerPlugin.enabled = value;
-    Save.system.flush();
-    return value;
-  }
-  #end
 
   /**
    * If enabled, an FPS and memory counter will be displayed even if this is not a debug build.
@@ -274,16 +258,6 @@ class Preferences
     #if NO_FEATURE_DEBUG_DISPLAY
     return DebugDisplayMode.Off;
     #else
-    #if hl
-    // Account for when debugDisplay used to be a boolean
-    var options:Null<SaveDataOptions> = Save.instance?.options;
-    if (options != null && Std.isOfType(options.debugDisplay, Bool))
-    {
-      var convertedDebugDisplay = cast(options.debugDisplay, Bool) ? DebugDisplayMode.Simple : DebugDisplayMode.Off;
-      options.debugDisplay = convertedDebugDisplay;
-      Save.system.flush();
-    }
-    #end
     return Save?.instance?.options?.debugDisplay ?? 'Off';
     #end
   }
@@ -331,13 +305,13 @@ class Preferences
 
   static function get_hapticsMode():HapticsMode
   {
-    var value = Save?.instance?.options?.hapticsMode ?? "All";
+    var value = Save?.instance?.options?.hapticsMode ?? 'All';
 
     return switch (value)
     {
-      case "None":
+      case 'None':
         HapticsMode.NONE;
-      case "Notes Only":
+      case 'Notes Only':
         HapticsMode.NOTES_ONLY;
       default:
         HapticsMode.ALL;
@@ -351,11 +325,11 @@ class Preferences
     switch (value)
     {
       case HapticsMode.NONE:
-        string = "None";
+        string = 'None';
       case HapticsMode.NOTES_ONLY:
-        string = "Notes Only";
+        string = 'Notes Only';
       default:
-        string = "All";
+        string = 'All';
     };
 
     var save:Save = Save.instance;
@@ -463,15 +437,15 @@ class Preferences
     #if (mobile || web)
     return lime.ui.WindowVSyncMode.OFF;
     #else
-    var value = Save?.instance?.options?.vsyncMode ?? "Off";
+    var value = Save?.instance?.options?.vsyncMode ?? 'Off';
 
     return switch (value)
     {
-      case "Off":
+      case 'Off':
         lime.ui.WindowVSyncMode.OFF;
-      case "On":
+      case 'On':
         lime.ui.WindowVSyncMode.ON;
-      case "Adaptive":
+      case 'Adaptive':
         lime.ui.WindowVSyncMode.ADAPTIVE;
       default:
         lime.ui.WindowVSyncMode.OFF;
@@ -489,13 +463,13 @@ class Preferences
     switch (value)
     {
       case lime.ui.WindowVSyncMode.OFF:
-        string = "Off";
+        string = 'Off';
       case lime.ui.WindowVSyncMode.ON:
-        string = "On";
+        string = 'On';
       case lime.ui.WindowVSyncMode.ADAPTIVE:
-        string = "Adaptive";
+        string = 'Adaptive';
       default:
-        string = "Off";
+        string = 'Off';
     };
 
     WindowUtil.setVSyncMode(value);
@@ -508,59 +482,25 @@ class Preferences
   }
 
   public static var unlockedFramerate(get, set):Bool;
-  static var cachedUnlockedFramerateSupport:Null<Bool>;
-
-  public static function supportsUnlockedFramerate():Bool
-  {
-    #if android
-    if (cachedUnlockedFramerateSupport != null) return cachedUnlockedFramerateSupport;
-
-    var maximumRefreshRate:Float = DisplayUtil.getMaximumRefreshRate();
-    if (maximumRefreshRate > 0)
-    {
-      cachedUnlockedFramerateSupport = maximumRefreshRate > 60.5;
-      return cachedUnlockedFramerateSupport;
-    }
-
-    if (FlxG.stage == null || FlxG.stage.window == null) return false;
-    var display = FlxG.stage.window.display;
-    if (display != null)
-    {
-      for (mode in display.supportedModes)
-      {
-        if (mode.refreshRate > 60)
-        {
-          cachedUnlockedFramerateSupport = true;
-          return true;
-        }
-      }
-    }
-    cachedUnlockedFramerateSupport = FlxG.stage.window.displayMode.refreshRate > 60;
-    return cachedUnlockedFramerateSupport;
-    #elseif (web || ios)
-    return false;
-    #else
-    return true;
-    #end
-  }
 
   static function get_unlockedFramerate():Bool
   {
-    #if (web || ios)
+    #if web
     return false;
     #else
-    return supportsUnlockedFramerate() && (Save?.instance?.options?.unlockedFramerate ?? false);
+    return Save?.instance?.options?.unlockedFramerate ?? false;
     #end
   }
 
   static function set_unlockedFramerate(value:Bool):Bool
   {
-    #if (web || ios)
+    #if web
     return false;
     #else
-    if (!supportsUnlockedFramerate()) value = false;
-
-    toggleFramerateCap(value);
+    if (value != Save.instance.options.unlockedFramerate)
+    {
+      toggleFramerateCap(value);
+    }
 
     var save:Save = Save.instance;
     save.options.unlockedFramerate = value;
@@ -568,6 +508,51 @@ class Preferences
     return value;
     #end
   }
+
+  public static function supportsUnlockedFramerate():Bool
+  {
+    return #if web false #else true #end;
+  }
+
+  public static var enabledDiscordRPC(get, set):Bool;
+
+  static function get_enabledDiscordRPC():Bool
+  {
+    return Save?.instance?.options?.enabledDiscordRPC ?? true;
+  }
+
+  static function set_enabledDiscordRPC(value:Bool):Bool
+  {
+    #if FEATURE_DISCORD_RPC
+    toggleDiscordRPC(value);
+    #end
+
+    var save:Save = Save.instance;
+    save.options.enabledDiscordRPC = value;
+    Save.system.flush();
+    return value;
+  }
+
+  #if FEATURE_DISCORD_RPC
+  public static function toggleDiscordRPC(enable:Bool)
+  {
+    if (DiscordClient.instance == null) return;
+
+    if (enable)
+    {
+      DiscordClient.instance.init();
+
+      if (DiscordClient.presenceParamsCache != null)
+      {
+        DiscordClient.instance.setPresence(DiscordClient.presenceParamsCache);
+      }
+    }
+    else
+    {
+      DiscordClient.instance.shutdown();
+    }
+  }
+  #end
 
   /**
    * If >0, the game will display a semi-opaque background under the notes.
@@ -663,34 +648,26 @@ class Preferences
     #if mobile
     // Apply the allowScreenTimeout setting.
     lime.system.System.allowScreenTimeout = Preferences.screenTimeout;
-    TouchPointerPlugin.enabled = Preferences.touchPointers;
     #end
   }
 
   static function toggleFramerateCap(unlocked:Bool):Void
   {
-    #if !(web || ios)
-    #if android
-    var supported = supportsUnlockedFramerate();
-    DisplayUtil.setHighRefreshRateEnabled(unlocked && supported);
-    var target:Int = unlocked && supported ? 1000 : framerate;
-    #else
-    var target:Int = unlocked ? 0 : framerate;
-    #end
-    FlxG.drawFramerate = target;
-    FlxG.updateFramerate = target;
+    #if !web
+    FlxG.drawFramerate = unlocked ? 0 : framerate;
+    FlxG.updateFramerate = unlocked ? 0 : framerate;
     #end
   }
 
   public static function setDebugDisplayMode(mode:DebugDisplayMode):Void
   {
-    if (FlxG.game.parent.contains(Main.debugDisplay)) FlxG.game.parent.removeChild(Main.debugDisplay);
+    if (FlxG.game.contains(Main.debugDisplay)) FlxG.game.removeChild(Main.debugDisplay);
 
     if (mode == DebugDisplayMode.Off) return;
 
     Main.debugDisplay.isAdvanced = (mode == DebugDisplayMode.Advanced);
 
-    FlxG.game.parent.addChild(Main.debugDisplay);
+    FlxG.game.addChild(Main.debugDisplay);
   }
 
   static function setDebugDisplayBGOpacity(value:Float):Void
@@ -719,6 +696,49 @@ class Preferences
     return value;
   }
 
+  public static var controlsScheme(get, set):String;
+
+  static function get_controlsScheme():String
+  {
+    return Save?.instance?.options?.controlsScheme ?? 'Arrows';
+  }
+
+  static function set_controlsScheme(value:String):String
+  {
+    Save.instance.options.controlsScheme = value;
+    Save.system.flush();
+    return value;
+  }
+
+  public static var arrowRGB(get, set):Bool;
+
+  static function get_arrowRGB():Bool
+  {
+    return Save?.instance?.options?.arrowRGB ?? true;
+  }
+
+  static function set_arrowRGB(value:Bool):Bool
+  {
+    Save.instance.options.arrowRGB = value;
+    Save.system.flush();
+    return value;
+  }
+
+  public static var arrowTransparency(get, set):Int;
+
+  static function get_arrowTransparency():Int
+  {
+    return Save?.instance?.options?.arrowTransparency ?? 12;
+  }
+
+  static function set_arrowTransparency(value:Int):Int
+  {
+    final result = Std.int(Math.max(0, Math.min(90, value)));
+    Save.instance.options.arrowTransparency = result;
+    Save.system.flush();
+    return result;
+  }
+
   #if mobile
   /**
    * If enabled, device will be able to sleep on its own.
@@ -737,83 +757,6 @@ class Preferences
 
     var save:Save = Save.instance;
     save.mobileOptions.screenTimeout = value;
-    Save.system.flush();
-    return value;
-  }
-
-  /**
-   * Controls Scheme for the hitbox.
-   * @default `4 Lanes`
-   */
-  public static var controlsScheme(get, set):String;
-
-  static function get_controlsScheme():String
-  {
-    return Save?.instance?.mobileOptions?.controlsScheme ?? FunkinHitboxControlSchemes.Arrows;
-  }
-
-  static function set_controlsScheme(value:String):String
-  {
-    var save:Save = Save.instance;
-    save.mobileOptions.controlsScheme = value;
-    Save.system.flush();
-    return value;
-  }
-
-  /**
-   * Arrow box layout: 'Arrow' or 'Hitbox'.
-   * @default `Arrow`
-   */
-  public static var arrowBoxLayout(get, set):String;
-
-  static function get_arrowBoxLayout():String
-  {
-    if (ControlsHandler.hasExternalInputDevice) return 'Arrow';
-    return Save?.instance?.mobileOptions?.arrowBoxLayout ?? 'Arrow';
-  }
-
-  static function set_arrowBoxLayout(value:String):String
-  {
-    var save:Save = Save.instance;
-    save.mobileOptions.arrowBoxLayout = value;
-    Save.system.flush();
-    return value;
-  }
-
-  /**
-   * Whether to use RGB colors from notes for the hitbox.
-   * @default `false`
-   */
-  public static var arrowRGB(get, set):Bool;
-
-  static function get_arrowRGB():Bool
-  {
-    return Save?.instance?.mobileOptions?.arrowRGB ?? false;
-  }
-
-  static function set_arrowRGB(value:Bool):Bool
-  {
-    var save:Save = Save.instance;
-    save.mobileOptions.arrowRGB = value;
-    Save.system.flush();
-    return value;
-  }
-
-  /**
-   * Hitbox transparency percentage (0 to 90).
-   * @default `10`
-   */
-  public static var arrowTransparency(get, set):Int;
-
-  static function get_arrowTransparency():Int
-  {
-    return Save?.instance?.mobileOptions?.arrowTransparency ?? 10;
-  }
-
-  static function set_arrowTransparency(value:Int):Int
-  {
-    var save:Save = Save.instance;
-    save.mobileOptions.arrowTransparency = value;
     Save.system.flush();
     return value;
   }

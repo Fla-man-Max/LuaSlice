@@ -56,3 +56,4 @@ class ChangeCharacterSongEvent extends SongEvent
     }]);
   }
 }
+

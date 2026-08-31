@@ -8,14 +8,11 @@ import funkin.ui.debug.charting.toolboxes.ChartEditorMetadataToolbox;
  * A command which adds a new timechange to the current song's timechanges, after the index value given, at the given timestamp.
  * Will clamp the target timestamp to a valid value.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class AddNewTimeChangeCommand implements ChartEditorCommand
 {
   var timeChangeIndex:Int;
-
   var previousTimeChanges:Null<Array<SongTimeChange>>;
-
   var targetTimeStamp:Float;
 
   public function new(timeChangeIndex:Int, targetTimeStamp:Float)
@@ -57,7 +54,6 @@ class AddNewTimeChangeCommand implements ChartEditorCommand
     state.updateSongTime(); // basically will update the time signature for the editor if necessary.
     state.updateGridHeight();
     state.updateTimeSignature();
-    state.saveDataDirty = true;
   }
 
   public function undo(state:ChartEditorState):Void
@@ -83,7 +79,6 @@ class AddNewTimeChangeCommand implements ChartEditorCommand
     state.updateSongTime();
     state.updateGridHeight();
     state.updateTimeSignature();
-    state.saveDataDirty = true;
   }
 
   public function shouldAddToHistory(state:ChartEditorState):Bool

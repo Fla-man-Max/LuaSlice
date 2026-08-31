@@ -3,7 +3,6 @@ package funkin.ui.debug.charting.components;
 #if FEATURE_CHART_EDITOR
 import funkin.data.event.SongEventRegistry;
 import flixel.graphics.frames.FlxAtlasFrames;
-import flixel.graphics.FlxGraphic;
 import openfl.display.BitmapData;
 import flixel.FlxObject;
 import flixel.FlxSprite;
@@ -30,13 +29,7 @@ class ChartEditorEventSprite extends FlxSprite
    */
   public var eventData(default, set):Null<SongEventData> = null;
 
-  /**
-   * The image used for all song events. Cached for performance.
-   */
-  static var eventSpriteBasic:Null<BitmapData> = null;
-
   public var overrideStepTime(default, set):Null<Float> = null;
-
   public var tooltip:ToolTipRegionOptions;
 
   /**
@@ -68,7 +61,6 @@ class ChartEditorEventSprite extends FlxSprite
   }
 
   static var eventFrames:Null<FlxFramesCollection> = null;
-  static var retainedGraphics:Array<FlxGraphic> = [];
 
   /**
    * Build a set of animations to allow displaying different types of chart events.
@@ -76,15 +68,14 @@ class ChartEditorEventSprite extends FlxSprite
    */
   static function buildFrames(force:Bool = false):FlxFramesCollection
   {
-    final cachedFrames = eventFrames;
-    if (!force && cachedFrames != null && isFrameCacheUsable()) return cachedFrames;
+    if (eventFrames != null && !force) return eventFrames;
 
     initEmptyEventFrames();
     if (eventFrames == null) throw 'Failed to initialize empty event frames.';
 
     // Push the default event as a frame.
     var defaultFrames:FlxAtlasFrames = Paths.getSparrowAtlas('ui/chart-editor/events/$DEFAULT_EVENT');
-    retainGraphic(defaultFrames.parent);
+    defaultFrames.parent.persist = true;
     for (frame in defaultFrames.frames)
     {
       eventFrames.pushFrame(frame);
@@ -99,7 +90,7 @@ class ChartEditorEventSprite extends FlxSprite
       var frames:FlxAtlasFrames = Paths.getSparrowAtlas('ui/chart-editor/events/$eventName');
       if (frames == null) continue; // Could not load graphic for this event.
 
-      retainGraphic(frames.parent);
+      frames.parent.persist = true;
       for (frame in frames.frames)
       {
         eventFrames.pushFrame(frame);
@@ -107,35 +98,6 @@ class ChartEditorEventSprite extends FlxSprite
     }
 
     return eventFrames;
-  }
-
-  @:nullSafety(Off)
-  static function isFrameCacheUsable():Bool
-  {
-    if (eventFrames == null || eventFrames.frames == null || eventFrames.frames.length == 0) return false;
-    for (frame in eventFrames.frames)
-    {
-      final graphic = frame?.parent;
-      if (graphic == null || graphic.isDestroyed) return false;
-    }
-    return true;
-  }
-
-  static function retainGraphic(graphic:FlxGraphic):Void
-  {
-    if (!retainedGraphics.contains(graphic)) retainedGraphics.push(graphic);
-    graphic.persist = true;
-  }
-
-  public static function clearFrameCache():Void
-  {
-    for (graphic in retainedGraphics)
-    {
-      if (graphic != null && !graphic.isDestroyed) graphic.persist = false;
-    }
-    retainedGraphics.resize(0);
-    eventFrames = null;
-    eventSpriteBasic = null;
   }
 
   @:nullSafety(Off)
@@ -246,22 +208,8 @@ class ChartEditorEventSprite extends FlxSprite
     }
   }
 
-  @:nullSafety(Off)
-  public function hideTooltip():Void
-  {
-    final manager = ToolTipManager.instance;
-    @:privateAccess
-    if (manager._currentRegion != this.tooltip) return;
-    @:privateAccess
-    manager.stopTimer();
-    manager.hideCurrentToolTip();
-    @:privateAccess
-    manager._currentRegion = null;
-  }
-
   override public function kill()
   {
-    hideTooltip();
     super.kill();
 
     // Remove the tooltip to prevent recently deleted events from showing a tooltip.
@@ -270,7 +218,6 @@ class ChartEditorEventSprite extends FlxSprite
 
   override public function destroy():Void
   {
-    hideTooltip();
     ToolTipManager.instance.unregisterTooltipRegion(this.tooltip);
     super.destroy();
   }

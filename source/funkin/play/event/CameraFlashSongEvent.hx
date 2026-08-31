@@ -22,7 +22,7 @@ class CameraFlashSongEvent extends SongEvent
     camera.flash(color, data.getFloat('duration') ?? 0.5, null, true);
   }
   public override function getEventSchema():SongEventSchema return new SongEventSchema([{
-    name: 'color', title: 'Color', defaultValue: '#FFFFFF', type: SongEventFieldType.COLOR
+      name: 'color', title: 'Color', defaultValue: '#FFFFFF', type: SongEventFieldType.COLOR
   }, {
     name: 'duration', title: 'Duration', defaultValue: 0.5, min: 0, step: 0.1, type: SongEventFieldType.FLOAT, units: 'seconds'
   }, {

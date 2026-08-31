@@ -8,7 +8,6 @@ import flixel.FlxSprite;
 import flixel.graphics.frames.FlxFramesCollection;
 import flixel.graphics.frames.FlxAtlasFrames;
 import flixel.graphics.frames.FlxFrame;
-import flixel.graphics.FlxGraphic;
 import funkin.data.animation.AnimationData;
 import funkin.data.song.SongData.SongNoteData;
 import funkin.data.notestyle.NoteStyleRegistry;
@@ -22,8 +21,7 @@ import haxe.ui.tooltips.ToolTipManager;
  * A sprite that can be used to display a note in a chart.
  * Designed to be used and reused efficiently. Has no gameplay functionality.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorNoteSprite extends FlxSprite
 {
   /**
@@ -88,7 +86,7 @@ class ChartEditorNoteSprite extends FlxSprite
 
     var entries:Array<String> = NoteStyleRegistry.instance.listEntryIds();
 
-    if (!isFrameCacheUsable())
+    if (noteFrameCollection == null)
     {
       buildEmptyFrameCollection();
 
@@ -111,35 +109,6 @@ class ChartEditorNoteSprite extends FlxSprite
   }
 
   static var noteFrameCollection:Null<FlxFramesCollection> = null;
-  static var retainedGraphics:Array<FlxGraphic> = [];
-
-  @:nullSafety(Off)
-  static function isFrameCacheUsable():Bool
-  {
-    if (noteFrameCollection == null || noteFrameCollection.frames == null || noteFrameCollection.frames.length == 0) return false;
-    for (frame in noteFrameCollection.frames)
-    {
-      final graphic = frame?.parent;
-      if (graphic == null || graphic.isDestroyed) return false;
-    }
-    return true;
-  }
-
-  static function retainGraphic(graphic:FlxGraphic):Void
-  {
-    if (!retainedGraphics.contains(graphic)) retainedGraphics.push(graphic);
-    graphic.persist = true;
-  }
-
-  public static function clearFrameCache():Void
-  {
-    for (graphic in retainedGraphics)
-    {
-      if (graphic != null && !graphic.isDestroyed) graphic.persist = false;
-    }
-    retainedGraphics.resize(0);
-    noteFrameCollection = null;
-  }
 
   function fetchNoteStyle(noteStyleId:String):NoteStyle
   {
@@ -148,8 +117,7 @@ class ChartEditorNoteSprite extends FlxSprite
     return NoteStyleRegistry.instance.fetchDefault();
   }
 
-  @:access(funkin.play.notes.notestyle.NoteStyle)
-  @:nullSafety(Off)
+  @:access(funkin.play.notes.notestyle.NoteStyle) @:nullSafety(Off)
   static function addNoteStyleFrames(noteStyle:NoteStyle):Void
   {
     var prefix:String = noteStyle.id.toTitleCase();
@@ -161,7 +129,6 @@ class ChartEditorNoteSprite extends FlxSprite
       FlxG.log.error('Could not retrieve frame collection for ${noteStyle}: ${Paths.image(noteStyle.getNoteAssetPath(), noteStyle.getNoteAssetLibrary())}');
       return;
     }
-    retainGraphic(frameCollection.parent);
     for (frame in frameCollection.frames)
     {
       // cloning the frame because else
@@ -172,8 +139,7 @@ class ChartEditorNoteSprite extends FlxSprite
     }
   }
 
-  @:access(funkin.play.notes.notestyle.NoteStyle)
-  @:nullSafety(Off)
+  @:access(funkin.play.notes.notestyle.NoteStyle) @:nullSafety(Off)
   function addNoteStyleAnimations(noteStyle:NoteStyle):Void
   {
     var prefix:String = noteStyle.id.toTitleCase();
@@ -302,7 +268,6 @@ class ChartEditorNoteSprite extends FlxSprite
   override public function destroy():Void
   {
     ToolTipManager.instance.unregisterTooltipRegion(this.tooltip);
-    kindIndicator.destroy();
     super.destroy();
   }
 
@@ -333,7 +298,6 @@ class ChartEditorNoteSprite extends FlxSprite
 
     // Play the appropriate animation for the type, direction, and skin.
     var dirName:String = overrideData != null ? SongNoteData.buildDirectionName(overrideData) : this.noteData.getDirectionName();
-    var noteStyleSuffix:String = this.noteStyle?.toTitleCase() ?? Constants.DEFAULT_NOTE_STYLE.toTitleCase();
     var animationName:String = '${baseAnimationName}${dirName}${this.noteStyle.toTitleCase()}';
 
     this.animation.play(animationName);

@@ -266,8 +266,8 @@ class NeneBaseCharacter extends AnimateAtlasCharacter
     super.onSongEvent(scriptEvent);
     if (scriptEvent.eventData.eventKind == "FocusCamera")
     {
-      var eventProps = scriptEvent.eventData.value;
-      switch (eventProps.char)
+      var value = scriptEvent.eventData.getInt("char");
+      switch (value)
       {
         case 0:
           movePupilsRight();
@@ -323,12 +323,6 @@ class NeneBaseCharacter extends AnimateAtlasCharacter
 
   var hasSetupAbot:Bool = false;
 
-  public override function onAdd(event:ScriptEvent):Void
-  {
-    super.onAdd(event);
-    if (!hasSetupAbot) setupAbot();
-  }
-
   public override function onUpdate(event:UpdateScriptEvent):Void
   {
     super.onUpdate(event);
@@ -337,7 +331,6 @@ class NeneBaseCharacter extends AnimateAtlasCharacter
 
     // Set the visibility of ABot to match Nene's.
     abot.visible = this.visible;
-    abotViz.visible = this.visible;
     pupil.visible = this.visible;
     eyeWhites.visible = this.visible;
     stereoBG.visible = this.visible;
@@ -448,27 +441,6 @@ class NeneBaseCharacter extends AnimateAtlasCharacter
     abotViz.dumpSound();
   }
 
-  public override function onDestroy(event:ScriptEvent):Void
-  {
-    abotViz?.dumpSound();
-
-    for (sprite in [abot, stereoBG, eyeWhites, pupil])
-    {
-      if (sprite == null) continue;
-      currentStage?.remove(sprite, true);
-      sprite.destroy();
-    }
-
-    if (abotViz != null)
-    {
-      currentStage?.remove(abotViz, true);
-      abotViz.destroy();
-    }
-
-    hasSetupAbot = false;
-    super.onDestroy(event);
-  }
-
   var animationFinished:Bool = false;
 
   override function onAnimationFinished(name:String)
@@ -504,7 +476,7 @@ class NeneBaseCharacter extends AnimateAtlasCharacter
 
   function shouldTransitionState():Bool
   {
-    return currentStage.getBoyfriend()?.characterId != "pico-blazin";
+    return currentStage?.getBoyfriend()?.characterId != "pico-blazin";
   }
 
   function checkTrainPassing(raised:Bool = false):Void

@@ -37,7 +37,6 @@ class FlxAnimationUtil
   {
     if (!target.isAnimate) return;
     if (anim.prefix == null) return;
-    if (target.anim == null) return;
 
     var frameRate:Int = anim.frameRate ?? 24;
     var looped:Bool = anim.looped ?? false;
@@ -45,32 +44,25 @@ class FlxAnimationUtil
     var flipY:Bool = anim.flipY ?? false;
     var animType:String = anim.animType ?? "framelabel";
 
-    try
+    if (anim.frameIndices != null && anim.frameIndices.length > 0)
     {
-      if (anim.frameIndices != null && anim.frameIndices.length > 0)
+      switch (animType)
       {
-        switch (animType)
-        {
-          case "framelabel":
-            target.anim.addByFrameLabelIndices(anim.name, anim.prefix, anim.frameIndices, frameRate, looped, flipX, flipY);
-          case "symbol":
-            target.anim.addBySymbolIndices(anim.name, anim.prefix, anim.frameIndices, frameRate, looped, flipX, flipY);
-        }
-      }
-      else
-      {
-        switch (animType)
-        {
-          case "framelabel":
-            target.anim.addByFrameLabel(anim.name, anim.prefix, frameRate, looped, flipX, flipY);
-          case "symbol":
-            target.anim.addBySymbol(anim.name, anim.prefix, frameRate, looped, flipX, flipY);
-        }
+        case "framelabel":
+          target.anim.addByFrameLabelIndices(anim.name, anim.prefix, anim.frameIndices, frameRate, looped, flipX, flipY);
+        case "symbol":
+          target.anim.addBySymbolIndices(anim.name, anim.prefix, anim.frameIndices, frameRate, looped, flipX, flipY);
       }
     }
-    catch (e)
+    else
     {
-      trace('WARNING: Could not add texture atlas animation "${anim.name}" with prefix "${anim.prefix}": $e');
+      switch (animType)
+      {
+        case "framelabel":
+          target.anim.addByFrameLabel(anim.name, anim.prefix, frameRate, looped, flipX, flipY);
+        case "symbol":
+          target.anim.addBySymbol(anim.name, anim.prefix, frameRate, looped, flipX, flipY);
+      }
     }
   }
 

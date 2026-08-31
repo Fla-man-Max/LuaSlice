@@ -18,8 +18,7 @@ import haxe.io.Path;
  * Functions for loading audio for the chart editor.
  * Handlers split up the functionality of the Chart Editor into different classes based on focus to limit the amount of code in each class.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorAudioHandler
 {
   /**
@@ -200,7 +199,7 @@ class ChartEditorAudioHandler
       case BF:
         state.audioVocalTrackGroup.addPlayerVoice(vocalTrack);
 
-        var waveformData:Null<WaveformData> = SoundUtil.isMP3(vocalTrackData) ? null : vocalTrack.waveformData;
+        var waveformData:Null<WaveformData> = vocalTrack.waveformData;
 
         if (waveformData != null)
         {
@@ -209,8 +208,7 @@ class ChartEditorAudioHandler
         }
         else
         {
-          trace(' WARNING '.warning()
-            + (SoundUtil.isMP3(vocalTrackData) ? ' Waveform display is disabled for MP3 vocal tracks.' : ' Failed to parse waveform data for vocal track.'));
+          trace(' WARNING '.warning() + ' Failed to parse waveform data for vocal track.');
         }
 
         state.audioVocalTrackGroup.playerVoicesOffset = state.currentVocalOffsetPlayer;
@@ -218,7 +216,7 @@ class ChartEditorAudioHandler
       case DAD:
         state.audioVocalTrackGroup.addOpponentVoice(vocalTrack);
 
-        var waveformData:Null<WaveformData> = SoundUtil.isMP3(vocalTrackData) ? null : vocalTrack.waveformData;
+        var waveformData:Null<WaveformData> = vocalTrack.waveformData;
 
         if (waveformData != null)
         {
@@ -227,8 +225,7 @@ class ChartEditorAudioHandler
         }
         else
         {
-          trace(' WARNING '.warning()
-            + (SoundUtil.isMP3(vocalTrackData) ? ' Waveform display is disabled for MP3 vocal tracks.' : ' Failed to parse waveform data for vocal track.'));
+          trace(' WARNING '.warning() + ' Failed to parse waveform data for vocal track.');
         }
 
         state.audioVocalTrackGroup.opponentVoicesOffset = state.currentVocalOffsetOpponent;
@@ -246,6 +243,7 @@ class ChartEditorAudioHandler
   }
 
   // initializes a waveform sprite with buncho non-charType specific things
+
   static function initWaveformSprite(waveformData:WaveformData, state:ChartEditorState, charType:CharacterType):WaveformSprite
   {
     var waveformSprite:WaveformSprite = new WaveformSprite(waveformData, VERTICAL, FlxColor.WHITE);
@@ -256,7 +254,7 @@ class ChartEditorAudioHandler
     waveformSprite.duration = Conductor.instance.getStepTimeInMs(16) * 0.001;
     waveformSprite.iconId = charType;
     waveformSprite.reversed = state.isViewDownscroll;
-    waveformSprite.y = state.isViewDownscroll ? FlxG.height - ChartEditorState.PLAYBAR_HEIGHT - waveformSprite.height : ChartEditorState.GRID_INITIAL_Y_POS;
+    if (state.isViewDownscroll) waveformSprite.y = FlxG.height - ChartEditorState.PLAYBAR_HEIGHT - waveformSprite.height;
     return waveformSprite;
   }
 
@@ -381,7 +379,6 @@ class ChartEditorAudioHandler
   {
     var zipEntries = [];
 
-    var vocalTrackIds = state.audioVocalTrackData.keys().array();
     for (key in state.audioVocalTrackData.keys())
     {
       var data:Null<Bytes> = state.audioVocalTrackData.get(key);

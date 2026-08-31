@@ -4,9 +4,10 @@ package funkin.ui.debug.charting.handlers;
 import flixel.util.FlxTimer;
 import funkin.data.song.importer.FNFLegacyData;
 import funkin.data.song.importer.FNFLegacyImporter;
+import funkin.data.song.importer.PsychEngineImporter;
+import funkin.data.song.importer.CodenameEngineImporter;
 import funkin.data.song.importer.OsuManiaData;
 import funkin.data.song.importer.OsuManiaImporter;
-import funkin.data.song.importer.PsychEngineImporter;
 import funkin.data.song.importer.StepManiaData;
 import funkin.data.song.importer.StepManiaImporter;
 import funkin.data.song.SongData.SongCharacterData;
@@ -19,13 +20,11 @@ import funkin.play.character.BaseCharacter.CharacterType;
 import funkin.ui.debug.charting.dialogs.ChartEditorAboutDialog;
 import funkin.ui.debug.charting.dialogs.ChartEditorBaseDialog.DialogDropTarget;
 import funkin.ui.debug.charting.dialogs.ChartEditorCharacterIconSelectorMenu;
-import funkin.ui.debug.charting.dialogs.ChartEditorPsychEngineImportDialog;
 import funkin.ui.debug.charting.dialogs.ChartEditorUploadChartDialog;
 import funkin.ui.debug.charting.dialogs.ChartEditorWelcomeDialog;
 import funkin.ui.debug.charting.dialogs.ChartEditorUploadVocalsDialog;
 import funkin.ui.debug.charting.util.ChartEditorDropdowns;
 import funkin.util.Constants;
-import funkin.util.DateUtil;
 import funkin.util.FileUtil;
 import funkin.util.VersionUtil;
 import haxe.io.Path;
@@ -33,7 +32,6 @@ import haxe.ui.components.Button;
 import haxe.ui.components.DropDown;
 import haxe.ui.components.Label;
 import haxe.ui.components.NumberStepper;
-import haxe.ui.containers.dialogs.Dialogs.FileDialogExtensionInfo;
 import haxe.ui.components.Slider;
 import haxe.ui.components.TextField;
 import haxe.ui.containers.Box;
@@ -53,15 +51,9 @@ using Lambda;
 /**
  * Handles dialogs for the new Chart Editor.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorDialogHandler
 {
-  static final AUDIO_FILTER:Array<FileDialogExtensionInfo> = [
-    {label: 'Ogg Vorbis Audio (.ogg)', extension: 'ogg'},
-    {label: 'MP3 Audio (.mp3)', extension: 'mp3'}
-  ];
-
   // Paths to HaxeUI layout files for each dialog.
   static final CHART_EDITOR_DIALOG_UPLOAD_INST_LAYOUT:String = Paths.ui('chart-editor/dialogs/upload-inst');
   static final CHART_EDITOR_DIALOG_SONG_METADATA_LAYOUT:String = Paths.ui('chart-editor/dialogs/song-metadata');
@@ -134,8 +126,6 @@ class ChartEditorDialogHandler
   public static function openUploadVocalsDialog(state:ChartEditorState, closable:Bool = true):Dialog
   {
     var charData:SongCharacterData = state.currentSongMetadata.playData.characters;
-
-    var hasClearedVocals:Bool = false;
 
     var charIdsForVocals:Array<String> = [charData.player, charData.opponent];
 
@@ -293,12 +283,6 @@ class ChartEditorDialogHandler
 
   public static function openImportChartWizard(state:ChartEditorState, format:String, closable:Bool):Void
   {
-    if (format == 'psych')
-    {
-      ChartEditorPsychEngineImportDialog.build(state, closable);
-      return;
-    }
-
     // Open the "Open Chart" wizard
     // Step 1. Open Chart
     var openChartDialog:Null<Dialog> = openImportChartDialog(state, format);
@@ -546,7 +530,7 @@ class ChartEditorDialogHandler
 
     instrumentalBox.onClick = function(_)
     {
-      FileUtil.browseForBinaryFile('Open Instrumental', AUDIO_FILTER, function(selectedFile:SelectedFileInfo)
+      FileUtil.browseForFile('Open Instrumental', [FileUtil.FILE_FILTER_OGG], function(selectedFile:SelectedFileData)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
@@ -709,6 +693,26 @@ class ChartEditorDialogHandler
     var startingValueNoteStyle = ChartEditorDropdowns.populateDropdownWithNoteStyles(inputNoteStyle, newSongMetadata.playData.noteStyle);
     inputNoteStyle.value = startingValueNoteStyle;
 
+    var inputAlbum:Null<DropDown> = dialog.findComponent('inputAlbum', DropDown);
+    if (inputAlbum == null) throw 'Could not locate inputAlbum DropDown in Song Metadata dialog';
+    inputAlbum.onChange = (event:UIEvent) ->
+    {
+      if (event.data?.id == null) return;
+      newSongMetadata.playData.album = event.data.id;
+    };
+    var startingValueAlbum = ChartEditorDropdowns.populateDropdownWithAlbums(inputAlbum, newSongMetadata.playData.album);
+    inputAlbum.value = startingValueAlbum;
+
+    var inputStickerPack:Null<DropDown> = dialog.findComponent('inputStickerPack', DropDown);
+    if (inputStickerPack == null) throw 'Could not locate inputStickerPack DropDown in Song Metadata dialog';
+    inputStickerPack.onChange = (event:UIEvent) ->
+    {
+      if (event.data?.id == null) return;
+      newSongMetadata.playData.stickerPack = event.data.id;
+    };
+    var startingValueStickerPack = ChartEditorDropdowns.populateDropdownWithStickerPacks(inputStickerPack, newSongMetadata.playData.stickerPack);
+    inputStickerPack.value = startingValueStickerPack;
+
     var inputCharacterPlayer:Null<DropDown> = dialog.findComponent('inputCharacterPlayer', DropDown);
     if (inputCharacterPlayer == null) throw 'ChartEditorToolboxHandler.buildToolboxMetadataLayout() - Could not find inputCharacterPlayer component.';
     inputCharacterPlayer.onChange = function(event:UIEvent)
@@ -751,7 +755,9 @@ class ChartEditorDialogHandler
       var timeChanges:Array<SongTimeChange> = newSongMetadata.timeChanges;
       if (timeChanges == null || timeChanges.length == 0)
       {
-        timeChanges = [new SongTimeChange(0, event.value)];
+        timeChanges = [
+          new SongTimeChange(0, event.value)
+        ];
       }
       else
       {
@@ -958,7 +964,7 @@ class ChartEditorDialogHandler
 
     onClickMetadataVariation = function(variation:String, label:Label, _:UIEvent)
     {
-      FileUtil.browseForBinaryFile('Open Chart ($variation) Metadata', [{label: 'JSON File (.json)', extension: 'json'}], function(selectedFile)
+      FileUtil.browseForFile('Open Chart ($variation) Metadata', [FileUtil.FILE_FILTER_JSON], function(selectedFile)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
@@ -1044,7 +1050,7 @@ class ChartEditorDialogHandler
 
     onClickChartDataVariation = function(variation:String, label:Label, _:UIEvent)
     {
-      FileUtil.browseForBinaryFile('Open Chart ($variation) Metadata', [{label: 'JSON File (.json)', extension: 'json'}], function(selectedFile)
+      FileUtil.browseForFile('Open Chart ($variation) Metadata', [FileUtil.FILE_FILTER_JSON], function(selectedFile)
       {
         if (selectedFile != null && selectedFile.bytes != null)
         {
@@ -1125,22 +1131,30 @@ class ChartEditorDialogHandler
 
     var prettyFormat:String = switch (format)
     {
-      case 'legacy': 'FNF Legacy';
-      case 'psych': 'Psych Engine (V1.0.4)';
-      case 'stepmania': 'StepMania';
-      case 'osumania': 'osu!Mania';
-      default: 'Unknown';
+      case 'legacy':
+        'FNF Legacy';
+      case 'psych':
+        'Psych Engine 1.0.4';
+      case 'codename':
+        'Codename Engine';
+      case 'stepmania':
+        'StepMania';
+      case 'osumania':
+        'osu!Mania';
+      default:
+        'Unknown';
     }
 
     var fileFilter = switch (format)
     {
-      case 'legacy' | 'psych':
-        [{label: 'JSON Data File (.json)', extension: 'json'}];
+      case 'legacy' | 'psych' | 'codename':
+        [FileUtil.FILE_FILTER_JSON];
       case 'stepmania':
-        [{label: 'StepMania File (.sm)', extension: 'sm'}];
+        [FileUtil.FILE_FILTER_SM];
       case 'osumania':
-        [{label: 'OSU! Beatmap File (.osu)', extension: 'osu'}];
-      default: null;
+        [FileUtil.FILE_FILTER_OSU];
+      default:
+        null;
     }
 
     var fileExt:String = switch (format)
@@ -1149,20 +1163,9 @@ class ChartEditorDialogHandler
         "osu";
       case 'stepmania':
         "sm";
-      default: "json";
+      default:
+        "json";
     }
-
-    var fileFilterLabel:String = switch (fileExt)
-    {
-      case 'json':
-        'JSON Data File';
-      case 'sm':
-        'StepMania File';
-      case 'osu':
-        'osu! Beatmap File';
-      default: "Unknown File Type";
-    };
-    fileFilterLabel += ' (.$fileExt)';
 
     dialog.title = 'Import Chart - ${prettyFormat}';
 
@@ -1203,7 +1206,7 @@ class ChartEditorDialogHandler
 
     var onDropFile:String->Void;
 
-    var onFileSelected:String->String->Dynamic->Void = (pathStr:String, content:String, externalEvents:Dynamic) ->
+    var onFileSelected:String->String->Void = (pathStr:String, content:String) ->
     {
       var path:Path = new Path(pathStr ?? "");
       trace('Selected file: ' + path.toString());
@@ -1234,30 +1237,40 @@ class ChartEditorDialogHandler
 
           loadedText = 'Loaded chart file';
         case 'psych':
-          var psychData:Dynamic = PsychEngineImporter.parseRaw(content, path.toString());
-          if (psychData == null)
+          final psychData:Dynamic = PsychEngineImporter.parseRaw(content, path.toString());
+          if (!PsychEngineImporter.isChart(psychData))
           {
             state.error('Failure', 'Failed to parse Psych Engine chart (${path.file}.${path.ext})');
             return;
           }
-          if (!PsychEngineImporter.isChart(psychData))
+
+          final psychDifficulty = PsychEngineImporter.inferDifficulty(path.file, Std.string(Reflect.field(psychData, 'song')));
+          songMetadata = PsychEngineImporter.migrateMetadata(psychData, psychDifficulty);
+          songChartData = PsychEngineImporter.migrateChartData(psychData, psychDifficulty);
+          loadedText = 'Converted Psych Engine chart';
+
+        case 'codename':
+          final codenameData:Dynamic = CodenameEngineImporter.parseRaw(content, path.toString());
+          if (!CodenameEngineImporter.isChart(codenameData))
           {
-            state.error('Failure', 'This is not a Psych Engine song chart. Select the song difficulty JSON, not events.json.');
+            state.error('Failure', 'Failed to parse Codename Engine chart (${path.file}.${path.ext})');
             return;
           }
 
-          var psychDifficulty = PsychEngineImporter.inferDifficulty(path.file);
-          try
-          {
-            songMetadata = PsychEngineImporter.migrateMetadata(psychData, psychDifficulty);
-            songChartData = PsychEngineImporter.migrateChartData(psychData, psychDifficulty, externalEvents);
-          }
-          catch (error)
-          {
-            state.error('Failure', 'Could not convert this Psych Engine chart:\n${error}');
-            return;
-          }
-          loadedText = externalEvents == null ? 'Loaded Psych Engine chart' : 'Loaded Psych Engine chart and events';
+          var codenameMetadata:Dynamic = null;
+          var codenameEvents:Dynamic = null;
+          #if sys
+          final songFolder = haxe.io.Path.normalize(haxe.io.Path.join([path.dir ?? '', '..']));
+          final metadataPath = haxe.io.Path.join([songFolder, 'meta.json']);
+          final eventsPath = haxe.io.Path.join([songFolder, 'events.json']);
+          if (sys.FileSystem.exists(metadataPath)) codenameMetadata = CodenameEngineImporter.parseRaw(FileUtil.readStringFromPath(metadataPath), metadataPath);
+          if (sys.FileSystem.exists(eventsPath)) codenameEvents = CodenameEngineImporter.parseRaw(FileUtil.readStringFromPath(eventsPath), eventsPath);
+          #end
+
+          final codenameDifficulty = CodenameEngineImporter.inferDifficulty(path.file);
+          songMetadata = CodenameEngineImporter.migrateMetadata(codenameData, codenameDifficulty, codenameMetadata);
+          songChartData = CodenameEngineImporter.migrateChartData(codenameData, codenameDifficulty, codenameEvents);
+          loadedText = 'Converted Codename Engine chart';
         case 'stepmania':
           var stepmaniaData:Null<StepManiaData> = StepManiaImporter.parseStepManiaFile(content);
 
@@ -1299,53 +1312,33 @@ class ChartEditorDialogHandler
         state.error('Failure', 'Failed to load song (${path.file}.${path.ext})');
         return;
       }
-      state.loadSong([Constants.DEFAULT_VARIATION => songMetadata], [Constants.DEFAULT_VARIATION => songChartData]);
+      state.loadSong([
+        Constants.DEFAULT_VARIATION => songMetadata
+      ], [
+        Constants.DEFAULT_VARIATION => songChartData
+      ]);
 
       dialog.hideDialog(DialogButton.APPLY);
       state.success('Success', '$loadedText (${path.file}.${path.ext})');
     };
 
-    var handleChartSelection = function(pathStr:String, content:String)
-    {
-      if (format != 'psych')
-      {
-        onFileSelected(pathStr, content, null);
-        return;
-      }
-
-      final chartData = PsychEngineImporter.parseRaw(content, pathStr);
-      if (chartData == null || !PsychEngineImporter.isChart(chartData))
-      {
-        state.error('Failure', 'This is not a Psych Engine song chart. Select the song difficulty JSON first.');
-        return;
-      }
-
-      FileUtil.browseForTextFile('Select Psych Engine events.json (Cancel to skip)', fileFilter ?? [], function(selectedFile)
-      {
-        final eventContent = selectedFile.text ?? selectedFile.bytes?.toString() ?? '';
-        final externalEvents = PsychEngineImporter.parseRaw(eventContent, selectedFile.name ?? selectedFile.fullPath ?? 'events.json');
-        if (externalEvents == null || !Std.isOfType(Reflect.field(externalEvents, 'events'), Array))
-        {
-          state.error('Failure', 'The second file is not a Psych Engine events JSON.');
-          return;
-        }
-        onFileSelected(pathStr, content, externalEvents);
-      }, () -> onFileSelected(pathStr, content, null));
-    };
-
     importBox.onClick = function(_)
     {
-      FileUtil.browseForTextFile('Import Chart - ${prettyFormat}', fileFilter ?? [], function(selectedFile)
+      // TODO / BUG: File filtering not working on mac finder dialog, so we don't use it for now
+      FileUtil.browseForFile('Import Chart - ${prettyFormat}', fileFilter ?? [], function(selectedFile:SelectedFileData)
       {
-        final content = selectedFile.text ?? selectedFile.bytes?.toString() ?? '';
-        handleChartSelection(selectedFile.name ?? selectedFile.fullPath ?? 'chart.${fileExt}', content);
+        if (selectedFile != null && selectedFile.bytes != null)
+        {
+          @:nullSafety(Off)
+          onFileSelected(selectedFile.fullPath, selectedFile.bytes.toString());
+        }
       });
     }
 
     onDropFile = function(pathStr:String)
     {
       var selectedFileText:String = FileUtil.readStringFromPath(pathStr);
-      handleChartSelection(pathStr, selectedFileText);
+      onFileSelected(pathStr, selectedFileText);
     };
 
     state.addDropHandler({component: importBox, handler: onDropFile});
@@ -1415,6 +1408,16 @@ class ChartEditorDialogHandler
     var startingValueNoteStyle = ChartEditorDropdowns.populateDropdownWithNoteStyles(dialogNoteStyle, state.currentSongMetadata.playData.noteStyle);
     dialogNoteStyle.value = startingValueNoteStyle;
 
+    var dialogAlbum:Null<DropDown> = dialog.findComponent('dialogAlbum', DropDown);
+    if (dialogAlbum == null) throw 'Could not locate dialogAlbum DropDown in Add Variation dialog';
+    var startingValueAlbum = ChartEditorDropdowns.populateDropdownWithAlbums(dialogAlbum, state.currentSongMetadata.playData.album);
+    dialogAlbum.value = startingValueAlbum;
+
+    var dialogStickerPack:Null<DropDown> = dialog.findComponent('dialogStickerPack', DropDown);
+    if (dialogStickerPack == null) throw 'Could not locate dialogStickerPack DropDown in Add Variation dialog';
+    var startingValueStickerPack = ChartEditorDropdowns.populateDropdownWithStickerPacks(dialogStickerPack, state.currentSongMetadata.playData.stickerPack);
+    dialogAlbum.value = startingValueStickerPack;
+
     var dialogCharacterPlayer:Null<DropDown> = dialog.findComponent('dialogCharacterPlayer', DropDown);
     if (dialogCharacterPlayer == null) throw 'Could not locate dialogCharacterPlayer DropDown in Add Variation dialog';
     dialogCharacterPlayer.value = ChartEditorDropdowns.populateDropdownWithCharacters(dialogCharacterPlayer, CharacterType.BF,
@@ -1451,12 +1454,13 @@ class ChartEditorDialogHandler
 
       pendingVariation.playData.stage = dialogStage.value.id;
       pendingVariation.playData.noteStyle = dialogNoteStyle.value.id;
+      pendingVariation.playData.album = dialogAlbum.value.id;
+      pendingVariation.playData.stickerPack = dialogStickerPack.value.id;
       pendingVariation.timeChanges[0].bpm = dialogBPM.value;
 
       state.songMetadata.set(pendingVariation.variation, pendingVariation);
       state.refreshPlayDataVariations();
       state.difficultySelectDirty = true; // Force the Difficulty toolbox to update.
-      state.saveDataDirty = true;
 
       // Don't update conductor since we haven't switched to the new variation yet.
 

@@ -11,7 +11,6 @@ class NoteHoldCover extends FlxTypedSpriteGroup<FlxSprite>
   static final FRAMERATE_DEFAULT:Int = 24;
 
   public var holdNote:SustainTrail;
-
   public var glow:FlxSprite;
 
   var sparks:FlxSprite;
@@ -42,15 +41,13 @@ class NoteHoldCover extends FlxTypedSpriteGroup<FlxSprite>
     }
   }
 
-  public override function update(elapsed):Void
+  override public function update(elapsed):Void
   {
     super.update(elapsed);
   }
 
   public function playStart():Void
   {
-    if (holdNote == null) return;
-
     glow.setPosition(this.x, this.y);
     var direction:NoteDirection = holdNote.noteDirection;
     glow.animation.play('holdCoverStart${direction.colorName.toTitleCase()}');
@@ -58,56 +55,29 @@ class NoteHoldCover extends FlxTypedSpriteGroup<FlxSprite>
 
   public function playContinue():Void
   {
-    if (holdNote == null) return;
-
     var direction:NoteDirection = holdNote.noteDirection;
     glow.animation.play('holdCover${direction.colorName.toTitleCase()}');
   }
 
   public function playEnd():Void
   {
-    if (holdNote == null)
-    {
-      kill();
-      return;
-    }
-
     var direction:NoteDirection = holdNote.noteDirection;
     glow.animation.play('holdCoverEnd${direction.colorName.toTitleCase()}');
   }
 
-  public function isEnding():Bool
-  {
-    return (glow?.animation?.name ?? "").startsWith("holdCoverEnd");
-  }
-
-  public function attachToHoldNote(note:SustainTrail):Void
-  {
-    detachFromHoldNote();
-
-    holdNote = note;
-    if (holdNote != null) holdNote.cover = this;
-  }
-
-  function detachFromHoldNote():Void
-  {
-    if (holdNote != null && holdNote.cover == this) holdNote.cover = null;
-    holdNote = null;
-  }
-
-  public override function kill():Void
+  override public function kill():Void
   {
     super.kill();
 
     this.visible = false;
 
-    detachFromHoldNote();
+    holdNote.cover = null;
 
     if (glow != null) glow.visible = false;
     if (sparks != null) sparks.visible = false;
   }
 
-  public override function revive():Void
+  override public function revive():Void
   {
     super.revive();
 

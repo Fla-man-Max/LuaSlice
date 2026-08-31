@@ -16,8 +16,7 @@ import flixel.tweens.FlxEase;
 import haxe.ui.components.Button;
 
 // @:nullSafety // TODO: Fix null safety when used with HaxeUI build macros.
-@:access(funkin.ui.debug.charting.ChartEditorState)
-@:build(haxe.ui.ComponentBuilder.build("assets/exclude/data/ui/chart-editor/dialogs/character-icon-selector.xml"))
+@:access(funkin.ui.debug.charting.ChartEditorState) @:build(haxe.ui.ComponentBuilder.build("assets/exclude/data/ui/chart-editor/dialogs/character-icon-selector.xml"))
 class ChartEditorCharacterIconSelectorMenu extends ChartEditorBaseMenu
 {
   public var charSelectScroll:ScrollView;
@@ -49,18 +48,25 @@ class ChartEditorCharacterIconSelectorMenu extends ChartEditorBaseMenu
   {
     currentCharId = switch (charType)
     {
-      case BF: chartEditorState.currentSongMetadata.playData.characters.player;
-      case GF: chartEditorState.currentSongMetadata.playData.characters.girlfriend;
-      case DAD: chartEditorState.currentSongMetadata.playData.characters.opponent;
-      default: throw 'Invalid charType: ' + charType;
+      case BF:
+        chartEditorState.currentSongMetadata.playData.characters.player;
+      case GF:
+        chartEditorState.currentSongMetadata.playData.characters.girlfriend;
+      case DAD:
+        chartEditorState.currentSongMetadata.playData.characters.opponent;
+      default:
+        throw 'Invalid charType: ' + charType;
     };
 
     // Position this menu.
     var targetHealthIcon:Null<HealthIcon> = switch (charType)
     {
-      case BF: chartEditorState.healthIconBF;
-      case DAD: chartEditorState.healthIconDad;
-      default: null;
+      case BF:
+        chartEditorState.healthIconBF;
+      case DAD:
+        chartEditorState.healthIconDad;
+      default:
+        null;
     };
 
     if (lockPosition && targetHealthIcon != null)
@@ -90,8 +96,7 @@ class ChartEditorCharacterIconSelectorMenu extends ChartEditorBaseMenu
 
     for (charIndex => charId in charIds)
     {
-      var charData:Null<CharacterData> = CharacterDataParser.fetchCharacterData(charId);
-      var charName:String = charData?.name ?? charId;
+      var charData:CharacterData = CharacterDataParser.fetchCharacterData(charId);
 
       var charButton = new Button();
       charButton.width = 70;
@@ -105,37 +110,32 @@ class ChartEditorCharacterIconSelectorMenu extends ChartEditorBaseMenu
         charSelectScroll.vscrollPos = Math.floor(charIndex / 5) * 80;
         charButton.focus = true;
 
-        defaultText = (currentCharId != "") ? '$charName [$charId]' : 'None';
+        defaultText = (currentCharId != "") ? '${charData.name} [${charId}]' : 'None';
 
         currentCharButton = charButton;
       }
 
       var LIMIT = 6;
-      var charIcon = CharacterDataParser.getCharPixelIconAsset(charId);
-      if (charIcon != null) charButton.icon = haxe.ui.util.Variant.fromImageData(charIcon);
-      charButton.text = (charId != "") ? (charName.length > LIMIT ? '${charName.substr(0, LIMIT)}.' : charName) : 'None';
+      charButton.icon = haxe.ui.util.Variant.fromImageData(CharacterDataParser.getCharPixelIconAsset(charId));
+      charButton.text = (charId != "") ? (charData.name.length > LIMIT ? '${charData.name.substr(0, LIMIT)}.' : '${charData.name}') : 'None';
 
       charButton.onClick = _ ->
       {
-        var changed:Bool = false;
         switch (charType)
         {
           case BF:
-            changed = chartEditorState.currentSongMetadata.playData.characters.player != charId;
             chartEditorState.currentSongMetadata.playData.characters.player = charId;
             chartEditorState.playerPreviewDirty = true;
           case GF:
-            changed = chartEditorState.currentSongMetadata.playData.characters.girlfriend != charId;
             chartEditorState.currentSongMetadata.playData.characters.girlfriend = charId;
           case DAD:
-            changed = chartEditorState.currentSongMetadata.playData.characters.opponent != charId;
             chartEditorState.currentSongMetadata.playData.characters.opponent = charId;
             chartEditorState.opponentPreviewDirty = true;
-          default: throw 'Invalid charType: ' + charType;
+          default:
+            throw 'Invalid charType: ' + charType;
         };
 
-        if (changed) chartEditorState.saveDataDirty = true;
-        defaultText = (charId != "") ? '$charName [$charId]' : 'None';
+        defaultText = (charId != "") ? '${charData.name} [${charId}]' : 'None';
         chartEditorState.healthIconsDirty = true;
 
         chartEditorState.refreshToolbox(ChartEditorState.CHART_EDITOR_TOOLBOX_METADATA_LAYOUT);
@@ -143,7 +143,7 @@ class ChartEditorCharacterIconSelectorMenu extends ChartEditorBaseMenu
 
       charButton.onMouseOver = _ ->
       {
-        charIconName.text = (charId != "") ? '$charName [$charId]' : 'None';
+        charIconName.text = (charId != "") ? '${charData.name} [${charId}]' : 'None';
       };
       charButton.onMouseOut = _ ->
       {

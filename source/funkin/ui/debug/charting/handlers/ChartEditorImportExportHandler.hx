@@ -19,8 +19,7 @@ import thx.semver.Version as SemverVersion;
 /**
  * Contains functions for importing, loading, saving, and exporting charts.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorImportExportHandler
 {
   public static final BACKUPS_PATH:String = './backups/charts/';
@@ -28,7 +27,7 @@ class ChartEditorImportExportHandler
   /**
    * Fetch's a song's existing chart and audio and loads it, replacing the current song.
    */
-  public static function loadSongAsTemplate(state:ChartEditorState, songId:String, targetSongDifficulty:String = null, targetSongVariation:String = null):Void
+  public static function loadSongAsTemplate(state:ChartEditorState, songId:String, targetSongDifficulty:String = null, ?targetSongVariation:String):Void
   {
     trace('===============START');
 
@@ -100,7 +99,7 @@ class ChartEditorImportExportHandler
           {
             state.loadVocalsFromAsset(voiceFile, diff.characters.player, instId);
             state.audioVocalTrackGroup.legacyVoiceSystem = true;
-            state.audioVocalTrackGroup.legacyVoiceUsesPlayer = true;  
+            state.audioVocalTrackGroup.legacyVoiceUsesPlayer = true;
           }
         }
 
@@ -177,7 +176,13 @@ class ChartEditorImportExportHandler
       if (stackedNotesCount > 0)
       {
         // Difficulty names might be out of order due to how maps work
-        affectedDiffs.sort(SortUtil.defaultsThenAlphabetically.bind(['Easy', 'Normal', 'Hard', 'Erect', 'Nightmare']));
+        affectedDiffs.sort(SortUtil.defaultsThenAlphabetically.bind([
+          'Easy',
+          'Normal',
+          'Hard',
+          'Erect',
+          'Nightmare'
+        ]));
 
         // Delay it so it doesn't overlap other notifications
         flixel.util.FlxTimer.wait(delay, () ->
@@ -496,7 +501,10 @@ class ChartEditorImportExportHandler
         // Force writing to a generic path (autosave or crash recovery)
         targetMode = Skip;
         if (state.currentSongId == '') state.currentSongName = 'New Chart'; // Hopefully no one notices this silliness
-        targetPath = Path.join([BACKUPS_PATH, 'chart-editor-${state.currentSongId}-${DateUtil.generateTimestamp()}.${Constants.EXT_CHART}']);
+        targetPath = Path.join([
+          BACKUPS_PATH,
+          'chart-editor-${state.currentSongId}-${DateUtil.generateTimestamp()}.${Constants.EXT_CHART}'
+        ]);
         // We have to force write because the program will die before the save dialog is closed.
         trace('Force exporting to $targetPath...');
         try
@@ -531,27 +539,6 @@ class ChartEditorImportExportHandler
     }
     else
     {
-      #if android
-      final chartsDirectory = Path.join([Sys.getCwd(), 'Charts']);
-      FileUtil.createDirIfNotExists(chartsDirectory);
-      var chartName = state.currentSongId == '' ? 'new-chart' : Path.withoutDirectory(state.currentSongId.replace('\\', '/'));
-      chartName = FileUtil.INVALID_CHARS.replace(chartName, '_');
-      if (chartName == '') chartName = 'new-chart';
-      final mobilePath = Path.join([chartsDirectory, '${chartName}.${Constants.EXT_CHART}']);
-      try
-      {
-        FileUtil.saveFilesAsZIPToPath(zipEntries, mobilePath, Force);
-        state.currentWorkingFilePath = mobilePath;
-        state.saveDataDirty = false;
-        state.applyWindowTitle();
-        if (onSaveCb != null) onSaveCb(mobilePath);
-      }
-      catch (error)
-      {
-        state.failure('Failed to Save Chart', 'Could not save to ${mobilePath}: ${error}');
-        if (onCancelCb != null) onCancelCb();
-      }
-      #else
       // Prompt and save.
       var onSave:Array<String>->Void = function(paths:Array<String>)
       {
@@ -584,7 +571,6 @@ class ChartEditorImportExportHandler
       catch (e)
       {
       }
-      #end
     }
   }
 }

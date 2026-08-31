@@ -11,6 +11,7 @@ import funkin.data.event.SongEventSchema.SongEventFieldType;
 /**
  * This class handles song events which force a specific character or stage prop to play an animation.
  */
+@:nullSafety
 class PlayAnimationSongEvent extends SongEvent
 {
   public function new()
@@ -18,49 +19,22 @@ class PlayAnimationSongEvent extends SongEvent
     super('PlayAnimation');
   }
 
-  static final DEFAULT_TARGET:String = 'boyfriend';
-  static final DEFAULT_ANIM:String = 'idle';
-  static final DEFAULT_FORCE:Bool = false;
+  public static final DEFAULT_TARGET:String = 'boyfriend';
+  public static final DEFAULT_ANIM:String = 'idle';
+  public static final DEFAULT_FORCE:Bool = false;
 
-  public override function handleEvent(data:SongEventData):Void
+  override public function handleEvent(data:SongEventData):Void
   {
-    // Does nothing if there is no PlayState camera or stage.
-    if (PlayState.instance == null || PlayState.instance.currentStage == null) return;
-
-    var targetName:Null<String> = data.getString('target');
-    if (targetName == null) targetName = DEFAULT_TARGET;
-
-    var anim = data.getString('anim');
-    if (anim == null) anim = DEFAULT_ANIM;
-
-    var force = data.getBool('force');
-    if (force == null) force = DEFAULT_FORCE;
-
-    var target:FlxSprite = null;
-
-    switch (targetName)
-    {
-      case 'boyfriend' | 'bf' | 'player':
-        trace('Playing animation $anim on boyfriend.');
-        target = PlayState.instance.currentStage.getBoyfriend();
-      case 'dad' | 'opponent':
-        trace('Playing animation $anim on dad.');
-        target = PlayState.instance.currentStage.getDad();
-      case 'girlfriend' | 'gf':
-        trace('Playing animation $anim on girlfriend.');
-        target = PlayState.instance.currentStage.getGirlfriend();
-      default:
-        target = PlayState.instance.currentStage.getNamedProp(targetName);
-        if (target == null) trace('Unknown animation target: $targetName');
-        else
-          trace('Fetched animation target $targetName from stage.');
-    }
+    var anim:String = data.getString('anim') ?? DEFAULT_ANIM;
+    var force:Bool = data.getBool('force') ?? DEFAULT_FORCE;
+    var target:Null<FlxSprite> = getTarget(data);
 
     if (target != null)
     {
       if (Std.isOfType(target, BaseCharacter))
       {
         var targetChar:BaseCharacter = cast target;
+        targetChar.tempVocals = force;
         targetChar.playAnimation(anim, force, force);
       }
       else
@@ -70,13 +44,33 @@ class PlayAnimationSongEvent extends SongEvent
     }
     else
     {
+      var targetName:String = data.getString('target') ?? DEFAULT_TARGET;
       trace('Unknown PlayAnimation target: $targetName');
     }
   }
 
-  public override function getTitle():String
+  public function getTarget(data:SongEventData):Null<FlxSprite>
   {
-    return "Play Animation";
+    if (PlayState.instance == null || PlayState.instance.currentStage == null) return null;
+
+    var targetName:String = data.getString('target') ?? DEFAULT_TARGET;
+
+    switch (targetName)
+    {
+      case 'boyfriend' | 'bf' | 'player':
+        return PlayState.instance.currentStage.getBoyfriend();
+      case 'dad' | 'opponent':
+        return PlayState.instance.currentStage.getDad();
+      case 'girlfriend' | 'gf':
+        return PlayState.instance.currentStage.getGirlfriend();
+      default:
+        return PlayState.instance.currentStage.getNamedProp(targetName);
+    }
+  }
+
+  override public function getTitle():String
+  {
+    return 'Play Animation';
   }
 
   /**
@@ -88,23 +82,27 @@ class PlayAnimationSongEvent extends SongEvent
    * }
    * @return SongEventSchema
    */
-  public override function getEventSchema():SongEventSchema
+  override public function getEventSchema():SongEventSchema
   {
-    return new SongEventSchema([{
-      name: 'target',
-      title: 'Target',
-      type: SongEventFieldType.STRING,
-      defaultValue: DEFAULT_TARGET,
-    }, {
-      name: 'anim',
-      title: 'Animation',
-      type: SongEventFieldType.STRING,
-      defaultValue: DEFAULT_ANIM,
-    }, {
-      name: 'force',
-      title: 'Force',
-      type: SongEventFieldType.BOOL,
-      defaultValue: DEFAULT_FORCE
-    }]);
+    return new SongEventSchema([
+      {
+        name: 'target',
+        title: 'Target',
+        type: SongEventFieldType.STRING,
+        defaultValue: DEFAULT_TARGET,
+      },
+      {
+        name: 'anim',
+        title: 'Animation',
+        type: SongEventFieldType.STRING,
+        defaultValue: DEFAULT_ANIM,
+      },
+      {
+        name: 'force',
+        title: 'Force',
+        type: SongEventFieldType.BOOL,
+        defaultValue: DEFAULT_FORCE
+      }
+    ]);
   }
 }

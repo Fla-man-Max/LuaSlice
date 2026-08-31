@@ -13,8 +13,7 @@ import openfl.geom.Rectangle;
 /**
  * Handles the display of the measure ticks and numbers on the left side.
  */
-@:nullSafety
-@:access(funkin.ui.debug.charting.ChartEditorState)
+@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorMeasureTicks extends FlxTypedSpriteGroup<FlxSprite>
 {
   /**
@@ -37,13 +36,6 @@ class ChartEditorMeasureTicks extends FlxTypedSpriteGroup<FlxSprite>
    * The horizontal bars over the grid at each measure tick.
    */
   var measureDividers:FlxTypedSpriteGroup<FlxSprite> = new FlxTypedSpriteGroup<FlxSprite>();
-
-  /**
-   * The positions of each measure tick, in pixels, relative to the start of the song.
-   */
-  var measurePositions:Array<Float> = [];
-
-  var downscroll:Bool = false;
 
   /**
    * A map of the
@@ -91,27 +83,25 @@ class ChartEditorMeasureTicks extends FlxTypedSpriteGroup<FlxSprite>
     updateMeasureNumbers(true);
   }
 
-  public function setDownscroll(value:Bool):Void
-  {
-    if (downscroll == value) return;
-    downscroll = value;
-    measureTicksSprite.flipY = value;
-    updateMeasureNumbers(true);
-  }
-
   function buildMeasureTicksSprite():Void
   {
     var backingColor:FlxColor = switch (chartEditorState.currentTheme)
     {
-      case Light: ChartEditorThemeHandler.MEASTURE_TICKS_BACKING_COLOR_LIGHT;
-      case Dark: ChartEditorThemeHandler.MEASTURE_TICKS_BACKING_COLOR_DARK;
-      default: ChartEditorThemeHandler.MEASTURE_TICKS_BACKING_COLOR_LIGHT;
+      case Light:
+        ChartEditorThemeHandler.MEASTURE_TICKS_BACKING_COLOR_LIGHT;
+      case Dark:
+        ChartEditorThemeHandler.MEASTURE_TICKS_BACKING_COLOR_DARK;
+      default:
+        ChartEditorThemeHandler.MEASTURE_TICKS_BACKING_COLOR_LIGHT;
     };
     var dividerColor:FlxColor = switch (chartEditorState.currentTheme)
     {
-      case Light: ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_LIGHT;
-      case Dark: ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_DARK;
-      default: ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_LIGHT;
+      case Light:
+        ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_LIGHT;
+      case Dark:
+        ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_DARK;
+      default:
+        ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_LIGHT;
     };
 
     // TODO: This does NOT account for time signature, and always assumes 4/4!
@@ -128,7 +118,7 @@ class ChartEditorMeasureTicks extends FlxTypedSpriteGroup<FlxSprite>
     measureTickBitmap.fillRect(new Rectangle(0, bottomTickY, ChartEditorState.GRID_SIZE, ChartEditorThemeHandler.MEASURE_TICKS_MEASURE_WIDTH / 2),
       dividerColor);
 
-    // Draw the beat ticks and dividers, and step ticks. No need for two seperate loops thankfully.
+    // Draw the beat ticks and dividers, and step ticks. No need for two separate loops thankfully.
     for (i in 1...stepsPerMeasure)
     {
       if ((i % Constants.STEPS_PER_BEAT) == 0) // If we're on a beat, draw a beat tick and divider.
@@ -259,9 +249,12 @@ class ChartEditorMeasureTicks extends FlxTypedSpriteGroup<FlxSprite>
   {
     var dividerColor:FlxColor = switch (chartEditorState.currentTheme)
     {
-      case Light: ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_LIGHT;
-      case Dark: ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_DARK;
-      default: ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_LIGHT;
+      case Light:
+        ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_LIGHT;
+      case Dark:
+        ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_DARK;
+      default:
+        ChartEditorThemeHandler.GRID_MEASURE_DIVIDER_COLOR_LIGHT;
     };
 
     var measureDivider = new FunkinSprite().makeSolidColor(ChartEditorState.GRID_SIZE * ChartEditorThemeHandler.TOTAL_COLUMN_COUNT,

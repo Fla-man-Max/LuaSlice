@@ -1,5 +1,7 @@
 package funkin.ui.transition.stickers;
 
+import funkin.util.assets.ResourceCache;
+
 import flixel.addons.transition.FlxTransitionableState;
 import flixel.FlxG;
 import flixel.FlxState;
@@ -16,6 +18,7 @@ import funkin.ui.freeplay.FreeplayState;
 import funkin.ui.MusicBeatSubState;
 import funkin.ui.transition.stickers.StickerPack;
 import funkin.FunkinMemory;
+import funkin.util.DeviceUtil;
 import funkin.Preferences;
 
 using Lambda;
@@ -23,17 +26,15 @@ using StringTools;
 
 typedef StickerSubStateParams =
 {
-  /*
+  /**
    * The state to transition into.
    */
   ?targetState:StickerSubState->FlxState,
-
   /**
    * The sticker pack to retrieve and use.
    * @default `Constants.DEFAULT_STICKER_PACK`
    */
   ?stickerPack:String,
-
   /**
    * An existing set of stickers to transition out with.
    */
@@ -75,7 +76,7 @@ class StickerSubState extends MusicBeatSubState
     var targetStickerPack = StickerRegistry.instance.fetchEntry(this.stickerPackId);
     this.stickerPack = targetStickerPack ?? StickerRegistry.instance.fetchDefault();
     // TODO: Make this tied to the sticker pack more closely.
-    var assetsInList = Assets.list();
+    var assetsInList = ResourceCache.list();
     var soundFilterFunc = function(a:String)
     {
       return a.startsWith('assets/shared/sounds/stickersounds/');
@@ -100,7 +101,7 @@ class StickerSubState extends MusicBeatSubState
     {
       return a.startsWith('assets/shared/sounds/stickersounds/' + soundSelection + '/');
     };
-    var assetsInList3 = Assets.list();
+    var assetsInList3 = ResourceCache.list();
     sounds = assetsInList3.filter(filterFunc);
     for (i in 0...sounds.length)
     {
@@ -109,8 +110,7 @@ class StickerSubState extends MusicBeatSubState
     }
     if (params.oldStickers != null)
     {
-      for (sticker in params.oldStickers)
-        grpStickers.add(sticker);
+      for (sticker in params.oldStickers) grpStickers.add(sticker);
       degenStickers();
     }
     else
@@ -118,7 +118,7 @@ class StickerSubState extends MusicBeatSubState
       #if !mobile
       // Re-enable autoPause if it was disabled
       FlxG.autoPause = Preferences.autoPause;
-      #end  
+      #end
       regenStickers();
     }
   }
@@ -214,6 +214,16 @@ class StickerSubState extends MusicBeatSubState
             switchingState = true;
             FlxTransitionableState.skipNextTransIn = true;
             FlxTransitionableState.skipNextTransOut = true;
+            FlxG.signals.preStateSwitch.addOnce(() -> {
+              #if ios
+              trace(DeviceUtil.iPhoneNumber);
+              if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
+              else
+                funkin.FunkinMemory.purgeCache();
+              #else
+              funkin.FunkinMemory.purgeCache(true);
+              #end
+            });
             FlxG.switchState(() ->
             {
               // TODO: Rework this asset caching stuff

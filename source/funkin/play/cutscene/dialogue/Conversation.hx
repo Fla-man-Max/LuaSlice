@@ -17,10 +17,8 @@ import funkin.modding.events.ScriptEvent;
 import funkin.modding.events.ScriptEventDispatcher;
 import funkin.modding.IScriptedClass.IDialogueScriptedClass;
 import funkin.modding.IScriptedClass.IEventHandler;
-import funkin.play.PlayState;
 import funkin.util.SortUtil;
 import funkin.util.EaseUtil;
-import openfl.Assets;
 
 /**
  * A high-level handler for dialogue.
@@ -30,7 +28,6 @@ import openfl.Assets;
 @:nullSafety
 class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass implements IRegistryEntry<ConversationData>
 {
-  var destroyHandled:Bool = false;
   /**
    * The current state of the conversation.
    */
@@ -50,7 +47,7 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
 
   /**
    * The current line in the current entry in the dialogue.
-  * **/
+   */
   var currentDialogueLine:Int = 0;
 
   var currentDialogueLineCount(get, never):Int;
@@ -75,15 +72,13 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
   function get_currentDialogueLineString():String
   {
     // TODO: Replace "" with some placeholder text?
-    return currentDialogueEntryData?.text[currentDialogueLine] ?? "";
+    return currentDialogueEntryData?.text[currentDialogueLine] ?? '';
   }
 
   /**
    * AUDIO
    */
   var music:Null<FunkinSound>;
-  var musicTween:Null<FlxTween> = null;
-  var loadedMusicPath:Null<String> = null;
 
   /**
    * GRAPHICS
@@ -91,7 +86,6 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
   var backdrop:Null<FunkinSprite>;
 
   var currentSpeaker:Null<Speaker>;
-
   var currentDialogueBox:Null<DialogueBox>;
 
   public function new(id:String, ?params:Dynamic)
@@ -109,7 +103,6 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
 
   public function onCreate(event:ScriptEvent):Void
   {
-    destroyHandled = false;
     // Reset the progress in the dialogue.
     currentDialogueEntry = 0;
     currentDialogueLine = 0;
@@ -123,16 +116,14 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
   {
     if (_data == null) return;
 
-    if (_data.music == null || (_data.music.asset ?? "") == "") return;
+    if (_data.music == null || (_data.music.asset ?? '') == '') return;
 
-    loadedMusicPath = Paths.music(_data.music.asset);
-    if (!Assets.exists(loadedMusicPath)) loadedMusicPath = Paths.music(_data.music.asset, 'week6');
-    music = Assets.exists(loadedMusicPath) ? FunkinSound.load(loadedMusicPath, 0.0, true, true, true) : null;
+    music = FunkinSound.load(Paths.music(_data.music.asset), 0.0, true, true, true);
     var fadeTime:Float = _data.music.fadeTime ?? 0.0;
 
     if (fadeTime > 0.0)
     {
-      tweenMusicVolume(1.0, fadeTime);
+      FlxTween.tween(music, {volume: 1.0}, fadeTime, {ease: FlxEase.linear});
     }
     else
     {
@@ -143,24 +134,10 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
     }
   }
 
-  function tweenMusicVolume(targetVolume:Float, duration:Float):Void
+  public function pause():Void
   {
-    musicTween?.cancel();
-    musicTween = null;
-    final targetMusic = music;
-    if (targetMusic == null) return;
-    if (duration <= 0)
-    {
-      targetMusic.volume = targetVolume;
-      return;
-    }
-    musicTween = FlxTween.num(targetMusic.volume, targetVolume, duration, {
-      ease: FlxEase.linear,
-      onComplete: function(_) musicTween = null
-    }, function(value)
-    {
-      if (music == targetMusic) targetMusic.volume = value;
-    });
+    if (outroTween != null) outroTween.active = false;
+    pauseMusic();
   }
 
   public function pauseMusic():Void
@@ -169,6 +146,12 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
     {
       music.pause();
     }
+  }
+
+  public function resume():Void
+  {
+    if (outroTween != null) outroTween.active = true;
+    resumeMusic();
   }
 
   public function resumeMusic():Void
@@ -219,7 +202,7 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
     refresh();
   }
 
-  public override function update(elapsed:Float):Void
+  override public function update(elapsed:Float):Void
   {
     super.update(elapsed);
 
@@ -228,7 +211,7 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
 
   function showCurrentSpeaker():Void
   {
-    var nextSpeakerId:String = currentDialogueEntryData?.speaker ?? "";
+    var nextSpeakerId:String = currentDialogueEntryData?.speaker ?? '';
 
     // Skip the next steps if the current speaker is already displayed.
     if ((currentSpeaker != null && currentSpeaker.alive) && nextSpeakerId == currentSpeaker.id) return;
@@ -236,11 +219,11 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
     if (currentSpeaker != null)
     {
       remove(currentSpeaker);
-      releaseDialogueObject(currentSpeaker);
+      currentSpeaker.kill(); // Kill, don't destroy! We want to revive it later.
       currentSpeaker = null;
     }
 
-    var nextSpeaker:Null<Speaker> = SpeakerRegistry.instance.createFreshEntry(nextSpeakerId);
+    var nextSpeaker:Null<Speaker> = SpeakerRegistry.instance.fetchEntry(nextSpeakerId);
 
     if (nextSpeaker == null)
     {
@@ -254,6 +237,8 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
       }
       return;
     }
+    if (!nextSpeaker.alive) nextSpeaker.revive();
+
     ScriptEventDispatcher.callEvent(nextSpeaker, new ScriptEvent(CREATE, true));
 
     currentSpeaker = nextSpeaker;
@@ -278,7 +263,7 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
 
   function showCurrentDialogueBox():Void
   {
-    var nextDialogueBoxId:String = currentDialogueEntryData?.box ?? "";
+    var nextDialogueBoxId:String = currentDialogueEntryData?.box ?? '';
 
     // Skip the next steps if the current dialogue box is already displayed.
     if ((currentDialogueBox != null && currentDialogueBox.alive) && nextDialogueBoxId == currentDialogueBox.id) return;
@@ -286,17 +271,19 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
     if (currentDialogueBox != null)
     {
       remove(currentDialogueBox);
-      releaseDialogueObject(currentDialogueBox);
+      currentDialogueBox.kill(); // Kill, don't destroy! We want to revive it later.
       currentDialogueBox = null;
     }
 
-    var nextDialogueBox:Null<DialogueBox> = DialogueBoxRegistry.instance.createFreshEntry(nextDialogueBoxId);
+    var nextDialogueBox:Null<DialogueBox> = DialogueBoxRegistry.instance.fetchEntry(nextDialogueBoxId);
 
     if (nextDialogueBox == null)
     {
       trace('Dialogue box could not be retrieved.');
       return;
     }
+    if (!nextDialogueBox.alive) nextDialogueBox.revive();
+
     ScriptEventDispatcher.callEvent(nextDialogueBox, new ScriptEvent(CREATE, true));
 
     currentDialogueBox = nextDialogueBox;
@@ -364,8 +351,8 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
 
   public function dispatchEvent(event:ScriptEvent):Void
   {
-    final currentState:IEventHandler = PlayState.instance != null ? PlayState.instance : cast FlxG.state;
-    currentState?.dispatchEvent(event);
+    var currentState:IEventHandler = cast FlxG.state;
+    currentState.dispatchEvent(event);
   }
 
   /**
@@ -385,25 +372,21 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
 
     if (this.music != null)
     {
-      musicTween?.cancel();
-      musicTween = null;
       this.music.stop();
-      this.music.destroy();
       this.music = null;
     }
-    releaseDialogueSounds();
 
     if (currentSpeaker != null)
     {
+      currentSpeaker.kill();
       remove(currentSpeaker);
-      releaseDialogueObject(currentSpeaker);
       currentSpeaker = null;
     }
 
     if (currentDialogueBox != null)
     {
+      currentDialogueBox.kill();
       remove(currentDialogueBox);
-      releaseDialogueObject(currentDialogueBox);
       currentDialogueBox = null;
     }
 
@@ -442,7 +425,7 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
           ease: EaseUtil.stepped(8)
         });
 
-        tweenMusicVolume(0.0, outroData.fadeTime ?? 0.0);
+        if (this.music != null) FlxTween.tween(this.music, {volume: 0.0}, outroData.fadeTime);
       case NONE(_):
         // Immediately clean up.
         endOutro();
@@ -588,9 +571,6 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
 
   public function onDestroy(event:ScriptEvent):Void
   {
-    if (destroyHandled) return;
-    destroyHandled = true;
-
     propagateEvent(event);
 
     if (outroTween != null)
@@ -599,28 +579,20 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
     }
     outroTween = null;
 
-    musicTween?.cancel();
-    musicTween = null;
-
-    if (this.music != null)
-    {
-      this.music.stop();
-      this.music.destroy();
-    }
+    if (this.music != null) this.music.stop();
     this.music = null;
-    releaseDialogueSounds();
 
     if (currentSpeaker != null)
     {
+      currentSpeaker.kill();
       remove(currentSpeaker);
-      releaseDialogueObject(currentSpeaker);
       currentSpeaker = null;
     }
 
     if (currentDialogueBox != null)
     {
+      currentDialogueBox.kill();
       remove(currentDialogueBox);
-      releaseDialogueObject(currentDialogueBox);
       currentDialogueBox = null;
     }
 
@@ -631,49 +603,9 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
       backdrop = null;
     }
 
-    if (members != null)
-      for (member in members.copy())
-        if (member != null) remove(member);
+    this.clear();
 
-    final callback = completeCallback;
-    completeCallback = null;
-    if (callback != null) callback();
-  }
-
-  function releaseDialogueObject(object:Dynamic):Void
-  {
-    final keys:Array<String> = [];
-    collectGraphicKeys(object, keys);
-    object.destroy();
-    for (key in keys)
-    {
-      final graphic:Null<flixel.graphics.FlxGraphic> = FlxG.bitmap.get(key);
-      if (graphic == null || graphic.useCount > 0) continue;
-      graphic.persist = false;
-      graphic.destroy();
-      @:privateAccess FlxG.bitmap.removeKey(key);
-      Assets.cache.clear(key);
-    }
-  }
-
-  function collectGraphicKeys(object:Dynamic, keys:Array<String>):Void
-  {
-    if (object == null) return;
-    final graphic:Dynamic = Reflect.field(object, 'graphic');
-    final key:Null<String> = graphic == null ? null : Reflect.field(graphic, 'key');
-    if (key != null && !keys.contains(key)) keys.push(key);
-    final children:Dynamic = Reflect.field(object, 'members');
-    if (children != null)
-      for (child in cast(children, Array<Dynamic>))
-        collectGraphicKeys(child, keys);
-  }
-
-  function releaseDialogueSounds():Void
-  {
-    if (loadedMusicPath != null) Assets.cache.removeSound(loadedMusicPath);
-    Assets.cache.removeSound(Paths.sound('pixelText'));
-    Assets.cache.removeSound(Paths.sound('pixelText', 'week6'));
-    loadedMusicPath = null;
+    if (completeCallback != null) completeCallback();
   }
 
   public function onScriptEvent(event:ScriptEvent):Void
@@ -701,7 +633,7 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
    * Calls `kill()` on the group's members and then on the group itself.
    * You can revive this group later via `revive()` after this.
    */
-  public override function revive():Void
+  override public function revive():Void
   {
     super.revive();
     this.alpha = 1;
@@ -712,7 +644,7 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
    * Calls `kill()` on the group's members and then on the group itself.
    * You can revive this group later via `revive()` after this.
    */
-  public override function kill():Void
+  override public function kill():Void
   {
     _skipTransformChildren = true;
     alive = false;
@@ -725,12 +657,11 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
       outroTween.cancel();
       outroTween = null;
     }
-    musicTween?.cancel();
-    musicTween = null;
   }
 }
 
 // Managing things with a single enum is a lot easier than a multitude of flags.
+
 enum ConversationState
 {
   /**

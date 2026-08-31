@@ -11,7 +11,6 @@ class CharSelectPlayer extends FunkinSprite implements IBPMSyncedScriptedClass
 
   var initialX:Float = 0;
   var initialY:Float = 0;
-
   var currentBFPath:Null<String>;
 
   public function new(x:Float, y:Float)
@@ -21,13 +20,10 @@ class CharSelectPlayer extends FunkinSprite implements IBPMSyncedScriptedClass
 
     super(x, y);
 
-    this.applyStageMatrix = true;
-    final texture = CharSelectAtlasHandler.loadAtlas(DEFAULT_PATH, {swfMode: true});
-    if (texture != null)
-    {
-      frames = texture;
-      currentBFPath = DEFAULT_PATH;
-    }
+    loadTextureAtlas(DEFAULT_PATH, {
+      applyStageMatrix: true,
+      swfMode: true
+    });
 
     anim.onFinish.add(function(animLabel:String)
     {
@@ -48,7 +44,6 @@ class CharSelectPlayer extends FunkinSprite implements IBPMSyncedScriptedClass
         case "slidein idle point", "cannot select Label", "unlock":
           anim.play("idle", true);
         case "idle":
-
           // TODO: once char select data is refactored, add a `shouldBop` field or something IDK
           if (currentBFPath != null)
           {
@@ -86,7 +81,6 @@ class CharSelectPlayer extends FunkinSprite implements IBPMSyncedScriptedClass
     if (texture != null)
     {
       frames = texture;
-      currentBFPath = 'charSelect/${str}Chill';
     }
     else
     {

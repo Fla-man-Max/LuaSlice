@@ -290,7 +290,15 @@ class PsychEngineImporter
   {
     if (value == null || value == false || value == '') return '';
     if (value == true) return 'alt';
-    return stringValue(value, '');
+    final kind = stringValue(value, '').trim();
+    return switch (kind.toLowerCase())
+    {
+      case 'hurt note': 'hurt';
+      case 'death note': 'death';
+      case 'play animation note': 'play_animation';
+      case 'no animation' | 'no anim' | 'no anim note': 'noanim';
+      default: kind;
+    };
   }
 
   static function mapStage(stage:String):String

@@ -52,3 +52,5 @@ class HUDFadeSongEvent extends SongEvent
     keys: ['Linear' => 'linear', 'Sine In' => 'sineIn', 'Sine Out' => 'sineOut', 'Quad In' => 'quadIn', 'Quad Out' => 'quadOut']
   }]);
 }
+
+

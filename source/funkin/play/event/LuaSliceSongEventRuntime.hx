@@ -29,7 +29,6 @@ import funkin.modding.events.ScriptEvent;
 import funkin.modding.events.ScriptEventDispatcher;
 import funkin.play.Countdown;
 import funkin.play.Countdown.CountdownStep;
-import LuaShaderManager;
 import openfl.Assets;
 import openfl.display.BitmapData;
 import openfl.display.BlendMode;
@@ -38,8 +37,6 @@ import haxe.io.Path;
 
 class LuaSliceSongEventRuntime
 {
-  static final EVENT_PRELOAD_LOOKAHEAD_MS:Float = 8000;
-
   final preloaded:Map<String, Bool> = [];
   final sounds:Map<String, FlxSound> = [];
 #if hxvlc
@@ -49,10 +46,6 @@ class LuaSliceSongEventRuntime
   final overlays:Map<String, FlxSprite> = [];
   final overlayTweens:Map<String, FlxTween> = [];
   final overlayAtlases:Map<String, FlxAtlasFrames> = [];
-  final shaderTweens:Map<String, FlxTween> = [];
-  final shaderValues:Map<String, Float> = [];
-  final shaderPositions:Map<String, Array<Float>> = [];
-  final shaderColors:Map<String, Array<Float>> = [];
   final hudFadeValues:Map<String, Float> = [];
   final hudFadeTweens:Map<String, FlxTween> = [];
   final timers:Array<FlxTimer> = [];
@@ -71,8 +64,8 @@ class LuaSliceSongEventRuntime
   var chartEvents:Array<SongEventData> = [];
   var nextPreloadEventIndex:Int = 0;
   var lastPreloadPosition:Float = Math.NEGATIVE_INFINITY;
+  var knownEventsPreloaded:Bool = false;
   var destroyed:Bool = false;
-  public final shaders:LuaShaderManager = new LuaShaderManager();
 
   public function new() {}
 
@@ -81,12 +74,23 @@ class LuaSliceSongEventRuntime
     chartEvents = events ?? [];
     nextPreloadEventIndex = 0;
     lastPreloadPosition = Math.NEGATIVE_INFINITY;
-    preloadUpcomingEvents(Conductor.instance.songPosition);
+    preloadKnownEvents();
+  }
+
+  function preloadKnownEvents():Void
+  {
+    if (destroyed || knownEventsPreloaded) return;
+    while (nextPreloadEventIndex < chartEvents.length)
+    {
+      preloadEvent(chartEvents[nextPreloadEventIndex]);
+      nextPreloadEventIndex++;
+    }
+    knownEventsPreloaded = true;
   }
 
   function preloadUpcomingEvents(songPosition:Float):Void
   {
-    if (destroyed || chartEvents.length == 0 || !Math.isFinite(songPosition)) return;
+    if (destroyed || knownEventsPreloaded || chartEvents.length == 0 || !Math.isFinite(songPosition)) return;
 
     if (songPosition < lastPreloadPosition)
     {
@@ -95,28 +99,33 @@ class LuaSliceSongEventRuntime
         nextPreloadEventIndex++;
     }
 
-    final preloadUntil = songPosition + EVENT_PRELOAD_LOOKAHEAD_MS;
+    final preloadUntil = songPosition + 8000;
     while (nextPreloadEventIndex < chartEvents.length)
     {
       final event = chartEvents[nextPreloadEventIndex];
       if (event.time > preloadUntil) break;
       nextPreloadEventIndex++;
-
-      switch (event.eventKind)
-      {
-        case 'ChangeCharacter' if (event.getBool('preload') ?? false):
-          preload('character', event.getString('id') ?? '');
-        case 'ChangeStage' if (event.getBool('preload') ?? false):
-          preload('stage', event.getString('stage') ?? '');
-        case 'PlayDialogue':
-          preload('dialogue', event.getString('conversation') ?? '');
-        case 'Overlay' if ((event.getString('action') ?? 'create') == 'create'):
-          final kind = event.getString('kind') ?? 'solid';
-          if (kind == 'image' || kind == 'animated') preloadOverlay(kind, event.getString('resource') ?? '', event.getString('atlasType') ?? 'sparrow');
-        default:
-      }
+      preloadEvent(event);
     }
     lastPreloadPosition = songPosition;
+  }
+
+  function preloadEvent(event:SongEventData):Void
+  {
+    if (event == null) return;
+    switch (event.eventKind)
+    {
+      case 'ChangeCharacter' if (event.getBool('preload') ?? false):
+        preload('character', event.getString('id') ?? '');
+      case 'ChangeStage' if (event.getBool('preload') ?? false):
+        preload('stage', event.getString('stage') ?? '');
+      case 'PlayDialogue':
+        preload('dialogue', event.getString('conversation') ?? '');
+      case 'Overlay' if ((event.getString('action') ?? 'create') == 'create'):
+        final kind = event.getString('kind') ?? 'solid';
+        if (kind == 'image' || kind == 'animated') preloadOverlay(kind, event.getString('resource') ?? '', event.getString('atlasType') ?? 'sparrow');
+      default:
+    }
   }
 
   public function preload(type:String, resource:String):Bool
@@ -144,32 +153,18 @@ class LuaSliceSongEventRuntime
           if (path == null) return warn('Music not found: ${resource}');
           FlxG.sound.cache(path);
         case 'character':
-          final character = CharacterDataParser.fetchCharacter(resource, false, false);
+          final character = CharacterDataParser.fetchCharacter(resource, false);
           if (character == null) return warn('Character not found: ${resource}');
           character.destroy();
         case 'stage':
-          final stage = StageRegistry.instance.createFreshEntry(resource);
+          final stage = StageRegistry.instance.fetchEntry(resource);
           if (stage == null) return warn('Stage not found: ${resource}');
           for (path in stage.fetchAssetPaths())
             if (Assets.exists(path) || FileSystem.exists(path)) FlxG.bitmap.add(path);
-          ScriptEventDispatcher.callEvent(stage, new ScriptEvent(DESTROY, false));
-          stage.destroy();
         case 'stageobject', 'stage object':
           final prop = PlayState.instance?.currentStage?.getNamedProp(resource);
           if (prop == null) return warn('Stage object not found: ${resource}');
           if (prop.graphic != null) FlxG.bitmap.add(prop.graphic);
-        case 'shader':
-          final fragment = resource.startsWith('frag:') ? resource.substr(5) : resource;
-          final isFragment = resource.startsWith('frag:') || ShaderSongEvent.listFragmentShaders().contains(fragment);
-          if (isFragment)
-          {
-            if (!shaders.initShader(fragment, fragment)) return warn('Shader fragment not found: ${resource}');
-          }
-          else
-          {
-            final className = shaderClassName(resource);
-            if (!shaders.initScriptedShader(className, className)) return warn('Shader HXC not found: ${resource}');
-          }
         case 'dialogue', 'dialogue data':
           if (!preloadDialogue(resource)) return false;
         default:
@@ -409,338 +404,6 @@ class LuaSliceSongEventRuntime
     return true;
   }
 
-  public function applyShader(shaderId:String, tag:String, targetType:String, targetName:String, fadeProperty:String = 'amount', fadeIn:Float = 0,
-      fadeOut:Float = 0, ignoreTransparentPixels:Bool = false, includeTransparentPixels:Bool = false):Bool
-  {
-    if (!Preferences.allowSongShaders()) return warn('Song shaders are disabled in Performance options.');
-    if (shaders.hasShader(tag)
-      && (shaders.usesTransparentPixelGuard(tag) != ignoreTransparentPixels || shaders.includesTransparentPixels(tag) != includeTransparentPixels))
-      shaders.destroyShader(tag);
-    if (!shaders.hasShader(tag) && !(shaders.hasShader(shaderId) && shaders.usesTransparentPixelGuard(shaderId) == ignoreTransparentPixels
-      && shaders.includesTransparentPixels(shaderId) == includeTransparentPixels && shaders.aliasShader(shaderId, tag))
-      && !shaders.initShader(shaderId, tag, ignoreTransparentPixels, includeTransparentPixels))
-      return warn('Shader not found: ${shaderId}');
-    final applied = applyShaderToTargets(tag, targetType, targetName);
-    if (applied) applyShaderFades(tag, fadeProperty, fadeIn, fadeOut);
-    return applied;
-  }
-
-  public function applyScriptedShader(className:String, tag:String, targetType:String, targetName:String, fadeProperty:String = 'amount', fadeIn:Float = 0,
-      fadeOut:Float = 0):Bool
-  {
-    if (!Preferences.allowSongShaders()) return warn('Song shaders are disabled in Performance options.');
-    final sourceTag = shaderClassName(className);
-    if (!shaders.hasShader(tag) && !(shaders.hasShader(sourceTag) && shaders.aliasShader(sourceTag, tag)) && !shaders.initScriptedShader(sourceTag, tag))
-      return warn('Shader HXC not found: ${className}');
-    final applied = applyShaderToTargets(tag, targetType, targetName);
-    if (applied) applyShaderFades(tag, fadeProperty, fadeIn, fadeOut);
-    return applied;
-  }
-
-  public function applyBuiltInShader(name:String, tag:String, targetType:String, targetName:String):Bool
-  {
-    if (!Preferences.allowSongShaders()) return warn('Song shaders are disabled in Performance options.');
-    if (!shaders.hasShader(tag) && !shaders.initBuiltInShader(name, tag)) return warn('Built-in shader not found: ${name}');
-    return applyShaderToTargets(tag, targetType, targetName);
-  }
-
-  function applyShaderToTargets(tag:String, targetType:String, targetName:String):Bool
-  {
-    if (targetType == 'camera' && targetName == 'screen')
-    {
-      var applied = false;
-      for (name in ['game', 'hud'])
-      {
-        final camera = resolveCamera(name);
-        if (camera != null) applied = shaders.applyToCamera(tag, camera) || applied;
-      }
-      if (!applied) warn('Could not apply shader "${tag}" to the screen.');
-      return applied;
-    }
-    final camera = targetType == 'camera' ? resolveCamera(targetName) : null;
-    if (camera != null)
-    {
-      final applied = shaders.applyToCamera(tag, camera);
-      if (!applied) warn('Could not apply shader "${tag}" to camera "${targetName}".');
-      return applied;
-    }
-    if (targetType == 'character' && targetName == 'all')
-    {
-      var applied = false;
-      for (name in ['bf', 'dad', 'gf'])
-      {
-        final character = resolveTarget('character', name);
-        if (character != null) applied = shaders.applyToTarget(tag, character) || applied;
-      }
-      if (!applied) warn('No characters were available for the shader.');
-      return applied;
-    }
-    final target = resolveTarget(targetType, targetName);
-    if (target == null) return warn('Shader target not found: ${targetType}:${targetName}');
-    final applied = targetType == 'object' || targetType == 'stageobject' || targetType == 'stage object' ? shaders.applyToObject(tag, target) : shaders.applyToTarget(tag, target);
-    if (!applied) warn('Could not apply shader "${tag}" to ${targetType} "${targetName}".');
-    return applied;
-  }
-
-  function applyShaderFades(tag:String, property:String, fadeIn:Float, fadeOut:Float):Void
-  {
-    if (fadeIn > 0) tweenShaderProperty(tag, property, 0, 1, fadeIn, 'linear');
-    if (fadeOut > 0) schedule(Math.max(0, fadeIn), function() tweenShaderProperty(tag, property, null, 0, fadeOut, 'linear'));
-  }
-
-  public function removeShader(targetType:String, targetName:String, tag:String, fadeOut:Float = 0, property:String = 'amount'):Bool
-  {
-    if (fadeOut > 0)
-    {
-      if (!tweenShaderProperty(tag, property, null, 0, fadeOut, 'linear')) return false;
-      schedule(fadeOut, function() removeShader(targetType, targetName, tag, 0, property));
-      return true;
-    }
-    for (key in shaderTweens.keys().array())
-    {
-      if (!key.startsWith('${tag}:')) continue;
-      shaderTweens.get(key)?.cancel();
-      shaderTweens.remove(key);
-    }
-    var result = false;
-    if (targetType == 'camera' && targetName == 'screen')
-    {
-      for (name in ['game', 'hud'])
-      {
-        final camera = resolveCamera(name);
-        if (camera != null) result = shaders.clearCameraTag(camera, tag) || result;
-      }
-    }
-    else
-    {
-      final camera = targetType == 'camera' ? resolveCamera(targetName) : null;
-      if (camera != null)
-        result = shaders.clearCameraTag(camera, tag);
-      else if (targetType == 'character' && targetName == 'all')
-      {
-        for (name in ['bf', 'dad', 'gf'])
-        {
-          final character = resolveTarget('character', name);
-          if (character != null) result = shaders.clearTargetTag(character, tag) || result;
-        }
-      }
-      else
-      {
-        final target = resolveTarget(targetType, targetName);
-        if (target != null) result = shaders.clearTargetTag(target, tag);
-      }
-    }
-    shaders.destroyShader(tag);
-    for (key in shaderValues.keys().array())
-      if (key.startsWith('${tag}:')) shaderValues.remove(key);
-    for (key in shaderPositions.keys().array())
-      if (key.startsWith('${tag}:')) shaderPositions.remove(key);
-    for (key in shaderColors.keys().array())
-      if (key.startsWith('${tag}:')) shaderColors.remove(key);
-    if (!result) warn('Shader target not found: ${targetType}:${targetName}');
-    return result;
-  }
-
-  /**
-   * Temporarily removes existing shaders from the selected event target.
-   */
-  public function clearShadersForTarget(targetType:String, targetName:String):Void
-  {
-    if (targetType == 'camera' && targetName == 'screen')
-    {
-      for (name in ['game', 'hud'])
-      {
-        final camera = resolveCamera(name);
-        if (camera != null) shaders.suppressCameraShaders(camera);
-      }
-    }
-    else if (targetType == 'camera')
-    {
-      final camera = resolveCamera(targetName);
-      if (camera != null) shaders.suppressCameraShaders(camera);
-    }
-    else if (targetType == 'character' && targetName == 'all')
-    {
-      for (name in ['bf', 'dad', 'gf'])
-      {
-        final character = resolveTarget('character', name);
-        if (character != null) shaders.suppressTargetShaders(character);
-      }
-    }
-    else
-    {
-      final target = resolveTarget(targetType, targetName);
-      if (target != null) shaders.suppressTargetShaders(target);
-    }
-  }
-
-  public function setShaderProperty(tag:String, property:String, value:Float):Bool
-  {
-    if (!shaders.setFloat(tag, property, value)) return warn('Could not set shader property ${tag}.${property}.');
-    shaderValues.set('${tag}:${property}', value);
-    return true;
-  }
-
-  public function setShaderPosition(tag:String, property:String, x:Float, y:Float):Bool
-  {
-    if (!shaders.setFloatArray(tag, property, [x, y])) return warn('Could not set shader position ${tag}.${property}.');
-    shaderPositions.set('${tag}:${property}', [x, y]);
-    return true;
-  }
-
-  public function setShaderInteger(tag:String, property:String, value:Int):Bool
-  {
-    if (!shaders.setInt(tag, property, value)) return warn('Could not set shader property ${tag}.${property}.');
-    shaderValues.set('${tag}:${property}', value);
-    return true;
-  }
-
-  public function setShaderBool(tag:String, property:String, value:Bool):Bool
-  {
-    if (!shaders.setBool(tag, property, value)) return warn('Could not set shader property ${tag}.${property}.');
-    return true;
-  }
-
-  public function setShaderColor(tag:String, property:String, value:Dynamic):Bool
-  {
-    final parsedColor = parseColor(value, FlxColor.WHITE);
-    final channels = colorChannels(parsedColor);
-    var applied = false;
-    if (shaders.setColor(tag, property, parsedColor))
-    {
-      applied = true;
-    }
-    else if (property == 'color')
-    {
-      applied = shaders.setFloat(tag, 'colorRed', channels[0]);
-      applied = shaders.setFloat(tag, 'colorGreen', channels[1]) || applied;
-      applied = shaders.setFloat(tag, 'colorBlue', channels[2]) || applied;
-      applied = shaders.setFloat(tag, 'colorAlpha', channels[3]) || applied;
-    }
-    else
-      applied = shaders.setFloatArray(tag, property, channels.slice(0, 3));
-    if (!applied) return warn('Could not set shader color ${tag}.${property}.');
-    shaderColors.set('${tag}:${property}', channels);
-    return true;
-  }
-
-  public function tweenShaderProperty(tag:String, property:String, from:Null<Float>, to:Float, duration:Float, ease:String):Bool
-  {
-    if (!shaders.hasShader(tag)) return warn('Shader tag not found: ${tag}');
-    final valueKey = '${tag}:${property}';
-    final tweenKey = valueKey;
-    final holder:Dynamic = {value: from ?? shaderValues.get(valueKey) ?? 1.0};
-    if (from != null && !setShaderProperty(tag, property, from)) return false;
-    shaderTweens.get(tweenKey)?.cancel();
-    final tween = FlxTween.tween(holder, {value: to}, Math.max(0, duration), {
-      ease: resolveEase(ease),
-      onUpdate: function(_)
-      {
-        shaders.setFloat(tag, property, holder.value);
-        shaderValues.set(valueKey, holder.value);
-      },
-      onComplete: function(_)
-      {
-        shaderValues.set(valueKey, to);
-        shaderTweens.remove(tweenKey);
-      }
-    });
-    shaderTweens.set(tweenKey, tween);
-    return true;
-  }
-
-  public function tweenShaderPosition(tag:String, property:String, fromX:Null<Float>, fromY:Null<Float>, toX:Float, toY:Float, duration:Float,
-      ease:String):Bool
-  {
-    if (!shaders.hasShader(tag)) return warn('Shader tag not found: ${tag}');
-    final valueKey = '${tag}:${property}';
-    final tweenKey = valueKey;
-    final previous = shaderPositions.get(valueKey) ?? [0.0, 0.0];
-    final holder:Dynamic = {x: fromX ?? previous[0], y: fromY ?? previous[1]};
-    if ((fromX != null || fromY != null) && !setShaderPosition(tag, property, holder.x, holder.y)) return false;
-    shaderTweens.get(tweenKey)?.cancel();
-    final tween = FlxTween.tween(holder, {x: toX, y: toY}, Math.max(0, duration), {
-      ease: resolveEase(ease),
-      onUpdate: function(_)
-      {
-        shaders.setFloatArray(tag, property, [holder.x, holder.y]);
-        shaderPositions.set(valueKey, [holder.x, holder.y]);
-      },
-      onComplete: function(_)
-      {
-        shaderPositions.set(valueKey, [toX, toY]);
-        shaderTweens.remove(tweenKey);
-      }
-    });
-    shaderTweens.set(tweenKey, tween);
-    return true;
-  }
-
-  public function tweenShaderInteger(tag:String, property:String, from:Null<Float>, to:Int, duration:Float, ease:String):Bool
-  {
-    if (!shaders.hasShader(tag)) return warn('Shader tag not found: ${tag}');
-    final valueKey = '${tag}:${property}';
-    final tweenKey = valueKey;
-    final holder:Dynamic = {value: from ?? shaderValues.get(valueKey) ?? 0};
-    if (from != null && !setShaderInteger(tag, property, Math.round(from))) return false;
-    shaderTweens.get(tweenKey)?.cancel();
-    final tween = FlxTween.tween(holder, {value: to}, Math.max(0, duration), {
-      ease: resolveEase(ease),
-      onUpdate: function(_)
-      {
-        final rounded = Math.round(holder.value);
-        shaders.setInt(tag, property, rounded);
-        shaderValues.set(valueKey, rounded);
-      },
-      onComplete: function(_)
-      {
-        shaderValues.set(valueKey, to);
-        shaderTweens.remove(tweenKey);
-      }
-    });
-    shaderTweens.set(tweenKey, tween);
-    return true;
-  }
-
-  public function tweenShaderColor(tag:String, property:String, from:Dynamic, to:Dynamic, duration:Float, ease:String):Bool
-  {
-    if (!shaders.hasShader(tag)) return warn('Shader tag not found: ${tag}');
-    final valueKey = '${tag}:${property}';
-    final tweenKey = valueKey;
-    final previous = shaderColors.get(valueKey) ?? colorChannels(FlxColor.WHITE);
-    final start = from == null ? previous : colorChannels(parseColor(from, FlxColor.WHITE));
-    final finish = colorChannels(parseColor(to, FlxColor.WHITE));
-    final holder:Dynamic = {r: start[0], g: start[1], b: start[2], a: start[3]};
-    if (from != null && !setShaderColor(tag, property, from)) return false;
-    shaderTweens.get(tweenKey)?.cancel();
-    final tween = FlxTween.tween(holder, {r: finish[0], g: finish[1], b: finish[2], a: finish[3]}, Math.max(0, duration), {
-      ease: resolveEase(ease),
-      onUpdate: function(_)
-      {
-        final channels = [holder.r, holder.g, holder.b, holder.a];
-        final color = FlxColor.fromRGBFloat(channels[0], channels[1], channels[2], channels[3]);
-        final builtInColorApplied = shaders.setColor(tag, property, color);
-        if (!builtInColorApplied && property == 'color')
-        {
-          shaders.setFloat(tag, 'colorRed', channels[0]);
-          shaders.setFloat(tag, 'colorGreen', channels[1]);
-          shaders.setFloat(tag, 'colorBlue', channels[2]);
-          shaders.setFloat(tag, 'colorAlpha', channels[3]);
-        }
-        else if (!builtInColorApplied)
-          shaders.setFloatArray(tag, property, channels.slice(0, 3));
-        shaderColors.set(valueKey, channels);
-      },
-      onComplete: function(_)
-      {
-        shaderColors.set(valueKey, finish);
-        shaderTweens.remove(tweenKey);
-      }
-    });
-    shaderTweens.set(tweenKey, tween);
-    return true;
-  }
-
   public function showDialogue(id:String, fadeOut:Float, dialogueVolume:Float, fadeIn:Float, pauseGameplay:Bool, keepHud:Bool):Bool
   {
     final state = PlayState.instance;
@@ -764,8 +427,22 @@ class LuaSliceSongEventRuntime
         music?.pause();
         state.vocals?.pause();
       }
-      state.startConversation(id, function()
+      state.startConversation(id);
+      final conversation = state.currentConversation;
+      if (conversation == null)
       {
+        if (!keepHud) state.camHUD.visible = oldHudVisible;
+        if (pauseGameplay)
+        {
+          music?.resume();
+          state.vocals?.resume();
+        }
+        return;
+      }
+      final originalComplete = conversation.completeCallback;
+      conversation.completeCallback = function()
+      {
+        if (originalComplete != null) originalComplete();
         if (destroyed || PlayState.instance != state) return;
         if (!keepHud) state.camHUD.visible = oldHudVisible;
         if (pauseGameplay)
@@ -781,7 +458,7 @@ class LuaSliceSongEventRuntime
         dialogueOriginalHudVisible = null;
         dialoguePausedGameplay = false;
         preloaded.remove('dialogue:${id}');
-      });
+      };
     };
 
     if (music != null && fadeOut > 0)
@@ -912,10 +589,11 @@ class LuaSliceSongEventRuntime
     if (state == null) return;
     switch (target)
     {
-      case 'hud': state.camHUD.alpha = opacity;
+      case 'hud':
+        if (state.camHUD != null) state.camHUD.alpha = opacity;
       case 'healthbar':
-        state.healthBar.alpha = opacity;
-        state.healthBarBG.alpha = opacity;
+        if (state.healthBar != null) state.healthBar.alpha = opacity;
+        if (state.healthBarBG != null) state.healthBarBG.alpha = opacity;
         final scoreText:Dynamic = Reflect.field(state, 'scoreText');
         if (scoreText != null) Reflect.setProperty(scoreText, 'alpha', opacity);
       case 'icons':
@@ -929,16 +607,19 @@ class LuaSliceSongEventRuntime
       case 'playernotes': applyStrumlineNotesAlpha(state.playerStrumline, opacity);
       case 'opponentnotes': applyStrumlineNotesAlpha(state.opponentStrumline, opacity);
       case 'receptors':
-        applyGroupAlpha(state.playerStrumline.strumlineNotes, opacity);
-        applyGroupAlpha(state.opponentStrumline.strumlineNotes, opacity);
-      case 'playerreceptors': applyGroupAlpha(state.playerStrumline.strumlineNotes, opacity);
-      case 'opponentreceptors': applyGroupAlpha(state.opponentStrumline.strumlineNotes, opacity);
+        if (state.playerStrumline != null) applyGroupAlpha(state.playerStrumline.strumlineNotes, opacity);
+        if (state.opponentStrumline != null) applyGroupAlpha(state.opponentStrumline.strumlineNotes, opacity);
+      case 'playerreceptors':
+        if (state.playerStrumline != null) applyGroupAlpha(state.playerStrumline.strumlineNotes, opacity);
+      case 'opponentreceptors':
+        if (state.opponentStrumline != null) applyGroupAlpha(state.opponentStrumline.strumlineNotes, opacity);
       default:
     }
   }
 
   function applyStrumlineNotesAlpha(strumline:funkin.play.notes.Strumline, opacity:Float):Void
   {
+    if (strumline == null) return;
     applyGroupAlpha(strumline.notes, opacity);
     applyGroupAlpha(strumline.holdNotes, opacity);
     applyGroupAlpha(strumline.noteHoldCovers, opacity);
@@ -1020,7 +701,6 @@ class LuaSliceSongEventRuntime
   public function updatePersistentEffects(elapsed:Float):Void
   {
     preloadUpcomingEvents(Conductor.instance.songPosition);
-    shaders.update(elapsed);
     for (target in hudFadeValues.keys()) applyHudFadeValue(target, hudFadeValues.get(target));
     final state = PlayState.instance;
     if (state != null && !state.isInCutscene && healthDrainAmount > 0 && elapsed > 0)
@@ -1179,7 +859,6 @@ class LuaSliceSongEventRuntime
   {
     for (tween in soundTweens) pauseEventTween(tween);
     for (tween in overlayTweens) pauseEventTween(tween);
-    for (tween in shaderTweens) pauseEventTween(tween);
     for (tween in visualTweens) pauseEventTween(tween);
     pauseEventTween(dialogueTween);
     for (timer in timers) pauseEventTimer(timer);
@@ -1230,11 +909,6 @@ class LuaSliceSongEventRuntime
     }
     overlays.clear();
     overlayAtlases.clear();
-    for (tween in shaderTweens) tween?.cancel();
-    shaderTweens.clear();
-    shaderValues.clear();
-    shaderPositions.clear();
-    shaderColors.clear();
     for (tween in hudFadeTweens) tween?.cancel();
     hudFadeTweens.clear();
     hudFadeValues.clear();
@@ -1247,11 +921,11 @@ class LuaSliceSongEventRuntime
     visualTweens.resize(0);
     pausedEventTweens.resize(0);
     pausedEventTimers.resize(0);
-    shaders.clear();
     preloaded.clear();
     chartEvents = [];
     nextPreloadEventIndex = 0;
     lastPreloadPosition = Math.NEGATIVE_INFINITY;
+    knownEventsPreloaded = false;
   }
 
   public function resetEffects():Void
@@ -1264,7 +938,7 @@ class LuaSliceSongEventRuntime
     if (state == null) return;
 
     if (oldMusicVolume != null && FlxG.sound.music != null) FlxG.sound.music.volume = oldMusicVolume;
-    if (oldHudVisible != null) state.camHUD.visible = oldHudVisible;
+    if (oldHudVisible != null && state.camHUD != null) state.camHUD.visible = oldHudVisible;
     if (resumeGameplay)
     {
       FlxG.sound.music?.resume();
@@ -1287,16 +961,26 @@ class LuaSliceSongEventRuntime
       }
     }
 
-    state.camGame.stopFX();
-    state.camHUD.stopFX();
-    state.camCutscene.stopFX();
-    state.playerStrumline.alpha = 1;
-    state.opponentStrumline.alpha = 1;
+    state.camGame?.stopFX();
+    state.camHUD?.stopFX();
+    state.camCutscene?.stopFX();
     for (target in ['hud', 'healthbar', 'playericons', 'opponenticons', 'playernotes', 'opponentnotes', 'playerreceptors', 'opponentreceptors'])
       applyHudFadeValue(target, 1);
+    if (state.playerStrumline != null)
+    {
+      state.playerStrumline.alpha = 1;
+    }
+    final opponentAlpha:Float = Preferences.shouldUseMiddleScroll() ? 0.9 : 1;
+    if (state.opponentStrumline != null)
+    {
+      state.opponentStrumline.alpha = opponentAlpha;
+    }
+    applyHudFadeValue('opponentnotes', opponentAlpha);
+    applyHudFadeValue('opponentreceptors', opponentAlpha);
     state.cancelScrollSpeedTweens();
-    state.playerStrumline.resetScrollSpeed();
-    state.opponentStrumline.resetScrollSpeed();
+    state.playerStrumline?.resetScrollSpeed();
+    state.opponentStrumline?.resetScrollSpeed();
+    destroyed = false;
   }
 
   static function resolveAsset(resource:String, fallback:String):Null<String>
@@ -1419,12 +1103,6 @@ class LuaSliceSongEventRuntime
     return normalized.contains('/videos/') || normalized.contains('/cutscenes/') || ['mp4', 'webm', 'mov', 'mkv', 'avi'].contains(extension);
   }
 
-  static function shaderClassName(value:String):String
-  {
-    if (value == null) return '';
-    return Path.withoutExtension(Path.withoutDirectory(value));
-  }
-
   public static function resolveCamera(name:String):Null<FlxCamera>
   {
     final state = PlayState.instance;
@@ -1479,11 +1157,6 @@ class LuaSliceSongEventRuntime
     }
     final parsed = FlxColor.fromString(normalized);
     return parsed ?? fallback;
-  }
-
-  static function colorChannels(color:FlxColor):Array<Float>
-  {
-    return [color.red / 255, color.green / 255, color.blue / 255, color.alpha / 255];
   }
 
   static function parseBlendMode(value:String):BlendMode

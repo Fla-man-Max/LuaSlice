@@ -8,10 +8,21 @@
       ]
     },
     {
-      "header": "LuaSlice Engine",
+      "header": "LuaSlice Engine Team",
       "body": [
-        { "line": "A AWSOME Engine created by" },
-        { "line": "Fla-man_OFFICAL" }
+        { "line": "An AWESOME Engine created by" },
+        { "line": "Fla-man_OFFICAL" },
+        { "line": "That0neidiot" },
+        { "line": "Len_TM" },
+        { "line": "Franklin_Clinton" }
+      ]
+    },
+    {
+      "header": "Playtesters (LuaSlice Engine)",
+      "body": [
+        { "line": "gabrigameyt" },
+        { "line": "gameboy1080p" },
+        { "line": "Brenninho" }
       ]
     },
     {

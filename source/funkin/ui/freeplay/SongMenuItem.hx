@@ -49,34 +49,25 @@ class SongMenuItem extends FlxSpriteGroup
 
   public var favIconBlurred:FlxSprite;
   public var favIcon:FlxSprite;
-
   public var ranking:FreeplayRank;
   public var blurredRanking:FreeplayRank;
-
   public var fakeRanking:FreeplayRank;
   public var fakeBlurredRanking:FreeplayRank;
-
   public var targetPos:FlxPoint = new FlxPoint();
   public var doLerp:Bool = false;
   public var doJumpIn:Bool = false;
-
   public var doJumpOut:Bool = false;
-
   public var onConfirm:Void->Void;
   public var grayscaleShader:Grayscale;
-
   public var hsvShader(default, set):HSVShader;
-
   // var diffRatingSprite:FlxSprite;
   public var bpmText:FlxSprite;
   public var difficultyText:FlxSprite;
   public var weekText:FunkinSprite;
-
   public var newText:FlxSprite;
 
   var difficultyNumbers:Array<CapsuleNumber> = []; // referred to as "bignumbers" in the .fla file!
   var bpmNumbers:Array<CapsuleNumber> = []; // referred to as "smallnumbers" in the .fla file!
-
   var impactThing:FunkinSprite;
 
   public var sparkle:FlxSprite;
@@ -100,32 +91,12 @@ class SongMenuItem extends FlxSpriteGroup
     // capsule.animation
     add(capsule);
 
-    bpmText = new FlxSprite(144, 87);
-    if (Preferences.isLowQualityMinimal())
-    {
-      bpmText.makeGraphic(1, 1, FlxColor.TRANSPARENT);
-      bpmText.visible = false;
-      bpmText.active = false;
-    }
-    else
-    {
-      bpmText.loadGraphic(Paths.image('freeplay/freeplayCapsule/bpmtext'));
-      bpmText.setGraphicSize(Std.int(bpmText.width * 0.9));
-    }
+    bpmText = new FlxSprite(144, 87).loadGraphic(Paths.image('freeplay/freeplayCapsule/bpmtext'));
+    bpmText.setGraphicSize(Std.int(bpmText.width * 0.9));
     add(bpmText);
 
-    difficultyText = new FlxSprite(414, 87);
-    if (Preferences.isLowQualityMinimal())
-    {
-      difficultyText.makeGraphic(1, 1, FlxColor.TRANSPARENT);
-      difficultyText.visible = false;
-      difficultyText.active = false;
-    }
-    else
-    {
-      difficultyText.loadGraphic(Paths.image('freeplay/freeplayCapsule/difficultytext'));
-      difficultyText.setGraphicSize(Std.int(difficultyText.width * 0.9));
-    }
+    difficultyText = new FlxSprite(414, 87).loadGraphic(Paths.image('freeplay/freeplayCapsule/difficultytext'));
+    difficultyText.setGraphicSize(Std.int(difficultyText.width * 0.9));
     add(difficultyText);
 
     weekText = new FunkinSprite(291, 88);
@@ -257,6 +228,7 @@ class SongMenuItem extends FlxSpriteGroup
 
   function sparkleEffect(timer:FlxTimer):Void
   {
+    if (Preferences.isLowQualityMinimal()) return;
     sparkle.setPosition(FlxG.random.float(ranking.x - 20, ranking.x + 3), FlxG.random.float(ranking.y - 29, ranking.y + 4));
     sparkle.animation.play('sparkle', true);
     sparkleTimer = new FlxTimer().start(FlxG.random.float(1.2, 4.5), sparkleEffect);
@@ -264,13 +236,6 @@ class SongMenuItem extends FlxSpriteGroup
 
   function checkWeek():Void
   {
-    if (Preferences.isLowQualityMinimal())
-    {
-      weekText.visible = false;
-      weekText.active = false;
-      return;
-    }
-
     weekText.offset.set(0, 0);
 
     if (this.freeplayData?.levelId == null)
@@ -284,7 +249,7 @@ class SongMenuItem extends FlxSpriteGroup
 
     var levelId:String = this.freeplayData.levelId;
     var levelIdData:Level = LevelRegistry.instance.fetchEntry(levelId);
-    var levelIdClean:String = "";
+    var levelIdClean:String = '';
 
     if (levelIdData.getCapsuleTitle() != null)
     {
@@ -306,9 +271,9 @@ class SongMenuItem extends FlxSpriteGroup
         var previousChar:String = levelId.charAt(i - 1);
         var currentChar:String = levelId.charAt(i);
 
-        if (previousChar.toLowerCase() == previousChar && currentChar.toLowerCase() != currentChar) levelIdClean += " ";
-        if (Std.parseInt(previousChar) == null && Std.parseInt(currentChar) != null) levelIdClean += " ";
-        if (Std.parseInt(previousChar) != null && Std.parseInt(currentChar) == null) levelIdClean += " ";
+        if (previousChar.toLowerCase() == previousChar && currentChar.toLowerCase() != currentChar) levelIdClean += ' ';
+        if (Std.parseInt(previousChar) == null && Std.parseInt(currentChar) != null) levelIdClean += ' ';
+        if (Std.parseInt(previousChar) != null && Std.parseInt(currentChar) == null) levelIdClean += ' ';
 
         levelIdClean += currentChar;
       }
@@ -436,6 +401,7 @@ class SongMenuItem extends FlxSpriteGroup
 
   public function fadeAnim(?newRank:ScoringRank):Void
   {
+    if (Preferences.isLowQualityMinimal()) return;
     if (hasTrail) clearUpTrail();
     hasTrail = true;
     impactThing = new FunkinSprite(0, 0);
@@ -486,13 +452,10 @@ class SongMenuItem extends FlxSpriteGroup
     else
     {
       songText.text = freeplayData.fullSongName;
-      if (!Preferences.isLowQualityMinimal() && freeplayData.songCharacter != null) pixelIcon.setCharacter(freeplayData.songCharacter);
+      if (freeplayData.songCharacter != null) pixelIcon.setCharacter(freeplayData.songCharacter);
       if (pixelIcon.char != freeplayData.songCharacter) pixelIcon.visible = false;
-      if (!Preferences.isLowQualityMinimal())
-      {
-        updateBPM(Std.int(freeplayData.songStartingBpm) ?? 0);
-        updateDifficultyRating(freeplayData.difficultyRating ?? 0);
-      }
+      updateBPM(Std.int(freeplayData.songStartingBpm) ?? 0);
+      updateDifficultyRating(freeplayData.difficultyRating ?? 0);
       if (updateRank) updateScoringRank(freeplayData.scoringRank);
       newText.visible = freeplayData.isNew;
       favIcon.visible = freeplayData.isFav;
@@ -500,12 +463,29 @@ class SongMenuItem extends FlxSpriteGroup
       checkClip();
     }
     updateSelected();
-    applyPerformanceOptions();
+  }
+
+  function applyLowQualityVisibility():Void
+  {
+    if (Preferences.isLowQualityMinimal())
+    {
+      bpmText.visible = false;
+      pixelIcon.visible = false;
+      sparkle.visible = false;
+      for (number in bpmNumbers) number.visible = false;
+      songText.applyLowQualityMode();
+    }
+
+    if (Preferences.isLowQualityMax())
+    {
+      difficultyText.visible = false;
+      for (number in difficultyNumbers) number.visible = false;
+    }
   }
 
   function updateDifficultyRating(newRating:Int):Void
   {
-    var ratingPadded:String = newRating < 10 ? '0$newRating' : '$newRating';
+    // var ratingPadded:String = newRating < 10 ? '0$newRating' : '$newRating';
 
     for (i in 0...difficultyNumbers.length)
     {
@@ -538,7 +518,7 @@ class SongMenuItem extends FlxSpriteGroup
     this.ranking.rank = newRank;
     this.blurredRanking.rank = newRank;
 
-    if (newRank == PERFECT_GOLD)
+    if (newRank == PERFECT_GOLD && !Preferences.isLowQualityMinimal())
     {
       sparkleTimer = new FlxTimer().start(1, sparkleEffect);
       sparkle.visible = true;
@@ -556,6 +536,7 @@ class SongMenuItem extends FlxSpriteGroup
 
   function textAppear():Void
   {
+    if (Preferences.isLowQualityMinimal()) return;
     songText.scale.x = 1.7;
     songText.scale.y = 0.2;
 
@@ -563,11 +544,10 @@ class SongMenuItem extends FlxSpriteGroup
     {
       songText.scale.x = 0.4;
       songText.scale.y = 1.4;
-    });
-
-    new FlxTimer().start(2 / 24, function(_)
-    {
-      songText.scale.x = songText.scale.y = 1;
+      new FlxTimer().start(2 / 24, function(_)
+      {
+        songText.scale.x = songText.scale.y = 1;
+      });
     });
   }
 
@@ -578,8 +558,9 @@ class SongMenuItem extends FlxSpriteGroup
       spr.visible = value;
     }
 
+    textAppear();
+
     updateSelected();
-    applyPerformanceOptions();
   }
 
   public function initPosition(x:Float, y:Float):Void
@@ -588,7 +569,7 @@ class SongMenuItem extends FlxSpriteGroup
     this.y = y;
   }
 
-  public function initData(freeplayData:Null<FreeplaySongData>, ?styleData:FreeplayStyle = null, index:Int = null):Void
+  public function initData(freeplayData:Null<FreeplaySongData>, ?styleData:FreeplayStyle = null, ?index:Int):Void
   {
     this.freeplayData = freeplayData;
 
@@ -614,7 +595,7 @@ class SongMenuItem extends FlxSpriteGroup
     checkWeek();
   }
 
-  public function initRandom(?styleData:FreeplayStyle = null):Void
+  public function initRandom(?styleData:FreeplayStyle):Void
   {
     initPosition(FlxG.width, 0);
     initData(null, styleData, 1);
@@ -629,13 +610,33 @@ class SongMenuItem extends FlxSpriteGroup
 
   var frameInTicker:Float = 0;
   var frameInTypeBeat:Int = 0;
-
   var frameOutTicker:Float = 0;
   var frameOutTypeBeat:Int = 0;
-
-  var xFrames:Array<Float> = [1.7, 1.8, 0.85, 0.85, 0.97, 0.97, 1];
-  var xPosLerpLol:Array<Float> = [0, 0, 0.16, 0.16, 0.22, 0.22, 0.245]; // NUMBERS ARE JANK CUZ THE SCALING OR WHATEVER
-  var xPosOutLerpLol:Array<Float> = [0.245, 0.75, 0.98, 0.98, 1.2]; // NUMBERS ARE JANK CUZ THE SCALING OR WHATEVER
+  var xFrames:Array<Float> = [
+    1.7,
+    1.8,
+    0.85,
+    0.85,
+    0.97,
+    0.97,
+    1
+  ];
+  var xPosLerpLol:Array<Float> = [
+    0,
+    0,
+    0.16,
+    0.16,
+    0.22,
+    0.22,
+    0.245
+  ]; // NUMBERS ARE JANK CUZ THE SCALING OR WHATEVER
+  var xPosOutLerpLol:Array<Float> = [
+    0.245,
+    0.75,
+    0.98,
+    0.98,
+    1.2
+  ]; // NUMBERS ARE JANK CUZ THE SCALING OR WHATEVER
 
   public var realScaled:Float = 0.8;
 
@@ -707,7 +708,9 @@ class SongMenuItem extends FlxSpriteGroup
 
         capsule.scale.x = xFrames[frameInTypeBeat];
         capsule.scale.y = 1 / xFrames[frameInTypeBeat];
-        targetPos.x = FlxG.width * xPosLerpLol[Std.int(Math.min(frameInTypeBeat, xPosLerpLol.length - 1))];
+        targetPos.x = FlxG.width * xPosLerpLol[
+          Std.int(Math.min(frameInTypeBeat, xPosLerpLol.length - 1))
+        ];
         capsule.scale.x *= realScaled;
         capsule.scale.y *= realScaled;
 
@@ -734,7 +737,9 @@ class SongMenuItem extends FlxSpriteGroup
 
         capsule.scale.x = xFrames[frameOutTypeBeat];
         capsule.scale.y = 1 / xFrames[frameOutTypeBeat];
-        this.x = FlxG.width * xPosOutLerpLol[Std.int(Math.min(frameOutTypeBeat, xPosOutLerpLol.length - 1))];
+        this.x = FlxG.width * xPosOutLerpLol[
+          Std.int(Math.min(frameOutTypeBeat, xPosOutLerpLol.length - 1))
+        ];
 
         capsule.scale.x *= realScaled;
         capsule.scale.y *= realScaled;
@@ -759,30 +764,6 @@ class SongMenuItem extends FlxSpriteGroup
     super.update(elapsed);
   }
 
-  function applyPerformanceOptions():Void
-  {
-    if (!Preferences.isLowQualityMinimal()) return;
-
-    pixelIcon.visible = false;
-    pixelIcon.active = false;
-    bpmText.visible = false;
-    bpmText.active = false;
-    difficultyText.visible = false;
-    difficultyText.active = false;
-    weekText.visible = false;
-    weekText.active = false;
-    for (number in bpmNumbers)
-    {
-      number.visible = false;
-      number.active = false;
-    }
-    for (number in difficultyNumbers)
-    {
-      number.visible = false;
-      number.active = false;
-    }
-  }
-
   /**
    * Play any animations associated with selecting this song.
    */
@@ -791,7 +772,7 @@ class SongMenuItem extends FlxSpriteGroup
     if (songText != null)
     {
       textAppear();
-      songText.flickerText();
+      if (!Preferences.isLowQualityMinimal()) songText.flickerText();
     }
     if (pixelIcon != null && pixelIcon.visible)
     {
@@ -835,9 +816,9 @@ class SongMenuItem extends FlxSpriteGroup
 
     grayscaleShader.setAmount(isSelected ? 0 : 0.8);
     songText.alpha = isSelected ? 1 : 0.6;
-    songText.blurredText.visible = isSelected ? true : false;
+    songText.blurredText.visible = !Preferences.isLowQualityMinimal() && isSelected;
     capsule.offset.x = isSelected ? 0 : -5;
-    capsule.animation.play(isSelected ? "selected" : "unselected");
+    capsule.animation.play(isSelected ? 'selected' : 'unselected');
     ranking.alpha = isSelected ? 1 : 0.7;
     favIcon.alpha = isSelected ? 1 : 0.6;
     favIconBlurred.alpha = isSelected ? 1 : 0;
@@ -846,9 +827,10 @@ class SongMenuItem extends FlxSpriteGroup
     if (songText.tooLong) songText.resetText();
 
     if (selected && songText.tooLong) songText.initMove();
+    applyLowQualityVisibility();
   }
 
-  public override function kill():Void
+  override public function kill():Void
   {
     super.kill();
 
@@ -938,8 +920,6 @@ class CapsuleNumber extends FlxSprite
 
   function set_digit(val):Int
   {
-    if (Preferences.isLowQualityMinimal()) return val;
-
     animation.play(numToString[val], true, false, 0);
 
     centerOffsets(false);
@@ -966,19 +946,22 @@ class CapsuleNumber extends FlxSprite
   public var baseY:Float = 0;
   public var baseX:Float = 0;
 
-  var numToString:Array<String> = ["ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
+  var numToString:Array<String> = [
+    'ZERO',
+    'ONE',
+    'TWO',
+    'THREE',
+    'FOUR',
+    'FIVE',
+    'SIX',
+    'SEVEN',
+    'EIGHT',
+    'NINE'
+  ];
 
   public function new(x:Float, y:Float, big:Bool = false, ?initDigit:Int = 0)
   {
     super(x, y);
-
-    if (Preferences.isLowQualityMinimal())
-    {
-      makeGraphic(1, 1, FlxColor.TRANSPARENT);
-      visible = false;
-      active = false;
-      return;
-    }
 
     if (big)
     {

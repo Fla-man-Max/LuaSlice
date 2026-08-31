@@ -39,7 +39,7 @@ class ScrollSpeedEvent extends SongEvent
   static final DEFAULT_ABSOLUTE:Bool = false;
   static final DEFAULT_STRUMLINE:String = 'both'; // my special little trick
 
-  public override function handleEvent(data:SongEventData):Void
+  override public function handleEvent(data:SongEventData):Void
   {
     // Does nothing if there is no PlayState.
     if (PlayState.instance == null) return;
@@ -51,12 +51,11 @@ class ScrollSpeedEvent extends SongEvent
     var ease:String = data.getString('ease') ?? SongEvent.DEFAULT_EASE;
     var easeDir:String = data.getString('easeDir') ?? SongEvent.DEFAULT_EASE_DIR;
 
-    if (SongEvent.EASE_TYPE_DIR_REGEX.match(ease) || ease == "linear") easeDir = "";
+    if (SongEvent.EASE_TYPE_DIR_REGEX.match(ease) || ease == 'linear') easeDir = '';
 
     var strumline:String = data.getString('strumline') ?? DEFAULT_STRUMLINE;
 
     var absolute:Bool = data.getBool('absolute') ?? DEFAULT_ABSOLUTE;
-    var returnToOriginal:Bool = data.getBool('returnToOriginal') ?? false;
 
     var strumlineNames:Array<String> = [];
 
@@ -79,7 +78,7 @@ class ScrollSpeedEvent extends SongEvent
       case 'INSTANT':
         PlayState.instance.tweenScrollSpeed(scroll, 0, null, strumlineNames);
       default:
-        var durSeconds = Conductor.instance.stepLengthMs * duration / 1000;
+        var durSeconds = Conductor.instance.stepLengthMs * duration / Constants.MS_PER_SEC;
         var easeFunctionName = '$ease$easeDir';
         var easeFunction:Null<Float->Float> = Reflect.field(FlxEase, easeFunctionName);
         if (easeFunction == null)
@@ -89,22 +88,10 @@ class ScrollSpeedEvent extends SongEvent
         }
 
         PlayState.instance.tweenScrollSpeed(scroll, durSeconds, easeFunction, strumlineNames);
-        if (returnToOriginal)
-        {
-          final originalSpeed:Float = switch (strumline)
-          {
-            case 'opponent': PlayState.instance.opponentStrumline.scrollSpeed;
-            default: PlayState.instance.playerStrumline.scrollSpeed;
-          };
-          PlayState.instance.songEventRuntime?.schedule(durSeconds / PlayState.instance.playbackRate, function()
-          {
-            PlayState.instance?.tweenScrollSpeed(originalSpeed, durSeconds, easeFunction, strumlineNames);
-          });
-        }
     }
   }
 
-  public override function getTitle():String
+  override public function getTitle():String
   {
     return 'Scroll Speed';
   }
@@ -121,58 +108,77 @@ class ScrollSpeedEvent extends SongEvent
    * }
    * @return SongEventSchema
    */
-  public override function getEventSchema():SongEventSchema
+  override public function getEventSchema():SongEventSchema
   {
-    return new SongEventSchema([{
-      name: 'scroll',
-      title: 'Target Value',
-      defaultValue: DEFAULT_SCROLL,
-      min: 0.1,
-      step: 0.1,
-      type: SongEventFieldType.FLOAT,
-      units: 'x'
-    }, {
-      name: 'duration',
-      title: 'Duration',
-      defaultValue: DEFAULT_DURATION,
-      min: 0,
-      step: 0.5,
-      type: SongEventFieldType.FLOAT,
-      units: 'steps'
-    }, {
-      name: 'ease',
-      title: 'Easing Type',
-      defaultValue: SongEvent.DEFAULT_EASE,
-      type: SongEventFieldType.ENUM,
-      keys: ['Linear' => 'linear', 'Instant (Ignores duration)' => 'INSTANT', 'Sine' => 'sine', 'Quad' => 'quad', 'Cube' => 'cube', 'Quart' => 'quart', 'Quint' => 'quint', 'Expo' => 'expo', 'Smooth Step' => 'smoothStep', 'Smoother Step' => 'smootherStep', 'Elastic' => 'elastic', 'Back' => 'back', 'Bounce' => 'bounce', 'Circ ' => 'circ',]
-    }, {
-      name: 'easeDir',
-      title: 'Easing Direction',
-      defaultValue: SongEvent.DEFAULT_EASE_DIR,
-      type: SongEventFieldType.ENUM,
-      keys: ['In' => 'In', 'Out' => 'Out', 'In/Out' => 'InOut']
-    }, {
-      name: 'advanced',
-      title: 'Advanced',
-      type: SongEventFieldType.FRAME,
-      collapsible: true,
-      children: [{
-        name: 'strumline',
-        title: 'Target Strumline',
-        defaultValue: DEFAULT_STRUMLINE,
+    return new SongEventSchema([
+      {
+        name: 'scroll',
+        title: 'Target Value',
+        defaultValue: DEFAULT_SCROLL,
+        min: 0.1,
+        step: 0.1,
+        type: SongEventFieldType.FLOAT,
+        units: 'x'
+      },
+      {
+        name: 'duration',
+        title: 'Duration',
+        defaultValue: DEFAULT_DURATION,
+        min: 0,
+        step: 0.5,
+        type: SongEventFieldType.FLOAT,
+        units: 'steps'
+      },
+      {
+        name: 'ease',
+        title: 'Easing Type',
+        defaultValue: SongEvent.DEFAULT_EASE,
         type: SongEventFieldType.ENUM,
-        keys: ['Both' => 'both', 'Player' => 'player', 'Opponent' => 'opponent']
-      }, {
-        name: 'absolute',
-        title: 'Absolute',
-        defaultValue: DEFAULT_ABSOLUTE,
-        type: SongEventFieldType.BOOL,
-      }, {
-        name: 'returnToOriginal',
-        title: 'Return to Original Speed',
-        defaultValue: false,
-        type: SongEventFieldType.BOOL,
-      }]
-    }]);
+        keys: [
+          'Linear' => 'linear',
+          'Instant (Ignores duration)' => 'INSTANT',
+          'Sine' => 'sine',
+          'Quad' => 'quad',
+          'Cube' => 'cube',
+          'Quart' => 'quart',
+          'Quint' => 'quint',
+          'Expo' => 'expo',
+          'Smooth Step' => 'smoothStep',
+          'Smoother Step' => 'smootherStep',
+          'Elastic' => 'elastic',
+          'Back' => 'back',
+          'Bounce' => 'bounce',
+          'Circ ' => 'circ',
+        ]
+      },
+      {
+        name: 'easeDir',
+        title: 'Easing Direction',
+        defaultValue: SongEvent.DEFAULT_EASE_DIR,
+        type: SongEventFieldType.ENUM,
+        keys: ['In' => 'In', 'Out' => 'Out', 'In/Out' => 'InOut']
+      },
+      {
+        name: 'advanced',
+        title: 'Advanced',
+        type: SongEventFieldType.FRAME,
+        collapsible: true,
+        children: [
+          {
+            name: 'strumline',
+            title: 'Target Strumline',
+            defaultValue: DEFAULT_STRUMLINE,
+            type: SongEventFieldType.ENUM,
+            keys: ['Both' => 'both', 'Player' => 'player', 'Opponent' => 'opponent']
+          },
+          {
+            name: 'absolute',
+            title: 'Absolute',
+            defaultValue: DEFAULT_ABSOLUTE,
+            type: SongEventFieldType.BOOL,
+          }
+        ]
+      }
+    ]);
   }
 }

@@ -10,7 +10,7 @@ class DataAssets
 
   public static function listDataFilesInPath(path:String, suffix:String = '.json'):Array<String>
   {
-    var textAssets = openfl.utils.Assets.list(TEXT);
+    var textAssets = ResourceCache.list(TEXT);
 
     var queryPath = buildDataPath(path);
 

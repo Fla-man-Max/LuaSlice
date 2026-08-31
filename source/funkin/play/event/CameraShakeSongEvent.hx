@@ -35,3 +35,5 @@ class CameraShakeSongEvent extends SongEvent
     name: 'vertical', title: 'Vertical Strength', defaultValue: 1.0, min: 0, step: 0.1, type: SongEventFieldType.FLOAT
   }]);
 }
+
+

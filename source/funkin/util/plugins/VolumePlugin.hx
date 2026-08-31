@@ -13,12 +13,15 @@ class VolumePlugin extends FlxBasic
     super();
   }
 
-  public static function initialize()
+  /**
+   * Initialize the plugin.
+   */
+  public static function initialize():Void
   {
     FlxG.plugins.addPlugin(new VolumePlugin());
   }
 
-  public override function update(elapsed:Float):Void
+  override public function update(elapsed:Float):Void
   {
     super.update(elapsed);
 
@@ -26,13 +29,10 @@ class VolumePlugin extends FlxBasic
 
     if (!isHaxeUIFocused)
     {
-      final player = PlayerSettings.get(1);
-      if (player == null) return;
-
       // Rebindable volume keys.
-      if (player.controls.VOLUME_MUTE) FlxG.sound.toggleMuted();
-      else if (player.controls.VOLUME_UP) FlxG.sound.changeVolume(0.1);
-      else if (player.controls.VOLUME_DOWN) FlxG.sound.changeVolume(-0.1);
+      if (PlayerSettings.player1.controls.VOLUME_MUTE) FlxG.sound.toggleMuted();
+      else if (PlayerSettings.player1.controls.VOLUME_UP) FlxG.sound.changeVolume(0.1);
+      else if (PlayerSettings.player1.controls.VOLUME_DOWN) FlxG.sound.changeVolume(-0.1);
     }
   }
 

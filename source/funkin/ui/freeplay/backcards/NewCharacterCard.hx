@@ -21,8 +21,6 @@ class NewCharacterCard extends BackingCard
   var yellow:FlxSprite;
   var multiplyBar:FlxSprite;
 
-  var bruh:FlxSprite;
-
   public var friendFoe:BGScrollingText;
   public var newUnlock1:BGScrollingText;
   public var waiting:BGScrollingText;
@@ -30,7 +28,7 @@ class NewCharacterCard extends BackingCard
   public var friendFoe2:BGScrollingText;
   public var newUnlock3:BGScrollingText;
 
-  public override function applyExitMovers(?exitMovers:FreeplayState.ExitMoverData, ?exitMoversCharSel:FreeplayState.ExitMoverData):Void
+  override public function applyExitMovers(?exitMovers:FreeplayState.ExitMoverData, ?exitMoversCharSel:FreeplayState.ExitMoverData):Void
   {
     super.applyExitMovers(exitMovers, exitMoversCharSel);
     if (exitMovers == null || exitMoversCharSel == null) return;
@@ -61,14 +59,22 @@ class NewCharacterCard extends BackingCard
       speed: 0.3
     });
 
-    exitMoversCharSel.set([friendFoe, newUnlock1, waiting, newUnlock2, friendFoe2, newUnlock3, multiplyBar], {
+    exitMoversCharSel.set([
+      friendFoe,
+      newUnlock1,
+      waiting,
+      newUnlock2,
+      friendFoe2,
+      newUnlock3,
+      multiplyBar
+    ], {
       y: -60,
       speed: 0.8,
       wait: 0.1
     });
   }
 
-  public override function introDone():Void
+  override public function introDone():Void
   {
     // pinkBack.color = 0xFFFFD863;
 
@@ -88,10 +94,10 @@ class NewCharacterCard extends BackingCard
     lightLayer3.visible = true;
 
     cardGlow.visible = true;
-    FlxTween.tween(cardGlow, {alpha: 0, "scale.x": 1.2, "scale.y": 1.2}, 0.45, {ease: FlxEase.sineOut});
+    FlxTween.tween(cardGlow, {alpha: 0, 'scale.x': 1.2, 'scale.y': 1.2}, 0.45, {ease: FlxEase.sineOut});
   }
 
-  public override function enterCharSel():Void
+  override public function enterCharSel():Void
   {
     FlxTween.tween(friendFoe, {speed: 0}, 0.8, {ease: FlxEase.sineIn});
     FlxTween.tween(newUnlock1, {speed: 0}, 0.8, {ease: FlxEase.sineIn});
@@ -101,7 +107,7 @@ class NewCharacterCard extends BackingCard
     FlxTween.tween(newUnlock3, {speed: 0}, 0.8, {ease: FlxEase.sineIn});
   }
 
-  public override function onCreate(event:ScriptEvent):Void
+  override public function onCreate(event:ScriptEvent):Void
   {
     FlxTween.tween(pinkBack, {x: 0}, 0.6, {ease: FlxEase.quartOut});
     add(pinkBack);
@@ -114,15 +120,14 @@ class NewCharacterCard extends BackingCard
     confirmGlow.visible = false;
     confirmGlow2.visible = false;
 
-    friendFoe = new BGScrollingText(0, 163, "COULD IT BE A NEW FRIEND? OR FOE??", FlxG.width, true, 43);
+    friendFoe = new BGScrollingText(0, 163, 'COULD IT BE A NEW FRIEND? OR FOE??', FlxG.width, true, 43);
     newUnlock1 = new BGScrollingText(-440, 215, 'NEW UNLOCK!', FlxG.width / 2, true, 80);
     waiting = new BGScrollingText(0, 286, "SOMEONE'S WAITING!", FlxG.width / 2, true, 43);
     newUnlock2 = new BGScrollingText(-220, 331, 'NEW UNLOCK!', FlxG.width / 2, true, 80);
     friendFoe2 = new BGScrollingText(0, 402, 'COULD IT BE A NEW FRIEND? OR FOE??', FlxG.width, true, 43);
     newUnlock3 = new BGScrollingText(0, 458, 'NEW UNLOCK!', FlxG.width / 2, true, 80);
 
-    var bitmap = BitmapUtil.scalePartByWidth(BackingCard.safeBitmapData(Paths.image('freeplay/backingCards/newCharacter/darkback'), 32, 32, 0xFF000000),
-      FreeplayState.CUTOUT_WIDTH);
+    var bitmap = BitmapUtil.scalePartByWidth(Assets.getBitmapData(Paths.image('freeplay/backingCards/newCharacter/darkback')), FreeplayState.CUTOUT_WIDTH);
     darkBg = new FlxSprite(0, 0).loadGraphic(bitmap);
     add(darkBg);
 
@@ -150,19 +155,17 @@ class NewCharacterCard extends BackingCard
     newUnlock3.speed = 2;
     add(newUnlock3);
 
-    var bitmap = BitmapUtil.scalePartByWidth(BackingCard.safeBitmapData(Paths.image('freeplay/backingCards/newCharacter/multiplyBar'), 32, 32, 0xFFFFFFFF),
-      FreeplayState.CUTOUT_WIDTH);
+    var bitmap = BitmapUtil.scalePartByWidth(Assets.getBitmapData(Paths.image('freeplay/backingCards/newCharacter/multiplyBar')), FreeplayState.CUTOUT_WIDTH);
     multiplyBar = new FlxSprite(-10, 440).loadGraphic(bitmap);
     multiplyBar.blend = BlendMode.MULTIPLY;
     add(multiplyBar);
 
-    lightLayer = BackingCard.loadBackcardSprite((FreeplayState.CUTOUT_WIDTH * FreeplayState.DJ_POS_MULTI) + -360, 230,
-      'freeplay/backingCards/newCharacter/orange gradient', 32, 32, 0x00FFFFFF);
+    lightLayer = new FlxSprite((FreeplayState.CUTOUT_WIDTH * FreeplayState.DJ_POS_MULTI) + -360,
+      230).loadGraphic(Paths.image('freeplay/backingCards/newCharacter/orange gradient'));
     lightLayer.blend = BlendMode.ADD;
     add(lightLayer);
 
-    var bitmap = BitmapUtil.scalePartByWidth(BackingCard.safeBitmapData(Paths.image('freeplay/backingCards/newCharacter/red'), 32, 32, 0xFFFF0000),
-      FreeplayState.CUTOUT_WIDTH);
+    var bitmap = BitmapUtil.scalePartByWidth(Assets.getBitmapData(Paths.image('freeplay/backingCards/newCharacter/red')), FreeplayState.CUTOUT_WIDTH);
     multiply1 = new FlxSprite(-15, -125).loadGraphic(bitmap);
     multiply1.blend = BlendMode.MULTIPLY;
     add(multiply1);
@@ -171,19 +174,19 @@ class NewCharacterCard extends BackingCard
     multiply2.blend = BlendMode.MULTIPLY;
     add(multiply2);
 
-    lightLayer2 = BackingCard.loadBackcardSprite((FreeplayState.CUTOUT_WIDTH * FreeplayState.DJ_POS_MULTI) + -360, 230,
-      'freeplay/backingCards/newCharacter/orange gradient', 32, 32, 0x00FFFFFF);
+    lightLayer2 = new FlxSprite((FreeplayState.CUTOUT_WIDTH * FreeplayState.DJ_POS_MULTI) + -360,
+      230).loadGraphic(Paths.image('freeplay/backingCards/newCharacter/orange gradient'));
     lightLayer2.blend = BlendMode.ADD;
     add(lightLayer2);
 
-    var bitmap = BitmapUtil.scalePartByWidth(BackingCard.safeBitmapData(Paths.image('freeplay/backingCards/newCharacter/yellow bg piece'), 32, 32, 0xFFFFFF00),
+    var bitmap = BitmapUtil.scalePartByWidth(Assets.getBitmapData(Paths.image('freeplay/backingCards/newCharacter/yellow bg piece')),
       FreeplayState.CUTOUT_WIDTH);
     yellow = new FlxSprite(0, 0).loadGraphic(bitmap);
     yellow.blend = BlendMode.MULTIPLY;
     add(yellow);
 
-    lightLayer3 = BackingCard.loadBackcardSprite((FreeplayState.CUTOUT_WIDTH * FreeplayState.DJ_POS_MULTI) + -360, 290,
-      'freeplay/backingCards/newCharacter/red gradient', 32, 32, 0x00FFFFFF);
+    lightLayer3 = new FlxSprite((FreeplayState.CUTOUT_WIDTH * FreeplayState.DJ_POS_MULTI) + -360,
+      290).loadGraphic(Paths.image('freeplay/backingCards/newCharacter/red gradient'));
     lightLayer3.blend = BlendMode.ADD;
     add(lightLayer3);
 
@@ -231,7 +234,7 @@ class NewCharacterCard extends BackingCard
     }
   }
 
-  public override function disappear():Void
+  override public function disappear():Void
   {
     FlxTween.color(pinkBack, 0.25, 0xFF05020E, 0xFFFFD0D5, {ease: FlxEase.quadOut});
 
@@ -253,6 +256,6 @@ class NewCharacterCard extends BackingCard
     cardGlow.visible = true;
     cardGlow.alpha = 1;
     cardGlow.scale.set(1, 1);
-    FlxTween.tween(cardGlow, {alpha: 0, "scale.x": 1.2, "scale.y": 1.2}, 0.25, {ease: FlxEase.sineOut});
+    FlxTween.tween(cardGlow, {alpha: 0, 'scale.x': 1.2, 'scale.y': 1.2}, 0.25, {ease: FlxEase.sineOut});
   }
 }

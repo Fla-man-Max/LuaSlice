@@ -6,8 +6,9 @@ import flixel.util.FlxSort;
 import flixel.util.FlxTimer;
 import funkin.data.freeplay.album.AlbumRegistry;
 import funkin.graphics.FunkinSprite;
-import funkin.Preferences;
 import funkin.util.SortUtil;
+import funkin.Preferences;
+import flixel.util.FlxColor;
 
 /**
  * The graphic for the album roll in the FreeplayState.
@@ -34,43 +35,33 @@ class AlbumRoll extends FlxSpriteGroup
   }
 
   final ALBUM_ART_SYMBOL:String = "album art placeholder";
-
   var newAlbumArt:FunkinSprite;
   var albumTitle:Null<FunkinSprite> = null;
-
   var difficultyStars:DifficultyStars;
   var _exitMovers:Null<FreeplayState.ExitMoverData>;
   var _exitMoversCharSel:Null<FreeplayState.ExitMoverData>;
-
   var albumData:Null<Album> = null;
 
   public function new()
   {
     super();
 
-    final lowQualityMax = Preferences.isLowQualityMax();
-    newAlbumArt = lowQualityMax ? new FunkinSprite().makeSolidColor(1, 1, 0x00000000) : FunkinSprite.createTextureAtlas((FlxG.width + -360)
-      - FullScreenScaleMode.gameNotchSize.x, 220, "freeplay/albumRoll/freeplayAlbum");
-    difficultyStars = new DifficultyStars(lowQualityMax ? 0 : (FlxG.width - 330) - FullScreenScaleMode.gameNotchSize.x, lowQualityMax ? 0 : 209);
+    if (Preferences.isLowQualityMinimal())
+      newAlbumArt = new FunkinSprite((FlxG.width + -360) - FullScreenScaleMode.gameNotchSize.x, 220).makeSolidColor(1, 1, FlxColor.TRANSPARENT);
+    else
+      newAlbumArt = FunkinSprite.createTextureAtlas((FlxG.width + -360) - FullScreenScaleMode.gameNotchSize.x, 220, "freeplay/albumRoll/freeplayAlbum");
+    newAlbumArt.visible = false;
+
+    difficultyStars = new DifficultyStars((FlxG.width - 330) - FullScreenScaleMode.gameNotchSize.x, 209);
+    difficultyStars.visible = false;
 
     add(newAlbumArt);
     add(difficultyStars);
 
-    if (lowQualityMax)
-    {
-      visible = false;
-      active = false;
-      return;
-    }
-
-    newAlbumArt.visible = false;
-
-    difficultyStars.visible = false;
-
-    buildAlbumTitle("freeplay/albumRoll/volume1-text");
+    if (!Preferences.isLowQualityMinimal()) buildAlbumTitle("freeplay/albumRoll/volume1-text");
     if (albumTitle != null) albumTitle.visible = false;
 
-    newAlbumArt.anim.onFinish.add(onAlbumFinish);
+    if (!Preferences.isLowQualityMinimal()) newAlbumArt.anim.onFinish.add(onAlbumFinish);
   }
 
   function onAlbumFinish(animName:String):Void
@@ -88,13 +79,6 @@ class AlbumRoll extends FlxSpriteGroup
    */
   function updateAlbum():Void
   {
-    if (Preferences.isLowQualityMax())
-    {
-      this.visible = false;
-      this.active = false;
-      return;
-    }
-
     if (albumId == null)
     {
       this.visible = false;
@@ -112,11 +96,12 @@ class AlbumRoll extends FlxSpriteGroup
       return;
     };
 
-    // Update the album art.
-    var albumGraphic = Paths.image(albumData.getAlbumArtAssetKey());
-    newAlbumArt.replaceSymbolGraphic(ALBUM_ART_SYMBOL, albumGraphic);
-
-    buildAlbumTitle(albumData.getAlbumTitleAssetKey(), albumData.getAlbumTitleOffsets());
+    if (!Preferences.isLowQualityMinimal())
+    {
+      var albumGraphic = Paths.image(albumData.getAlbumArtAssetKey());
+      newAlbumArt.replaceSymbolGraphic(ALBUM_ART_SYMBOL, albumGraphic);
+      buildAlbumTitle(albumData.getAlbumTitleAssetKey(), albumData.getAlbumTitleOffsets());
+    }
     applyExitMovers();
     refresh();
   }
@@ -167,21 +152,19 @@ class AlbumRoll extends FlxSpriteGroup
     });
   }
 
-  var titleTimer:Null<FlxTimer> = null;
-
   /**
    * Play the intro animation on the album art.
    */
   public function playIntro():Void
   {
-    if (Preferences.isLowQualityMax())
+    this.visible = true;
+
+    if (Preferences.isLowQualityMinimal())
     {
-      this.visible = false;
-      this.active = false;
+      newAlbumArt.visible = false;
+      showStars();
       return;
     }
-
-    this.visible = true;
 
     if (albumTitle != null) albumTitle.visible = false;
     newAlbumArt.visible = true;
@@ -200,14 +183,12 @@ class AlbumRoll extends FlxSpriteGroup
 
   public function skipIntro():Void
   {
-    if (Preferences.isLowQualityMax())
+    this.visible = true;
+    if (Preferences.isLowQualityMinimal())
     {
-      this.visible = false;
-      this.active = false;
+      newAlbumArt.visible = false;
       return;
     }
-
-    this.visible = true;
     // Weird workaround
     newAlbumArt.anim.play('switch', true);
     if (albumTitle != null) albumTitle.animation.play('switch');
@@ -215,8 +196,7 @@ class AlbumRoll extends FlxSpriteGroup
 
   public function showTitle():Void
   {
-    if (Preferences.isLowQualityMax()) return;
-    if (albumTitle != null && albumTitle.frames != null) albumTitle.visible = true;
+    if (!Preferences.isLowQualityMinimal() && albumTitle != null && albumTitle.frames != null) albumTitle.visible = true;
   }
 
   public function buildAlbumTitle(assetKey:String, ?titleOffsets:Null<Array<Float>>):Void
@@ -226,6 +206,8 @@ class AlbumRoll extends FlxSpriteGroup
       remove(albumTitle);
       albumTitle = null;
     }
+
+    if (Preferences.isLowQualityMinimal()) return;
 
     if (titleOffsets == null)
     {
@@ -273,7 +255,6 @@ class AlbumRoll extends FlxSpriteGroup
    */
   public function showStars():Void
   {
-    if (Preferences.isLowQualityMax()) return;
     difficultyStars.visible = true;
     difficultyStars.flameCheck();
   }
@@ -300,7 +281,7 @@ class AlbumRoll extends FlxSpriteGroup
 
   override function destroy():Void
   {
-    if (!Preferences.isLowQualityMax()) newAlbumArt.replaceSymbolGraphic(ALBUM_ART_SYMBOL, null);
+    if (!Preferences.isLowQualityMinimal()) newAlbumArt.replaceSymbolGraphic(ALBUM_ART_SYMBOL, null);
 
     super.destroy();
   }

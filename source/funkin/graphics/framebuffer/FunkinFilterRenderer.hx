@@ -22,6 +22,11 @@ import animate.internal.FilterRenderer;
 class FunkinFilterRenderer implements IFlxDestroyable
 {
   /**
+   * An optional key to use for the graphic.
+   */
+  public var graphicKey:String = '';
+
+  /**
    * Graphic containing the current frame with filters.
    */
   public var graphic(default, null):Null<FlxGraphic>;
@@ -38,12 +43,12 @@ class FunkinFilterRenderer implements IFlxDestroyable
    * Apply filters to the current frame.
    * The result will be contained in the `graphic` variable.
    */
-  public function applyFilters():Void
+  public function applyFilters(?textureToUse:BitmapData):Void
   {
     parent.filtered = false;
     if (parent.filters == null || parent.filters.length < 1) return;
 
-    var textureBitmap:BitmapData = parent._renderTexture.graphic.bitmap;
+    var textureBitmap:BitmapData = textureToUse ?? parent._renderTexture.graphic.bitmap;
 
     var bounds:FlxRect = FlxRect.get().copyFromFlash(textureBitmap.rect);
     FilterRenderer.expandFilterBounds(bounds, parent.filters);
@@ -57,7 +62,15 @@ class FunkinFilterRenderer implements IFlxDestroyable
 
     if (graphic == null)
     {
-      graphic = FlxGraphic.fromBitmapData(bitmap, false, null, false);
+      if (!graphicKey.isBlank())
+      {
+        @:privateAccess
+        graphic = new FlxGraphic(graphicKey, bitmap);
+      }
+      else
+      {
+        graphic = FlxGraphic.fromBitmapData(bitmap, false, null, false);
+      }
     }
     else
     {
@@ -91,8 +104,7 @@ class FunkinFilterRenderer implements IFlxDestroyable
     parent.filtered = true;
   }
 
-  function _applyFilters(target:BitmapData, bmp:BitmapData, filters:Array<BitmapFilter>, target1:Null<BitmapData>, target2:Null<BitmapData>,
-      bounds:FlxRect):Void
+  function _applyFilters(target:BitmapData, bmp:BitmapData, filters:Array<BitmapFilter>, target1:Null<BitmapData>, target2:Null<BitmapData>, bounds:FlxRect):Void
   {
     var renderer = FilterRenderer.renderer;
 

@@ -62,7 +62,6 @@ class FreeplayScore extends FlxTypedSpriteGroup<ScoreNum>
       active = false;
       return;
     }
-
     scoreShit = scoreNew;
   }
 }
@@ -80,7 +79,6 @@ class ScoreNum extends FlxSprite
   function set_digit(val):Int
   {
     if (Preferences.isLowQualityMax()) return val;
-
     if (animation.curAnim != null && animation.curAnim.name != numToString[val])
     {
       animation.play(numToString[val], true, false, 0);
@@ -143,7 +141,18 @@ class ScoreNum extends FlxSprite
     updateHitbox();
   }
 
-  final numToString:Array<String> = ["ZERO", "ONE", "TWO", "THREE", "FOUR", "FIVE", "SIX", "SEVEN", "EIGHT", "NINE"];
+  final numToString:Array<String> = [
+    "ZERO",
+    "ONE",
+    "TWO",
+    "THREE",
+    "FOUR",
+    "FIVE",
+    "SIX",
+    "SEVEN",
+    "EIGHT",
+    "NINE"
+  ];
 
   function getIntToString(number:Int):String
   {

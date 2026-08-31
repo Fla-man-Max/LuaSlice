@@ -26,7 +26,7 @@ class StageObjectControlSongEvent extends SongEvent
   }, {
     name: 'value2', title: 'Second Value / Y', defaultValue: 0.0, step: 0.1, type: SongEventFieldType.FLOAT
   }, {
-    name: 'color', title: 'Color', defaultValue: '#FFFFFF', type: SongEventFieldType.COLOR
+      name: 'color', title: 'Color', defaultValue: '#FFFFFF', type: SongEventFieldType.COLOR
   }, {
     name: 'animation', title: 'Animation', defaultValue: 'idle', type: SongEventFieldType.STRING
   }, {

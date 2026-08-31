@@ -7,19 +7,14 @@ import funkin.vis.dsp.SpectralAnalyzer;
 import funkin.data.freeplay.player.PlayerRegistry;
 import funkin.ui.FullScreenScaleMode;
 import flixel.math.FlxPoint;
-import flixel.sound.FlxSound;
 
 @:nullSafety
 class CharSelectGF extends FunkinSprite implements IBPMSyncedScriptedClass
 {
   var analyzer:Null<SpectralAnalyzer>;
   var analyzerLevelsCache:Array<Bar> = new Array<Bar>();
-  var analyzerSound:Null<FlxSound>;
-  var analyzerTimer:Float = 0;
-
   var currentGFPath:String = "";
   var enableVisualizer:Bool = false;
-
   var danceEvery:Int = 2;
 
   public function new(x:Float, y:Float)
@@ -47,75 +42,17 @@ class CharSelectGF extends FunkinSprite implements IBPMSyncedScriptedClass
     }
   };
 
-  override public function update(elapsed:Float):Void
+  override public function draw()
   {
-    super.update(elapsed);
-    if (enableVisualizer && analyzer == null && analyzerSound != null)
-    {
-      analyzerRetryTimer -= elapsed;
-      if (analyzerRetryTimer <= 0)
-      {
-        analyzerRetryTimer = 0.25;
-        initAnalyzer(analyzerSound);
-      }
-    }
-    analyzerTimer += elapsed;
-    if (analyzerTimer >= 1 / 30)
-    {
-      analyzerTimer %= 1 / 30;
-      if (analyzer != null) drawFFT();
-    }
+    if (analyzer != null) drawFFT();
+    super.draw();
   }
 
-  var analyzerRetryTimer:Float = 0;
-
-  public function initAnalyzer(sound:Null<FlxSound>):Void
-  {
-    analyzer = null;
-    analyzerSound = sound;
-    final targetSound = analyzerSound;
-    if (targetSound == null || !targetSound.exists) return;
-    @:privateAccess
-    final channel = targetSound._channel;
-    if (channel == null) return;
-    @:privateAccess
-    final source = channel.__audioSource;
-    if (source == null) return;
-
-    try
-    {
-      final nextAnalyzer = new SpectralAnalyzer(source, 7, 0.1);
-      #if sys
-      nextAnalyzer.fftN = 512;
-      #end
-      analyzer = nextAnalyzer;
-    }
-    catch (_:Dynamic)
-    {
-      analyzer = null;
-    }
-  }
-
-  function drawFFT():Void
+  function drawFFT()
   {
     if (enableVisualizer && analyzer != null)
     {
-      if (!hasAudioSource())
-      {
-        analyzer = null;
-        return;
-      }
-      try
-      {
-        final activeAnalyzer = analyzer;
-        if (activeAnalyzer == null) return;
-        analyzerLevelsCache = activeAnalyzer.getLevels(analyzerLevelsCache);
-      }
-      catch (_:Dynamic)
-      {
-        analyzer = null;
-        return;
-      }
+      analyzerLevelsCache = analyzer.getLevels(analyzerLevelsCache);
       var frame:Null<animate.internal.Frame> = this.timeline.getLayer("VIZ_bars")?.getFrameAtIndex(anim.curAnim.curFrame) ?? null;
       var elements:Array<animate.internal.elements.Element> = frame?.elements ?? [];
       var len:Int = cast Math.min(elements.length, 7);
@@ -143,17 +80,6 @@ class CharSelectGF extends FunkinSprite implements IBPMSyncedScriptedClass
     }
   }
 
-  function hasAudioSource():Bool
-  {
-    final sound = analyzerSound;
-    if (sound == null || !sound.exists) return false;
-    @:privateAccess
-    final channel = sound._channel;
-    if (channel == null) return false;
-    @:privateAccess
-    return channel.__audioSource != null;
-  }
-
   /**
    * For switching between "GFs" such as gf, nene, etc
    * @param bf Which BF we are selecting, so that we know the accompyaning GF
@@ -167,13 +93,11 @@ class CharSelectGF extends FunkinSprite implements IBPMSyncedScriptedClass
     var assetPath:Null<String> = gfData?.assetPath ?? "";
 
     currentGFPath = assetPath;
-    enableVisualizer = gfData?.visualizer ?? false;
 
     // We don't need to update any anims if we didn't change GF
     if (currentGFPath == "")
     {
       this.visible = false;
-      clearFrames();
       return;
     }
     else if (previousGFPath != currentGFPath)
@@ -189,30 +113,16 @@ class CharSelectGF extends FunkinSprite implements IBPMSyncedScriptedClass
       else
       {
         this.visible = false;
-        clearFrames();
         currentGFPath = "";
         return;
       }
 
+      enableVisualizer = gfData?.visualizer ?? false;
     }
 
     anim.play("idle", true);
 
     updateHitbox();
-  }
-
-  @:nullSafety(Off)
-  function clearFrames():Void
-  {
-    this.frames = null;
-  }
-
-  override public function destroy():Void
-  {
-    analyzer = null;
-    analyzerSound = null;
-    analyzerLevelsCache.resize(0);
-    super.destroy();
   }
 
   public function onScriptEvent(event:ScriptEvent):Void
@@ -225,9 +135,6 @@ class CharSelectGF extends FunkinSprite implements IBPMSyncedScriptedClass
 
   public function onDestroy(event:ScriptEvent):Void
   {
-    analyzer = null;
-    analyzerSound = null;
-    analyzerLevelsCache = [];
   };
 
   public function onUpdate(event:UpdateScriptEvent):Void

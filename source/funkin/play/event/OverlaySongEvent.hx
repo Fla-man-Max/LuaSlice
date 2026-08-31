@@ -43,9 +43,9 @@ class OverlaySongEvent extends SongEvent
   }, {
     name: 'prefix', title: 'Animation Prefix', defaultValue: '', type: SongEventFieldType.STRING
   }, {
-    name: 'color', title: 'Color', defaultValue: '#000000', type: SongEventFieldType.COLOR
+      name: 'color', title: 'Color', defaultValue: '#000000', type: SongEventFieldType.COLOR
   }, {
-    name: 'secondColor', title: 'Gradient End Color', defaultValue: '#00000000', type: SongEventFieldType.COLOR
+      name: 'secondColor', title: 'Gradient End Color', defaultValue: '#00000000', type: SongEventFieldType.COLOR
   }, {
     name: 'opacity', title: 'Opacity', defaultValue: 1.0, min: 0, max: 1, step: 0.05, type: SongEventFieldType.FLOAT
   }, {

@@ -1,7 +1,6 @@
 package funkin.audio;
 
 import flixel.group.FlxGroup.FlxTypedGroup;
-import flixel.math.FlxMath;
 import flixel.sound.FlxSound;
 import flixel.system.FlxAssets.FlxSoundAsset;
 import flixel.tweens.FlxTween;
@@ -16,7 +15,6 @@ import funkin.Paths.PathsFunction;
 import lime.app.Promise;
 import lime.media.AudioSource;
 import openfl.events.Event;
-import openfl.media.Sound;
 import openfl.media.SoundChannel;
 import openfl.media.SoundMixer;
 
@@ -100,16 +98,12 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
 
   var _waveformData:Null<WaveformData> = null;
 
-  @:nullSafety(Off)
   function get_waveformData():WaveformData
   {
     if (_waveformData == null)
     {
       _waveformData = WaveformDataParser.interpretFlxSound(this);
-      if (_waveformData == null)
-      {
-        FlxG.log.warn('MP3 files are not supported for waveforms!!');
-      }
+      if (_waveformData == null) throw 'Could not interpret waveform data!';
     }
     return _waveformData;
   }
@@ -127,14 +121,14 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
   /**
    * For debug purposes.
    */
-  var _label:String = "unknown";
+  var _label:String = 'unknown';
 
   public function new()
   {
     super();
   }
 
-  public override function update(elapsedSec:Float)
+  override public function update(elapsedSec:Float)
   {
     if (!playing && !_shouldPlay) return;
 
@@ -175,7 +169,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     return this;
   }
 
-  public override function play(forceRestart:Bool = false, startTime:Float = 0, ?endTime:Float):FunkinSound
+  override public function play(forceRestart:Bool = false, startTime:Float = 0, ?endTime:Float):FunkinSound
   {
     if (!exists) return this;
 
@@ -212,7 +206,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     }
   }
 
-  public override function pause():FunkinSound
+  override public function pause():FunkinSound
   {
     if (_shouldPlay)
     {
@@ -229,7 +223,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     return this;
   }
 
-  public override function resume():FunkinSound
+  override public function resume():FunkinSound
   {
     if (this._time < 0)
     {
@@ -333,9 +327,12 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     var suffix = params.suffix ?? '';
     var pathToUse = switch (pathsFunction)
     {
-      case MUSIC: Paths.music('$key/$key');
-      case INST: Paths.inst('$key', suffix);
-      default: Paths.music('$key/$key');
+      case MUSIC:
+        Paths.music('$key/$key');
+      case INST:
+        Paths.inst('$key', suffix);
+      default:
+        Paths.music('$key/$key');
     }
 
     var shouldLoadPartial = params.partialParams?.loadPartial ?? false;
@@ -405,7 +402,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     while (partialQueue.length > 0)
     {
       @:nullSafety(Off)
-      partialQueue.pop().error("Cancel loading partial sound");
+      partialQueue.pop().error('Cancel loading partial sound');
     }
   }
 
@@ -423,7 +420,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
    * @param autoPlay        Whether to play the sound immediately or wait for a `play()` call.
    * @param persist         Whether to keep this `FunkinSound` between states, or destroy it.
    * @param onComplete      Called when the sound finished playing.
-   * @param onLoad          Called when the sound finished loading.  Called immediately for succesfully loaded embedded sounds.
+   * @param onLoad          Called when the sound finished loading.  Called immediately for successfully loaded embedded sounds.
    * @param important       If `true`, the sound channel will forcefully be added onto the channel array, even if full. Use sparingly!
    * @return A `FunkinSound` object, or `null` if the sound could not be loaded.
    */
@@ -441,16 +438,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
 
     // Load the sound.
     // Sets `exists = true` as a side effect.
-    try
-    {
-      sound.loadEmbedded(embeddedSound, looped, autoDestroy, onComplete);
-    }
-    catch (e:Dynamic)
-    {
-      FlxG.log.error('FunkinSound failed to load ${Std.string(embeddedSound)}: ${Std.string(e)}');
-      sound.destroy();
-      return null;
-    }
+    sound.loadEmbedded(embeddedSound, looped, autoDestroy, onComplete);
 
     if (embeddedSound is String)
     {
@@ -459,13 +447,6 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     else
     {
       sound._label = 'unknown';
-    }
-
-    if (sound._sound == null)
-    {
-      FlxG.log.error('FunkinSound failed to load ${Std.string(embeddedSound)}');
-      sound.destroy();
-      return null;
     }
 
     if (autoPlay) sound.play();
@@ -520,7 +501,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     {
       promise.future.onError(function(e)
       {
-        soundRequest.error("Sound loading was errored or cancelled");
+        soundRequest.error('Sound loading was errored or cancelled');
       });
 
       soundRequest.future.onComplete(function(partialSound)
@@ -534,7 +515,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
   }
 
   @:nullSafety(Off)
-  public override function destroy():Void
+  override public function destroy():Void
   {
     super.destroy();
     if (fadeTween != null)
@@ -547,9 +528,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
     this._waveformData = null;
   }
 
-  @:access(openfl.media.Sound)
-  @:access(openfl.media.SoundChannel)
-  @:access(openfl.media.SoundMixer)
+  @:access(openfl.media.Sound) @:access(openfl.media.SoundChannel) @:access(openfl.media.SoundMixer)
   override function startSound(startTime:Float)
   {
     if (!important)
@@ -621,7 +600,7 @@ class FunkinSound extends FlxSound implements ICloneable<FunkinSound>
   /**
    * Produces a string representation suitable for debugging.
    */
-  public override function toString():String
+  override public function toString():String
   {
     return 'FunkinSound(${this._label})';
   }

@@ -15,11 +15,18 @@ import funkin.util.FileUtil;
 class DebugMenuSubState extends MusicBeatSubState
 {
   var items:TextMenuList;
+  final exitCallback:Null<Void->Void>;
 
   /**
    * Camera focus point
    */
   var camFocusPoint:FlxObject;
+
+  public function new(?exitCallback:Void->Void)
+  {
+    super();
+    this.exitCallback = exitCallback;
+  }
 
   override function create():Void
   {
@@ -58,7 +65,14 @@ class DebugMenuSubState extends MusicBeatSubState
     createItem("CHART EDITOR", openChartEditor);
     #end
     #if FEATURE_ANIMATION_EDITOR
+    #if mobile
+    createItem("ANIMATION EDITOR [WIP]", openAnimationEditor);
+    #else
     createItem("ANIMATION EDITOR", openAnimationEditor);
+    #end
+    #end
+    #if (FEATURE_POLYMOD_MODS && !mobile)
+    createItem("MOD MENU", openModMenu);
     #end
     #if FEATURE_STAGE_EDITOR
     createItem("STAGE EDITOR", openStageEditor);
@@ -111,6 +125,14 @@ class DebugMenuSubState extends MusicBeatSubState
   }
   #end
 
+  #if (FEATURE_POLYMOD_MODS && !mobile)
+  function openModMenu():Void
+  {
+    FlxTransitionableState.skipNextTransIn = true;
+    FlxG.switchState(() -> new funkin.ui.modmenu.ModMenuState());
+  }
+  #end
+
   function openCharSelect():Void
   {
     FlxG.switchState(() -> new funkin.ui.charSelect.CharSelectSubState());
@@ -155,7 +177,13 @@ class DebugMenuSubState extends MusicBeatSubState
 
   function exitDebugMenu()
   {
-    // TODO: Add a transition?
-    this.close();
+    if (exitCallback != null)
+    {
+      exitCallback();
+    }
+    else
+    {
+      this.close();
+    }
   }
 }

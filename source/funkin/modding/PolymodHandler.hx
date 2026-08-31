@@ -17,11 +17,19 @@ import funkin.data.freeplay.album.AlbumRegistry;
 import funkin.modding.module.ModuleHandler;
 import funkin.data.character.CharacterData.CharacterDataParser;
 import funkin.save.Save;
+import funkin.util.CLIUtil;
 import funkin.util.FileUtil;
 import funkin.util.macro.ClassMacro;
+import funkin.util.assets.ResourceCache;
 import polymod.backends.PolymodAssets.PolymodAssetType;
 import polymod.format.ParseRules.TextFileFormat;
 import polymod.Polymod;
+
+typedef AssetReloadTask =
+{
+  var label:String;
+  var run:Void->Void;
+}
 
 /**
  * A class for interacting with Polymod, the atomic modding framework for Haxe.
@@ -51,7 +59,7 @@ class PolymodHandler
   /**
    * Where relative to the executable that mods are located.
    */
-  static final MOD_FOLDER:String =
+  public static final MOD_FOLDER:String =
     #if (REDIRECT_ASSETS_FOLDER && mac)
     '../../../../../../../example_mods'
     #elseif REDIRECT_ASSETS_FOLDER
@@ -81,13 +89,30 @@ class PolymodHandler
 
   // Use SysZipFileSystem on native and MemoryZipFilesystem on web.
   static var modFileSystem:Null<ZipFileSystem> = null;
+  static var cachedModMetadata:Null<Array<ModMetadata>> = null;
 
   /**
    * If the mods folder doesn't exist, create it.
    */
   public static function createModRoot():Void
   {
+    CLIUtil.resetWorkingDir();
     FileUtil.createDirIfNotExists(MOD_FOLDER);
+  }
+
+  public static function getModRoot():String
+  {
+    return MOD_FOLDER;
+  }
+
+  public static function getModFolderEntries():Array<String>
+  {
+    #if sys
+    createModRoot();
+    return FileUtil.readDir(MOD_FOLDER);
+    #else
+    return [];
+    #end
   }
 
   /**
@@ -113,14 +138,7 @@ class PolymodHandler
     createModRoot();
     #end
     trace('Initializing Polymod (using configured mods)...');
-    final installedModDirs = getAllModDirs();
-    final configuredModDirs = Save.instance.enabledModDirs.value;
-    final availableModDirs = configuredModDirs.filter((dir) -> installedModDirs.contains(dir));
-    for (dir in configuredModDirs)
-    {
-      if (!installedModDirs.contains(dir)) trace('Skipping enabled mod directory that is no longer installed: $dir');
-    }
-    loadModsByDir(availableModDirs);
+    loadModsByDir(Save.instance.enabledModDirs.value);
   }
 
   /**
@@ -143,6 +161,8 @@ class PolymodHandler
    */
   public static function loadModsByDir(dirs:Array<String>):Void
   {
+    ResourceCache.beginGeneration();
+    cachedModMetadata = null;
     if (dirs.length == 0)
     {
       trace('You attempted to load zero mods.');
@@ -264,7 +284,13 @@ class PolymodHandler
   static function buildImports():Void
   {
     // Add default imports for common classes.
-    static final DEFAULT_IMPORTS:Array<Class<Dynamic>> = [funkin.Assets, funkin.Paths, funkin.Preferences, funkin.util.Constants, flixel.FlxG];
+    static final DEFAULT_IMPORTS:Array<Class<Dynamic>> = [
+      funkin.Assets,
+      funkin.Paths,
+      funkin.Preferences,
+      funkin.util.Constants,
+      flixel.FlxG
+    ];
 
     for (cls in DEFAULT_IMPORTS)
     {
@@ -329,6 +355,10 @@ class PolymodHandler
     // Lib.load() can load malicious DLLs
     Polymod.blacklistImport('cpp.Lib');
 
+    // `haxe.Http`
+    // An alias for `sys.Http`, which is also a blacklisted package.
+    Polymod.blacklistImport('haxe.Http');
+    
     // `haxe.Unserializer`
     // Unserializer.DEFAULT_RESOLVER.resolveClass() can access blacklisted packages
     Polymod.blacklistImport('haxe.Unserializer');
@@ -337,57 +367,16 @@ class PolymodHandler
     // If you create your own library using a manifest, AssetLibrary.__fromManifest() can access blacklisted packages apparently.
     Polymod.blacklistImport('lime.utils.AssetLibrary');
 
-    // Disable access to AdMob Util
-    Polymod.blacklistImport('funkin.mobile.util.AdMobUtil');
-
-    // Disable access to In-App Purchases Util
-    Polymod.blacklistImport('funkin.mobile.util.InAppPurchasesUtil');
-
-    // Disable access to In-App Reviews Util
-    Polymod.blacklistImport('funkin.mobile.util.InAppReviewUtil');
-
-    // Disable access to AndroidTools Extension
-    for (cls in ClassMacro.listClassesInPackage('extension.androidtools'))
+    // Disable access to all Mobile Utils
+    for (cls in ClassMacro.listClassesInPackage('funkin.mobile.util'))
     {
       if (cls == null) continue;
       var className:String = Type.getClassName(cls);
       Polymod.blacklistImport(className);
     }
 
-    // Disable access to Haptics Extension
-    for (cls in ClassMacro.listClassesInPackage('extension.haptics'))
-    {
-      if (cls == null) continue;
-      var className:String = Type.getClassName(cls);
-      Polymod.blacklistImport(className);
-    }
-
-    // Disable access to Admob Extension
-    for (cls in ClassMacro.listClassesInPackage('extension.admob'))
-    {
-      if (cls == null) continue;
-      var className:String = Type.getClassName(cls);
-      Polymod.blacklistImport(className);
-    }
-
-    // Disable access to IAPCore Extension
-    for (cls in ClassMacro.listClassesInPackage('extension.iapcore'))
-    {
-      if (cls == null) continue;
-      var className:String = Type.getClassName(cls);
-      Polymod.blacklistImport(className);
-    }
-
-    // Disable access to IARCore Extension
-    for (cls in ClassMacro.listClassesInPackage('extension.iarcore'))
-    {
-      if (cls == null) continue;
-      var className:String = Type.getClassName(cls);
-      Polymod.blacklistImport(className);
-    }
-
-    // Disable access to WebViewCore Extension
-    for (cls in ClassMacro.listClassesInPackage('extension.webviewcore'))
+    // Disable access to all Extension in the extension package
+    for (cls in ClassMacro.listClassesInPackage('extension'))
     {
       if (cls == null) continue;
       var className:String = Type.getClassName(cls);
@@ -432,10 +421,14 @@ class PolymodHandler
     // `funkin.save.Save`
     // Direct access to save data is important for scripts (like checking unlocks),
     // but we don't want scripts to be able to perform operations like writing scores.
-    Polymod.blacklistInstanceFields(funkin.save.Save, [ // No direct field access
+    Polymod.blacklistInstanceFields(funkin.save.Save, [
+      // No direct field access
       'data', // LMFAO definitely not
       'clearData', // No score manipulation please
-      'setLevelScore', 'setSongScore', 'applySongRank']);
+      'setLevelScore',
+      'setSongScore',
+      'applySongRank'
+    ]);
 
     // `openfl.filesystem.FileStream`, `openfl.net.Socket`, `openfl.utils.ByteArray.ByteArrayData`
     // Returns `Unseralizer.run` if encoded in HXSF format, though it does have to be seralized correctly for the exploit to work.
@@ -503,6 +496,9 @@ class PolymodHandler
     Polymod.blacklistImport('funkin.external.android.CallbackUtil');
     Polymod.blacklistImport('funkin.external.android.DataFolderUtil');
     Polymod.blacklistImport('funkin.external.android.JNIUtil');
+
+    // Blacklists accessing the interp for polymod hscript
+    Polymod.blacklistInstanceFields(polymod.hscript._internal.PolymodScriptClass.PolymodScriptClass, ['_interp']);
   }
 
   /**
@@ -536,7 +532,22 @@ class PolymodHandler
   static inline function buildFrameworkParams():polymod.Polymod.FrameworkParams
   {
     return {
-      assetLibraryPaths: ['default' => 'preload', 'shared' => 'shared', 'songs' => 'songs', 'videos' => 'videos', 'tutorial' => 'tutorial', 'week1' => 'week1', 'week2' => 'week2', 'week3' => 'week3', 'week4' => 'week4', 'week5' => 'week5', 'week6' => 'week6', 'week7' => 'week7', 'weekend1' => 'weekend1', 'sserafim' => 'sserafim'],
+      assetLibraryPaths: [
+        'default' => 'preload',
+        'shared' => 'shared',
+        'songs' => 'songs',
+        'videos' => 'videos',
+        'tutorial' => 'tutorial',
+        'week1' => 'week1',
+        'week2' => 'week2',
+        'week3' => 'week3',
+        'week4' => 'week4',
+        'week5' => 'week5',
+        'week6' => 'week6',
+        'week7' => 'week7',
+        'weekend1' => 'weekend1',
+        'sserafim' => 'sserafim'
+      ],
       coreAssetRedirect: CORE_FOLDER,
     }
   }
@@ -545,10 +556,20 @@ class PolymodHandler
    * Retrieve a list of metadata for ALL installed mods, including disabled mods.
    * @return An array of mod metadata
    */
-  public static function getAllMods():Array<ModMetadata>
+  public static function getAllMods(refresh:Bool = false):Array<ModMetadata>
   {
-    trace('Scanning the mods folder...');
+    #if sys
+    createModRoot();
+    #end
 
+    if (refresh)
+    {
+      modFileSystem = null;
+      cachedModMetadata = null;
+    }
+    if (cachedModMetadata != null) return cachedModMetadata.copy();
+
+    trace('Scanning the mods folder...');
     if (modFileSystem == null) modFileSystem = buildFileSystem();
 
     var modMetadata:Array<ModMetadata> = Polymod.scan({
@@ -558,7 +579,8 @@ class PolymodHandler
       errorCallback: PolymodErrorHandler.onPolymodError
     });
     trace('Found ${modMetadata.length} mods when scanning.');
-    return modMetadata;
+    cachedModMetadata = modMetadata;
+    return modMetadata.copy();
   }
 
   /**
@@ -577,7 +599,9 @@ class PolymodHandler
    */
   public static function getAllModDirs():Array<String>
   {
-    var modDirs:Array<String> = [for (i in getAllMods()) i.dirName];
+    var modDirs:Array<String> = [
+      for (i in getAllMods()) i.dirName
+    ];
     return modDirs;
   }
 
@@ -600,45 +624,77 @@ class PolymodHandler
     return enabledMods;
   }
 
+  public static function enableMod(modId:String):Void
+  {
+    var metadata = getAllMods().find((mod) -> mod.id == modId);
+    if (metadata == null) return;
+
+    var enabledDirs = Save.instance.enabledModDirs.value.copy();
+    if (!enabledDirs.contains(metadata.dirName))
+    {
+      enabledDirs.push(metadata.dirName);
+      Save.instance.enabledModDirs.value = enabledDirs;
+      Save.system.flush();
+    }
+  }
+
+  public static function disableAllMods():Void
+  {
+    Save.instance.enabledModDirs.value = [];
+    Save.system.flush();
+  }
+
+  public static function getDisabledMods():Array<ModMetadata>
+  {
+    var enabledDirs = Save.instance.enabledModDirs.value;
+    var disabled = getAllMods().filter((mod) -> !enabledDirs.contains(mod.dirName));
+    disabled.sort((a, b) -> Reflect.compare(a.title.toLowerCase(), b.title.toLowerCase()));
+    return disabled;
+  }
+
   /**
    * Clear and reload from disk all data assets.
    * Useful for "hot reloading" for fast iteration!
    */
   public static function forceReloadAssets():Void
   {
-    // Forcibly clear scripts so that scripts can be edited.
-    ModuleHandler.clearModuleCache();
-    Polymod.clearScripts();
+    for (task in buildAssetReloadTasks()) task.run();
+  }
 
-    // Forcibly reload Polymod so it finds any new files.
-    // This will also register all scripts.
-    // TODO: Replace this with loadEnabledMods().
-    funkin.modding.PolymodHandler.loadAllMods();
-
-    // Reload everything that is cached.
-    // Currently this freezes the game for a second but I guess that's tolerable?
-
-    // TODO: Reload event callbacks
-
-    // These MUST be imported at the top of the file and not referred to by fully qualified name,
-    // to ensure build macros work properly.
-    SongEventRegistry.loadEventCache();
-
-    SongRegistry.instance.loadEntries();
-    LevelRegistry.instance.loadEntries();
-    NoteStyleRegistry.instance.loadEntries();
-    PlayerRegistry.instance.loadEntries();
-    ConversationRegistry.instance.loadEntries();
-    DialogueBoxRegistry.instance.loadEntries();
-    SpeakerRegistry.instance.loadEntries();
-    AlbumRegistry.instance.loadEntries();
-    StageRegistry.instance.loadEntries();
-    StickerRegistry.instance.loadEntries();
-    FreeplayStyleRegistry.instance.loadEntries();
-
-    CharacterDataParser.loadCharacterCache(); // TODO: Migrate characters to BaseRegistry.
-    NoteKindManager.initialize();
-    ModuleHandler.loadModuleCache();
-    ModuleHandler.callOnCreate();
+  public static function buildAssetReloadTasks():Array<AssetReloadTask>
+  {
+    return [
+      {
+        label: 'Reloading mods and scripts',
+        run: () ->
+        {
+          ModuleHandler.clearModuleCache();
+          Polymod.clearScripts();
+          loadEnabledMods();
+        }
+      },
+      {label: 'Loading song events', run: () -> SongEventRegistry.loadEventCache()},
+      {label: 'Loading songs', run: () -> SongRegistry.instance.loadEntries()},
+      {label: 'Loading levels', run: () -> LevelRegistry.instance.loadEntries()},
+      {label: 'Loading note styles', run: () -> NoteStyleRegistry.instance.loadEntries()},
+      {label: 'Loading players', run: () -> PlayerRegistry.instance.loadEntries()},
+      {label: 'Loading conversations', run: () -> ConversationRegistry.instance.loadEntries()},
+      {label: 'Loading dialogue boxes', run: () -> DialogueBoxRegistry.instance.loadEntries()},
+      {label: 'Loading speakers', run: () -> SpeakerRegistry.instance.loadEntries()},
+      {label: 'Loading albums', run: () -> AlbumRegistry.instance.loadEntries()},
+      {label: 'Loading stages', run: () -> StageRegistry.instance.loadEntries()},
+      {label: 'Loading stickers', run: () -> StickerRegistry.instance.loadEntries()},
+      {label: 'Loading freeplay styles', run: () -> FreeplayStyleRegistry.instance.loadEntries()},
+      {label: 'Loading characters', run: () -> CharacterDataParser.loadCharacterCache()},
+      {label: 'Loading note kinds', run: () -> NoteKindManager.initialize()},
+      {
+        label: 'Loading modules',
+        run: () ->
+        {
+          ModuleHandler.loadModuleCache();
+          ModuleHandler.callOnCreate();
+        }
+      }
+    ];
   }
 }

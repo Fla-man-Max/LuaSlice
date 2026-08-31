@@ -28,8 +28,7 @@ class PreloadResourceSongEvent extends SongEvent
       title: 'Resource Type',
       defaultValue: 'image',
       type: SongEventFieldType.ENUM,
-      keys: ['Image' => 'image', 'Sound' => 'sound', 'Music' => 'music', 'Character' => 'character', 'Stage' => 'stage', 'Stage Object' => 'stageobject',
-        'Shader' => 'shader', 'Dialogue Data' => 'dialogue']
+      keys: ['Image' => 'image', 'Sound' => 'sound', 'Music' => 'music', 'Character' => 'character', 'Stage' => 'stage', 'Stage Object' => 'stageobject', 'Dialogue Data' => 'dialogue']
     }, {
       name: 'resource',
       title: 'Path or ID',
@@ -38,3 +37,5 @@ class PreloadResourceSongEvent extends SongEvent
     }]);
   }
 }
+
+

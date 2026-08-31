@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<TextureAtlas imagePath="modsButton.png">
+	<SubTexture name="mods0000" x="0" y="514" width="490" height="514" frameX="-110" frameY="-109" frameWidth="709" frameHeight="724"/>
+	<SubTexture name="mods0001" x="536" y="0" width="517" height="502" frameX="-90" frameY="-131" frameWidth="772" frameHeight="724"/>
+	<SubTexture name="mods0002" x="0" y="0" width="536" height="514" frameX="-109" frameY="-111" frameWidth="750" frameHeight="724"/>
+</TextureAtlas>

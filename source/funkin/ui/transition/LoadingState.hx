@@ -2,6 +2,7 @@ package funkin.ui.transition;
 
 import funkin.data.notestyle.NoteStyleRegistry;
 import flixel.FlxSprite;
+import flixel.FlxSubState;
 import flixel.math.FlxMath;
 import flixel.tweens.FlxEase;
 import flixel.tweens.FlxTween;
@@ -9,11 +10,11 @@ import flixel.util.FlxTimer;
 import flixel.util.typeLimit.NextState;
 import funkin.graphics.FunkinSprite;
 import funkin.graphics.shaders.ScreenWipeShader;
-import funkin.luasliceMemory.MemoryCleanup;
 import funkin.play.PlayState;
 import funkin.play.PlayStatePlaylist;
 import funkin.play.song.Song.SongDifficulty;
 import funkin.play.stage.Stage;
+import funkin.Preferences;
 import haxe.io.Path;
 import lime.app.Future;
 import lime.app.Promise;
@@ -22,22 +23,34 @@ import lime.utils.AssetManifest;
 import lime.utils.Assets as LimeAssets;
 import openfl.filters.ShaderFilter;
 import openfl.utils.Assets as OpenFLAssets;
+import funkin.util.assets.ResourceCache;
+
+typedef SongAudioLoad =
+{
+  var path:String;
+  var callback:Void->Void;
+}
 
 @:nullSafety
 class LoadingState extends MusicBeatSubState
 {
-  inline static var MIN_TIME = 1.0;
+  inline static var MIN_TIME = 0.1;
 
   var asSubState:Bool = false;
-
   var target:NextState;
   var playParams:Null<PlayStateParams>;
   var stopMusic:Bool = false;
   var callbacks:Null<MultiCallback>;
   var danceLeft:Bool = false;
-
   var loadBar:FlxSprite;
   var funkay:FlxSprite;
+  var resourcePlan:Null<SongResourcePlan>;
+  var loadGeneration:Int = 0;
+  var cancelled:Bool = false;
+  var failed:Bool = false;
+  var loadStartedAt:Float = 0;
+  var audioQueue:Array<SongAudioLoad> = [];
+  var activeAudioLoads:Int = 0;
 
   function new(target:NextState, stopMusic:Bool, ?playParams:PlayStateParams)
   {
@@ -45,6 +58,7 @@ class LoadingState extends MusicBeatSubState
     this.target = target;
     this.playParams = playParams;
     this.stopMusic = stopMusic;
+    this.resourcePlan = playParams == null ? null : SongResourcePlan.build(playParams);
 
     this.loadBar = new FunkinSprite(0, FlxG.height - 20).makeSolidColor(0, 10, 0xFFff16d2);
     this.funkay = FunkinSprite.create('funkay');
@@ -52,6 +66,8 @@ class LoadingState extends MusicBeatSubState
 
   override function create():Void
   {
+    loadStartedAt = haxe.Timer.stamp();
+    loadGeneration = ResourceCache.generation;
     var bg:FunkinSprite = new FunkinSprite().makeSolidColor(FlxG.width, FlxG.height, 0xFFcaff4d);
     add(bg);
 
@@ -65,6 +81,7 @@ class LoadingState extends MusicBeatSubState
 
     initSongsManifest().onComplete(function(lib)
     {
+      if (cancelled || failed || loadGeneration != ResourceCache.generation) return;
       callbacks = new MultiCallback(onLoad);
       var introComplete = callbacks.add('introComplete');
 
@@ -76,24 +93,21 @@ class LoadingState extends MusicBeatSubState
           throw 'Invalid parameter: Target song should not be null';
         }
 
-        var difficulty:String = playParams.targetDifficulty ?? Constants.DEFAULT_DIFFICULTY;
-        var variation:String = playParams.targetVariation ?? Constants.DEFAULT_VARIATION;
-        playParams.targetSong.cacheCharts(true);
-
-        // Preload the song for the play state.
-        var targetChart:Null<SongDifficulty> = playParams.targetSong.getDifficulty(difficulty, variation);
-        if (targetChart == null)
+        queueSongAudio(resourcePlan?.audioPaths ?? []);
+        var visualComplete = callbacks.add('visuals');
+        new FlxTimer().start(0, _ ->
         {
-          throw 'Couldn\'t retrieve chart data for song "${playParams.targetSong.songName}" on difficulty "$difficulty" and variation "$variation"';
-        }
-        var instPath:String = targetChart.getInstPath(playParams.targetInstrumental);
-        var voicesPaths:Array<String> = targetChart.buildVoiceList();
-
-        checkLoadSong(instPath);
-        for (voicePath in voicesPaths)
-        {
-          checkLoadSong(voicePath);
-        }
+          if (cancelled || failed || loadGeneration != ResourceCache.generation) return;
+          try
+          {
+            resourcePlan?.preloadVisuals();
+            visualComplete();
+          }
+          catch (error:Dynamic)
+          {
+            failLoad(error);
+          }
+        });
       }
 
       checkLibrary('shared');
@@ -104,24 +118,42 @@ class LoadingState extends MusicBeatSubState
       var fadeTime:Float = 0.5;
       FlxG.camera.fade(FlxG.camera.bgColor, fadeTime, true);
       new FlxTimer().start(fadeTime + MIN_TIME, function(_) introComplete());
-    });
+    }).onError(failLoad);
   }
 
-  function checkLoadSong(path:String):Void
+  function queueSongAudio(paths:Array<String>):Void
   {
-    if (!OpenFLAssets.cache.hasSound(path))
+    for (path in paths)
     {
-      var library = Assets.getLibrary('songs');
-      var symbolPath = path.split(':').pop();
-      // @:privateAccess
-      // library.types.set(symbolPath, SOUND);
-      // @:privateAccess
-      // library.pathGroups.set(symbolPath, [library.__cacheBreak(symbolPath)]);
+      if (OpenFLAssets.cache.hasSound(path)) continue;
       var callback = callbacks?.add('song:' + path);
-      Assets.loadSound(path).onComplete(function(_)
+      if (callback != null) audioQueue.push({path: path, callback: cast callback});
+    }
+    pumpSongAudio();
+  }
+
+  function pumpSongAudio():Void
+  {
+    while (!cancelled && !failed && activeAudioLoads < 4 && audioQueue.length > 0)
+    {
+      final request:Null<SongAudioLoad> = audioQueue.shift();
+      if (request == null) return;
+      activeAudioLoads++;
+      Assets.loadSound(request.path).onComplete(function(sound)
       {
-        if (callback != null) callback();
-      });
+        activeAudioLoads--;
+        if (cancelled || loadGeneration != ResourceCache.generation)
+        {
+          if (OpenFLAssets.cache.getSound(request.path) == sound) OpenFLAssets.cache.removeSound(request.path);
+          return;
+        }
+        request.callback();
+        pumpSongAudio();
+      }).onError(error ->
+        {
+          activeAudioLoads--;
+          failLoad('Could not load song audio "${request.path}": ${Std.string(error)}');
+        });
     }
   }
 
@@ -136,8 +168,8 @@ class LoadingState extends MusicBeatSubState
       var callback = callbacks?.add('library:' + library);
       Assets.loadLibrary(library).onComplete(function(_)
       {
-        if (callback != null) callback();
-      });
+        if (!cancelled && loadGeneration == ResourceCache.generation && callback != null) callback();
+      }).onError(error -> failLoad('Could not load asset library "$library": ${Std.string(error)}'));
     }
   }
 
@@ -156,6 +188,12 @@ class LoadingState extends MusicBeatSubState
   override function update(elapsed:Float):Void
   {
     super.update(elapsed);
+
+    if (!cancelled && !failed && loadGeneration != ResourceCache.generation)
+    {
+      failLoad('Resources changed while the song was loading.');
+      return;
+    }
 
     funkay.setGraphicSize(Std.int(FlxMath.lerp(FlxG.width * 0.88, funkay.width, 0.9)));
     funkay.updateHitbox();
@@ -190,6 +228,10 @@ class LoadingState extends MusicBeatSubState
 
   function onLoad():Void
   {
+    if (cancelled || loadGeneration != ResourceCache.generation) return;
+    #if debug
+    trace('Song resources loaded in ${Math.round((haxe.Timer.stamp() - loadStartedAt) * 1000)} ms');
+    #end
     // Stop the instrumental.
     @:nullSafety(Off)
     if (stopMusic && FlxG.sound.music != null)
@@ -200,20 +242,29 @@ class LoadingState extends MusicBeatSubState
 
     if (asSubState)
     {
-      this.close();
-      // We will assume the target is a valid substate.
-      FlxG.state.openSubState(cast target);
+      final targetState = target.createInstance();
+      if (!Std.isOfType(targetState, FlxSubState))
+      {
+        failLoad('The requested playtest state is not a substate.');
+        return;
+      }
+      FlxG.state.openSubState(cast targetState);
     }
     else
     {
-      MemoryCleanup.requestFullCleanup();
       FlxG.switchState(target);
     }
   }
 
-  static function getSongPath():String
+  function failLoad(error:Dynamic):Void
   {
-    return Paths.inst(PlayState.instance?.currentSong.id ?? throw 'Cannot retrieve song path');
+    if (cancelled || failed) return;
+    failed = true;
+    cancelled = true;
+    final message:String = Std.string(error);
+    trace('Loading failed: $message');
+    funkin.util.WindowUtil.showError('Loading Failed', message);
+    FlxG.switchState(() -> new funkin.ui.mainmenu.MainMenuState());
   }
 
   static var stageDirectory:String = "shared";
@@ -251,27 +302,36 @@ class LoadingState extends MusicBeatSubState
       };
     }
 
-    #if NO_PRELOAD_ALL
-    // Switch to loading state while we load assets (default on HTML5 target).
-    var loadStateCtor = function()
+    #if (PRELOAD_ALL || NO_PRELOAD_ALL)
+    if (Preferences.loadingScreens)
     {
-      var result = new LoadingState(playStateCtor, shouldStopMusic, params);
-      @:privateAccess
-      result.asSubState = asSubState;
-      return result;
+      var loadStateCtor = function()
+      {
+        var result = new LoadingState(playStateCtor, shouldStopMusic, params);
+        @:privateAccess
+        result.asSubState = asSubState;
+        return result;
+      }
+      if (asSubState)
+      {
+        FlxG.state.openSubState(cast loadStateCtor());
+      }
+      else
+      {
+        #if PRELOAD_ALL
+        FlxG.signals.preStateSwitch.addOnce(function()
+        {
+          funkin.FunkinMemory.clearFreeplay();
+          funkin.FunkinMemory.purgeCache(true);
+        });
+        #end
+        FlxG.switchState(loadStateCtor);
+      }
+      return;
     }
-    if (asSubState)
-    {
-      FlxG.state.openSubState(cast loadStateCtor());
-    }
-    else
-    {
-      FlxG.switchState(loadStateCtor);
-    }
-    #else
-    // All assets preloaded, switch directly to play state (defualt on other targets).
-    if (!asSubState) FunkinMemory.beginStateCache();
+    #end
 
+    // All assets preloaded, switch directly to play state (default on other targets).
     @:nullSafety(Off)
     if (shouldStopMusic && FlxG.sound.music != null)
     {
@@ -279,28 +339,75 @@ class LoadingState extends MusicBeatSubState
       FlxG.sound.music = null;
     }
 
-    // Load and cache the song's charts.
-    // Don't do this if we already provided the music and charts.
-    if (!(params.overrideMusic ?? false))
-    {
-      params.targetSong.cacheCharts(true);
-    }
+    var resourcePlan:SongResourcePlan = SongResourcePlan.build(params);
+    resourcePlan.preloadAudio();
 
     var shouldPreloadLevelAssets:Bool = !(params?.minimalMode ?? false);
 
     if (shouldPreloadLevelAssets)
     {
+      #if !NO_PRELOAD_ALL
       preloadLevelAssets();
+      #end
 
-      // Cache the note style.
-      var songDifficulty = params.targetSong.getDifficulty(params.targetDifficulty, params.targetVariation);
-      if (songDifficulty != null)
+      resourcePlan.preloadVisuals();
+
+      // TODO: This sucks lol.
+      if (params.targetSong.songName == "2hot")
       {
-        var noteStyle = NoteStyleRegistry.instance.fetchEntry(songDifficulty.noteStyle ?? '');
-        if (noteStyle == null) noteStyle = NoteStyleRegistry.instance.fetchDefault();
-        FunkinMemory.cacheNoteStyle(noteStyle);
-      }
+        var spritesToCache = [
+          "wked1_cutscene_1_can",
+          "spraypaintExplosionEZ",
+          "SpraypaintExplosion",
+          "CanImpactParticle",
+          "spraycanAtlas/spritemap1"
+        ];
 
+        var soundsToCache = [
+          "Darnell_Lighter",
+          "fuse_burning",
+          "Gun_Prep",
+          "Kick_Can_FORWARD",
+          "Kick_Can_UP",
+          "Lightning1",
+          "Lightning2",
+          "Lightning3",
+          "Pico_Bonk",
+          "Shoot_1",
+          "shot1",
+          "shot2",
+          "shot3",
+          "shot4"
+        ];
+
+        for (sprite in spritesToCache)
+        {
+          trace('Queueing $sprite to preload.');
+          // new Future<String>(function() {
+          var path = Paths.image(sprite, "weekend1");
+          funkin.FunkinMemory.cacheTexture(path);
+          // Another dumb hack: FlxAnimate fetches from OpenFL's BitmapData cache directly and skips the FlxGraphic cache.
+          // Since FlxGraphic tells OpenFL to not cache it, we have to do it manually.
+          if (path.endsWith('spritemap1.png') #if FEATURE_COMPRESSED_TEXTURES || path.endsWith('spritemap1.astc') #end)
+          {
+            trace('Preloading FlxAnimate asset: ${path}');
+            openfl.Assets.getBitmapData(path, true);
+          }
+          // return '${path} successfuly loaded.';
+          // }, true);
+        }
+
+        for (sound in soundsToCache)
+        {
+          trace('Queueing $sound to preload.');
+          new Future<String>(function()
+          {
+            var path = Paths.sound(sound, "weekend1");
+            funkin.FunkinMemory.cacheSound(path);
+            return '${path} successfuly loaded.';
+          }, true);
+        }
+      }
     }
 
     if (asSubState)
@@ -309,15 +416,14 @@ class LoadingState extends MusicBeatSubState
     }
     else
     {
+      // funkin.FunkinMemory.clearFreeplay();
       FlxG.signals.preStateSwitch.addOnce(function()
       {
         funkin.FunkinMemory.clearFreeplay();
-        funkin.FunkinMemory.finishStateCache();
+        funkin.FunkinMemory.purgeCache(true);
       });
-      MemoryCleanup.requestFullCleanup();
       FlxG.switchState(playStateCtor);
     }
-    #end
   }
 
   #if NO_PRELOAD_ALL
@@ -386,9 +492,11 @@ class LoadingState extends MusicBeatSubState
 
   override function destroy():Void
   {
+    cancelled = true;
     super.destroy();
 
     callbacks = null;
+    audioQueue.resize(0);
   }
 
   static function initSongsManifest():Future<AssetLibrary>
@@ -459,7 +567,20 @@ class LoadingState extends MusicBeatSubState
 
   public static function transitionToState(state:NextState, stopMusic:Bool = false):Void
   {
-    FlxG.switchState(() -> new LoadingState(state, stopMusic));
+    if (Preferences.loadingScreens)
+    {
+      FlxG.switchState(() -> new LoadingState(state, stopMusic));
+    }
+    else
+    {
+      @:nullSafety(Off)
+      if (stopMusic && FlxG.sound.music != null)
+      {
+        FlxG.sound.music.destroy();
+        FlxG.sound.music = null;
+      }
+      FlxG.switchState(state);
+    }
   }
 }
 
@@ -537,6 +658,8 @@ class MultiCallback
         FlxG.switchState(state);
       }
     });
-    FlxG.camera.filters = [new ShaderFilter(screenWipeShit)];
+    FlxG.camera.filters = [
+      new ShaderFilter(screenWipeShit)
+    ];
   }
 }

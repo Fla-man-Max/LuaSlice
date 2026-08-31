@@ -468,5 +468,10 @@ class TwoHOTSong extends Song
     hasPlayedCutscene = false;
     cutsceneConductor = null;
 
+    // Precache the assets for the song.
+    FunkinMemory.cacheTexture(Paths.image("CanImpactParticle"));
+    FunkinMemory.cacheTexture(Paths.image("SpraypaintExplosion"));
+    FunkinMemory.cacheTexture(Paths.image("spraypaintExplosionEZ"));
+    FunkinMemory.cacheTexture(Paths.image("spraycanAtlas/spritemap1"));
   }
 }

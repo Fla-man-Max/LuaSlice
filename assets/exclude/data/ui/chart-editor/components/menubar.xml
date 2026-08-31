@@ -5,8 +5,13 @@
     // The width of the individual menu items
     width: 160px;
     }
+    #menubarOpenRecent {
+      width: auto;
+      initial-width: none;
+      min-width: 160px;
+      max-width: 800px;
+    }
   </style>
-  <spacer width="100%" />
   <menu text="File">
     <menu-item id="menubarItemNewChart" text="New Chart" shortcutText="Ctrl+N" />
     <menu-separator />
@@ -17,13 +22,13 @@
     <menu-item id="menubarItemSaveChartAs" text="Save Chart As..." shortcutText="Ctrl+Shift+S" />
     <menu-separator />
     <menu id="menubarPreferences" text="Preferences">
-      <vbox id="menubarPreferenceDoubleClickDeleteRow" width="100%">
+      <vbox width="100%">
         <menu-checkbox width="100%" id="menubarPreferenceDoubleClickDelete" text="Enable Double Click Delete" selected="true" />
       </vbox>
-      <menu-separator id="menubarPreferenceDoubleClickDeleteSeparator" />
+      <menu-separator />
       <hbox width="100%" style="padding: 5px;" verticalAlign="center">
         <label text="Auto-save Time" styleName="menuLabel" width="100%" />
-        <number-stepper id="menubarPreferenceAutoSaveMinutes" min="6" max="29" step="1" pos="10" width="72" />
+        <number-stepper id="menubarPreferenceAutoSaveMinutes" min="1" max="60" step="1" pos="5" width="72" />
         <label text="min" styleName="menuLabel" />
       </hbox>
     </menu>
@@ -42,7 +47,12 @@
     <menu-item id="menubarItemDeleteStacked" text="Delete Stacked Notes" shortcutText="Shift + Delete" />
     <menu-separator />
     <menu-item id="menubarItemFlipNotes" text="Flip Selected Notes" shortcutText="Ctrl+F" />
-    <menu id="menubarMirrorNotes" text="Mirror Notes">
+    <menu text="Randomize Chart">
+      <menu-item id="menubarItemRandomizePlayer" text="Player" />
+      <menu-item id="menubarItemRandomizeOpponent" text="Opponent" />
+      <menu-item id="menubarItemRandomizeBoth" text="Both" />
+    </menu>
+    <menu text="Mirror Notes">
         <menu-item id="menubarItemMirrorX" text="X Axis" shortcutText="Ctrl+Shift+M" />
         <menu-item id="menubarItemMirrorY" text="Y Axis" shortcutText="Ctrl+Alt+M" />
         <menu-item id="menubarItemMirrorXY" text="XY Axis" shortcutText="Ctrl+Shift+Alt+M" />
@@ -68,11 +78,11 @@
       </dropdown>
     </hbox>
     <menu-separator />
-    <menu id="menubarNoteSnapping" text="Note Snapping">
+    <menu text="Note Snapping">
       <menu-item id="menuBarItemNoteSnapDecrease" text="Decrease Note Snap Precision" shortcutText="Left Arrow" />
       <menu-item id="menuBarItemNoteSnapIncrease" text="Increase Note Snap Precision" shortcutText="Right Arrow" />
     </menu>
-    <menu id="menubarLiveInputMode" text="Live Input Mode">
+    <menu text="Live Input Mode">
       <menuoptionbox id="menuBarItemInputStyleNone" text="None" group="menubarItemInputStyleGroup" />
       <menuoptionbox id="menuBarItemInputStyleNumberKeys" text="Number Keys" group="menubarItemInputStyleGroup" />
       <menuoptionbox id="menuBarItemInputStyleWASD" text="WASD + Arrows" group="menubarItemInputStyleGroup" />
@@ -81,14 +91,21 @@
   <menu text="View">
     <vbox width="100%">
     <menu-checkbox width="100%" id="menubarItemDownscroll" text="Downscroll" />
+    <menu-checkbox width="100%" id="menubarItemVortex" text="Vortex" tooltip="Show note-style receptors at the playhead while the chart is playing." />
     </vbox>
-    <menu-option-box id="menuBarItemThemeLight" text="Light Theme" group="menubarItemThemeGroup" />
-    <menu-option-box id="menuBarItemThemeDark" text="Dark Theme" group="menubarItemThemeGroup" />
+    <menu text="Theme">
+      <menu-option-box id="menuBarItemThemeLight" text="Light" group="menubarItemThemeGroup" />
+      <menu-option-box id="menuBarItemThemeDark" text="Dark" group="menubarItemThemeGroup" />
+    </menu>
     <menu-separator />
     <vbox width="100%">
     <menu-checkbox width="100%" id="menubarItemViewIndicators" text="Note Kind Indicator" tooltip="Show an indicator if a note is of a non-default kind." />
     <menu-checkbox width="100%" id="menubarItemViewSubtitles" text="Subtitles" tooltip="Show subtitles." />
     <menu-checkbox width="100%" id="menubarItemViewWaveforms" text="Waveforms" />
+    <menu text="Waveform Position">
+      <menu-option-box id="menubarItemWaveformPosAdjacent" text="Adjacent" group="menubarItemWaveformPosGroup" />
+      <menu-option-box id="menubarItemWaveformPosOverlay" text="Overlay" group="menubarItemWaveformPosGroup" />
+    </menu>
     </vbox>
     <menu-separator />
     <menu-item id="menubarItemDifficultyUp" text="Increase Difficulty" tooltip="Manage Difficulties with the Difficulty Toolbox" shortcutText="Ctrl+Left" />

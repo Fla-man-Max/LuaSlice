@@ -8,6 +8,7 @@ import funkin.play.scoring.Scoring.ScoringRank;
 import funkin.save.migrator.RawSaveData_v1_0_0;
 import funkin.save.migrator.SaveDataMigrator;
 import funkin.ui.debug.charting.ChartEditorState.ChartEditorLiveInputStyle;
+import funkin.ui.debug.charting.ChartEditorState.ChartEditorWaveformPos;
 import funkin.ui.debug.charting.ChartEditorState.ChartEditorTheme;
 import funkin.ui.debug.stageeditor.StageEditorState.StageEditorTheme;
 import funkin.util.FileUtil;
@@ -21,13 +22,11 @@ import funkin.api.newgrounds.Medals;
 import funkin.api.newgrounds.Leaderboards;
 #end
 
-@:nullSafety
-@:build(funkin.util.macro.SaveMacro.buildSaveProperties())
+@:nullSafety @:build(funkin.util.macro.SaveMacro.buildSaveProperties())
 class Save implements ConsoleClass
 {
   public static final SAVE_DATA_VERSION:thx.semver.Version = "2.1.1";
   public static final SAVE_DATA_VERSION_RULE:thx.semver.VersionRule = ">=2.1.0 <2.2.0";
-
   public static var system:SaveSystem = new SaveSystem();
 
   /**
@@ -45,9 +44,12 @@ class Save implements ConsoleClass
 
   var data:RawSaveData;
 
-  public static function load():Save
+  public static function load(force:Bool = false):Save
   {
-    trace(' SAVE '.bold().bg_note_down() + ' Loading save......');
+    trace(' SAVE '.bold().bg_note_down() + ' Loading save...');
+
+    if (force) _instance = null;
+    if (!force && _instance != null) return _instance;
 
     // Bind save data.
     final loadedSave:Save = loadFromSlot(Constants.BASE_SAVE_SLOT);
@@ -61,39 +63,6 @@ class Save implements ConsoleClass
     _instance = Save.system.clearSlot(Constants.BASE_SAVE_SLOT);
   }
 
-  public function clearSongData():Void
-  {
-    data.scores.levels = [];
-    data.scores.songs = [];
-    Save.system.flush();
-  }
-
-  public function clearOptions():Void
-  {
-    var defaults = Save.getDefaultData();
-    var controls = data.options.controls;
-    data.options = defaults.options;
-    data.options.controls = controls;
-    #if mobile
-    var controlsScheme = data.mobileOptions.controlsScheme;
-    var noAds = data.mobileOptions.noAds;
-    data.mobileOptions = defaults.mobileOptions;
-    data.mobileOptions.controlsScheme = controlsScheme;
-    data.mobileOptions.noAds = noAds;
-    #end
-    Save.system.flush();
-  }
-
-  public function clearControls():Void
-  {
-    var defaults = Save.getDefaultData();
-    data.options.controls = defaults.options.controls;
-    #if mobile
-    data.mobileOptions.controlsScheme = defaults.mobileOptions.controlsScheme;
-    #end
-    Save.system.flush();
-  }
-
   /**
    * Constructing a new Save will load the default values.
    */
@@ -103,7 +72,7 @@ class Save implements ConsoleClass
     this.data = data ??= Save.getDefaultData();
     // Build macro will inject SaveProperty initialization here automatically
 
-    // Make sure the verison number is up to date before we flush.
+    // Make sure the version number is up to date before we flush.
     updateVersionToLatest();
   }
 
@@ -115,7 +84,7 @@ class Save implements ConsoleClass
     #end
     return {
       // Version number is an abstract(Array) internally.
-      // This means it copies by reference, so merging save data overides the version number lol.
+      // This means it copies by reference, so merging save data overrides the version number lol.
       version: thx.Dynamics.clone(Save.SAVE_DATA_VERSION),
       volume: 1.0,
       mute: false,
@@ -136,7 +105,9 @@ class Save implements ConsoleClass
         naughtyness: true,
         downscroll: false,
         middleScroll: false,
+        pauseButton: true,
         flashingLights: true,
+        loadingScreens: true,
         zoomCamera: true,
         songShaders: true,
         lowQualityMode: 'None',
@@ -145,6 +116,9 @@ class Save implements ConsoleClass
         subtitles: true,
         hapticsMode: 'All',
         hapticsIntensityMultiplier: 1,
+        controlsScheme: FunkinHitboxControlSchemes.Arrows,
+        arrowRGB: true,
+        arrowTransparency: 12,
         autoPause: true,
         vsyncMode: 'Off',
         strumlineBackgroundOpacity: 0,
@@ -152,6 +126,7 @@ class Save implements ConsoleClass
         globalOffset: 0,
         audioVisualOffset: 0,
         unlockedFramerate: false,
+        enabledDiscordRPC: true,
         screenshot: {
           shouldHideMouse: true,
           fancyPreview: true,
@@ -178,10 +153,6 @@ class Save implements ConsoleClass
         // Reasonable defaults.
         screenTimeout: false,
         controlsScheme: FunkinHitboxControlSchemes.Arrows,
-        arrowBoxLayout: "Arrow",
-        arrowRGB: false,
-        arrowTransparency: 10,
-        touchPointers: true,
         noAds: false
       },
       #end
@@ -198,15 +169,17 @@ class Save implements ConsoleClass
       optionsChartEditor: {
         // Reasonable defaults.
         previousFiles: [],
-        doubleClickDelete: true,
-        autoSaveMinutes: 10,
         noteQuant: 3,
         chartEditorLiveInputStyle: ChartEditorLiveInputStyle.None,
+        chartEditorWaveformPos: ChartEditorWaveformPos.Adjacent,
         theme: ChartEditorTheme.Light,
         playtestStartTime: false,
         playtestAudioSettings: false,
         playtestResultsSettings: false,
         downscroll: false,
+        doubleClickDelete: true,
+        vortex: false,
+        autoSaveMinutes: 5,
         showNoteKinds: true,
         metronomeVolume: 1.0,
         hitsoundVolumePlayer: 1.0,
@@ -214,7 +187,7 @@ class Save implements ConsoleClass
         instVolume: 1.0,
         playerVoiceVolume: 1.0,
         opponentVoiceVolume: 1.0,
-        playbackSpeed: 0.5,
+        playbackSpeed: 1.0,
         themeMusic: true
       },
       optionsStageEditor: {
@@ -288,71 +261,54 @@ class Save implements ConsoleClass
   ///
   @:saveProperty(data.mods.enabledMods)
   public var enabledModDirs:SaveProperty<Array<String>>;
-
   ///
   /// CHART EDITOR OPTIONS
   ///
   @:saveProperty(data.optionsChartEditor.previousFiles, [])
   public var chartEditorPreviousFiles:SaveProperty<Array<String>>;
-
   @:saveProperty(data.optionsChartEditor.hasBackup, false)
   public var chartEditorHasBackup:SaveProperty<Bool>;
-
-  @:saveProperty(data.optionsChartEditor.doubleClickDelete, true)
-  public var chartEditorDoubleClickDelete:SaveProperty<Bool>;
-
-  @:saveProperty(data.optionsChartEditor.autoSaveMinutes, 10)
-  public var chartEditorAutoSaveMinutes:SaveProperty<Int>;
-
   @:saveProperty(data.optionsChartEditor.noteQuant, 3)
   public var chartEditorNoteQuant:SaveProperty<Int>;
-
   @:saveProperty(data.optionsChartEditor.chartEditorLiveInputStyle, ChartEditorLiveInputStyle.None)
   public var chartEditorLiveInputStyle:SaveProperty<ChartEditorLiveInputStyle>;
-
+  @:saveProperty(data.optionsChartEditor.chartEditorWaveformPos, ChartEditorWaveformPos.Adjacent)
+  public var chartEditorWaveformPos:SaveProperty<ChartEditorWaveformPos>;
   @:saveProperty(data.optionsChartEditor.downscroll, false)
   public var chartEditorDownscroll:SaveProperty<Bool>;
-
+  @:saveProperty(data.optionsChartEditor.doubleClickDelete, true)
+  public var chartEditorDoubleClickDelete:SaveProperty<Bool>;
+  @:saveProperty(data.optionsChartEditor.vortex, false)
+  public var chartEditorVortex:SaveProperty<Bool>;
+  @:saveProperty(data.optionsChartEditor.autoSaveMinutes, 5)
+  public var chartEditorAutoSaveMinutes:SaveProperty<Int>;
   @:saveProperty(data.optionsChartEditor.showNoteKinds, true)
   public var chartEditorShowNoteKinds:SaveProperty<Bool>;
-
   @:saveProperty(data.optionsChartEditor.showSubtitles, true)
   public var chartEditorShowSubtitles:SaveProperty<Bool>;
-
   @:saveProperty(data.optionsChartEditor.playtestStartTime, false)
   public var chartEditorPlaytestStartTime:SaveProperty<Bool>;
-
   @:saveProperty(data.optionsChartEditor.playtestAudioSettings, false)
   public var chartEditorPlaytestAudioSettings:SaveProperty<Bool>;
-
   @:saveProperty(data.optionsChartEditor.playtestResultsSettings, false)
   public var chartEditorPlaytestResultsSettings:SaveProperty<Bool>;
-
   @:saveProperty(data.optionsChartEditor.theme, ChartEditorTheme.Light)
   public var chartEditorTheme:SaveProperty<ChartEditorTheme>;
-
   @:saveProperty(data.optionsChartEditor.metronomeVolume, 1.0)
   public var chartEditorMetronomeVolume:SaveProperty<Float>;
-
   @:saveProperty(data.optionsChartEditor.hitsoundVolumePlayer, 1.0)
   public var chartEditorHitsoundVolumePlayer:SaveProperty<Float>;
-
   @:saveProperty(data.optionsChartEditor.hitsoundVolumeOpponent, 1.0)
   public var chartEditorHitsoundVolumeOpponent:SaveProperty<Float>;
-
   @:saveProperty(data.optionsChartEditor.instVolume, 1.0)
   public var chartEditorInstVolume:SaveProperty<Float>;
-
   @:saveProperty(data.optionsChartEditor.playerVoiceVolume, 1.0)
   public var chartEditorPlayerVoiceVolume:SaveProperty<Float>;
-
   @:saveProperty(data.optionsChartEditor.opponentVoiceVolume, 1.0)
   public var chartEditorOpponentVoiceVolume:SaveProperty<Float>;
-
   @:saveProperty(data.optionsChartEditor.themeMusic, true)
   public var chartEditorThemeMusic:SaveProperty<Bool>;
-
-  @:saveProperty(data.optionsChartEditor.playbackSpeed, 0.5)
+  @:saveProperty(data.optionsChartEditor.playbackSpeed, 1.0)
   public var chartEditorPlaybackSpeed:SaveProperty<Float>;
 
   /**
@@ -380,7 +336,6 @@ class Save implements ConsoleClass
   public var stageEditorAngleStep:SaveProperty<Float>;
   @:saveProperty(data.optionsStageEditor.theme, StageEditorTheme.Light)
   public var stageEditorTheme:SaveProperty<StageEditorTheme>;
-
   public var stageBoyfriendChar(get, set):String;
 
   function get_stageBoyfriendChar():String
@@ -440,6 +395,11 @@ class Save implements ConsoleClass
   public function flush():Void
   {
     Save.system.flush();
+  }
+
+  public static function getDataForFlush():Null<RawSaveData>
+  {
+    return _instance?.data;
   }
 
   /**
@@ -784,7 +744,6 @@ class Save implements ConsoleClass
       case Gamepad(_):
         getPlayer(playerId).gamepad = controls;
     }
-    Save.system.flush();
   }
 
   public function isCharacterUnlocked(characterId:String):Bool
@@ -851,13 +810,11 @@ class Save implements ConsoleClass
             trace('[SAVE] No legacy save data found.');
             var gameSave:Save = new Save();
             FlxG.save.mergeData(gameSave.data, true);
-            gameSave.data = cast FlxG.save.data;
             return gameSave;
           case Some(legacySaveData):
             trace('[SAVE] Found legacy save data, converting...');
             var gameSave = SaveDataMigrator.migrateFromLegacy(legacySaveData);
             FlxG.save.mergeData(gameSave.data, true);
-            gameSave.data = cast FlxG.save.data;
             return gameSave;
         }
       case ERROR(_): // DEPRECATED: Unused
@@ -870,7 +827,6 @@ class Save implements ConsoleClass
         trace('[SAVE] Loaded existing save data in slot ${slot}.');
         var gameSave = SaveDataMigrator.migrate(FlxG.save.data);
         FlxG.save.mergeData(gameSave.data, true);
-        gameSave.data = cast FlxG.save.data;
         return gameSave;
     }
   }
@@ -971,7 +927,7 @@ class Save implements ConsoleClass
 
   public function debug_dumpSaveJsonSave():Void
   {
-    FileUtil.saveFile(haxe.io.Bytes.ofString(this.serializeJson()), [FileUtil.FILE_FILTER_JSON], null, null, './save.json', 'Write save data as JSON...');
+    FileUtil.saveFile('Write save data as JSON...', haxe.io.Bytes.ofString(this.serializeJson()), [FileUtil.FILE_FILTER_JSON], null, null, './save.json');
   }
 
   public function debug_dumpSaveJsonPrint():Void
@@ -1023,7 +979,7 @@ class Save implements ConsoleClass
 }
 
 /**
- * An anonymous structure containingg all the user's save data.
+ * An anonymous structure containing all the user's save data.
  * Isn't stored with JSON, stored with some sort of Haxe built-in serialization?
  */
 typedef RawSaveData =
@@ -1103,7 +1059,7 @@ typedef SaveDataUnlocks =
 }
 
 /**
- * An anoymous structure containing options about the user's high scores.
+ * An anonymous structure containing options about the user's high scores.
  */
 typedef SaveHighScoresData =
 {
@@ -1194,11 +1150,9 @@ typedef SaveDataOptions =
    */
   var downscroll:Bool;
 
-  /**
-   * If enabled, player strumline is centered and opponent strumline is split/hidden.
-   * @default `false`
-   */
   var middleScroll:Bool;
+
+  var pauseButton:Bool;
 
   /**
    * If disabled, flashing lights in the main menu and other areas will be less intense.
@@ -1206,22 +1160,16 @@ typedef SaveDataOptions =
    */
   var flashingLights:Bool;
 
+  var loadingScreens:Bool;
+
   /**
    * If disabled, the camera bump synchronized to the beat.
    * @default `false`
    */
   var zoomCamera:Bool;
 
-  /**
-   * If enabled, song gameplay may use stage and character shaders.
-   * @default `true`
-   */
   var songShaders:Bool;
 
-  /**
-   * Low quality mode. Valid values are `None`, `Minimal`, and `Max`.
-   * @default `None`
-   */
   var lowQualityMode:String;
 
   /**
@@ -1253,6 +1201,12 @@ typedef SaveDataOptions =
    * @default `1`
    */
   var hapticsIntensityMultiplier:Float;
+
+  var controlsScheme:String;
+
+  var arrowRGB:Bool;
+
+  var arrowTransparency:Int;
 
   /**
    * If enabled, the game will automatically pause when tabbing out.
@@ -1299,6 +1253,12 @@ typedef SaveDataOptions =
   var unlockedFramerate:Bool;
 
   /**
+   * Indicates if the discord RPC is enabled.
+   * @default `true`
+   */
+  var enabledDiscordRPC:Bool;
+
+  /**
    * Screenshot options
    * @param shouldHideMouse Should the mouse be hidden when taking a screenshot? Default: `true`
    * @param fancyPreview Show a fancy preview? Default: `true`
@@ -1338,14 +1298,6 @@ typedef SaveDataMobileOptions =
    * @default `Arrows`
    */
   var controlsScheme:String;
-
-  var arrowBoxLayout:String;
-
-  var arrowRGB:Bool;
-
-  var arrowTransparency:Int;
-
-  var touchPointers:Bool;
 
   /**
    * If bought, the game will not show any ads.
@@ -1480,18 +1432,6 @@ typedef SaveDataChartEditorOptions =
   var ?previousFiles:Array<String>;
 
   /**
-   * Whether double-clicking a note or event deletes it on mobile.
-   * @default `true`
-   */
-  var ?doubleClickDelete:Bool;
-
-  /**
-   * Number of inactive minutes before the Chart Editor auto-saves.
-   * @default `10`
-   */
-  var ?autoSaveMinutes:Int;
-
-  /**
    * Note snapping level in the Chart Editor.
    * @default `3`
    */
@@ -1502,6 +1442,8 @@ typedef SaveDataChartEditorOptions =
    * @default `ChartEditorLiveInputStyle.None`
    */
   var ?chartEditorLiveInputStyle:ChartEditorLiveInputStyle;
+
+  var ?chartEditorWaveformPos:ChartEditorWaveformPos;
 
   /**
    * Theme in the Chart Editor.
@@ -1514,6 +1456,12 @@ typedef SaveDataChartEditorOptions =
    * @default `false`
    */
   var ?downscroll:Bool;
+
+  var ?doubleClickDelete:Bool;
+
+  var ?vortex:Bool;
+
+  var ?autoSaveMinutes:Int;
 
   /**
    * Show Note Kind Indicator in the Chart Editor.

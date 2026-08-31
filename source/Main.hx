@@ -11,6 +11,8 @@ import funkin.util.logging.CrashHandler;
 import funkin.ui.debug.FunkinDebugDisplay;
 import funkin.ui.debug.FunkinDebugDisplay.DebugDisplayMode;
 import funkin.save.Save;
+import funkin.FunkinMemory;
+import funkin.audio.FunkinSound;
 #if hxvlc
 import hxvlc.util.Handle;
 #end
@@ -20,7 +22,6 @@ import openfl.Lib;
 import openfl.media.Video;
 import openfl.net.NetStream;
 import funkin.util.WindowUtil;
-import funkin.util.CLIUtil;
 
 using funkin.util.AnsiUtil;
 
@@ -39,10 +40,6 @@ class Main extends Sprite
 
   public static function main():Void
   {
-    #if !mobile
-    CLIUtil.resetWorkingDir();
-    #end
-
     // Set the current working directory for Android and iOS devices
     #if android
     // On Android use External Files Dir.
@@ -54,6 +51,7 @@ class Main extends Sprite
 
     // We need to make the crash handler LITERALLY FIRST so nothing EVER gets past it.
     CrashHandler.initialize();
+    funkin.util.CLIUtil.resetWorkingDir();
     CrashHandler.queryStatus();
 
     Lib.current.addChild(new Main());
@@ -66,17 +64,12 @@ class Main extends Sprite
     // Initialize custom logging.
     haxe.Log.trace = funkin.util.logging.AnsiTrace.trace;
     funkin.util.logging.AnsiTrace.traceBF();
-    #if FEATURE_LUA_SCRIPTS
-    LuaLogger.init();
-    #end
 
     // Get OpenFL to stop complaining so much.
     // You can remove this line if you want to read debug messages.
     openfl.utils._internal.Log.level = openfl.utils._internal.Log.LogLevel.INFO;
 
-    // Load mods to override assets.
-    // TODO: Replace with loadEnabledMods() once the user can configure the mod list.
-    funkin.modding.PolymodHandler.loadAllMods();
+    funkin.modding.PolymodHandler.loadEnabledMods();
 
     if (stage != null)
     {
@@ -95,27 +88,28 @@ class Main extends Sprite
       removeEventListener(Event.ADDED_TO_STAGE, init);
     }
 
-    #if (sys && !mobile)
+    #if (!html5 && !mobile)
     // Force-kill the game to prevent background processing.
-    Lib.current.stage.window.onClose.add(function()
+    openfl.Lib.application.onExit.add((_) ->
     {
-      trace(' EXITING '.bold().bg_red() + ' Game is exiting, cleaning up resources...');
+      // Dispose of cached audio and textures.
+      funkin.audio.FunkinSound.stopAllAudio(true, true);
+      funkin.FunkinMemory.purgeCache(true);
 
-      #if hxvlc
-      // Clean up VLC threads to prevent memory leaks.
-      hxvlc.util.Handle.dispose();
-      #end
+      // Dispose of any assets still in the OpenFL cache, just incase.
+      openfl.Assets.cache.clear();
+
+      trace(' EXITING '.bold().bg_red() + ' Resources are disposed, Game is closing now.');
 
       Sys.exit(0);
-    });
+    }, 99);
     #end
 
-    #if !mobile
     // Manually crash the game when using a software renderer in order to give a nicer error message.
     var context = stage.window.context.type;
     if (context != WEBGL && context != OPENGL && context != OPENGLES)
     {
-      var tech:String = #if web "WebGL" #elseif desktop "OpenGL" #else "OpenGL ES" #end;
+      var tech:String = #if web 'WebGL' #elseif desktop 'OpenGL' #else 'OpenGL ES' #end;
       var requiredVersion:String = #if web '$tech 1.0 or newer' #elseif desktop '$tech 3.0 or newer' #else '$tech 2.0 or newer' #end;
       var desc:String = 'Failed to initialize the $tech rendering context!\n\n';
       #if web
@@ -129,7 +123,6 @@ class Main extends Sprite
       WindowUtil.showError('Failed to initialize $tech', desc);
       System.exit(1);
     }
-    #end
 
     setupGame();
   }
@@ -176,11 +169,9 @@ class Main extends Sprite
 
     WindowUtil.setVSyncMode(funkin.Preferences.vsyncMode);
 
-    #if !mobile
     // Force a `FunkinCamera` to be the default camera.
     // This allows the blend mode shader to work everywhere.
     untyped FlxG.cameras = new funkin.graphics.FunkinCameraFrontEnd();
-    #end
 
     var framerate:Int = Preferences.unlockedFramerate ? 0 : Preferences.framerate;
 
@@ -258,7 +249,7 @@ class Main extends Sprite
   function repositionCounters(lerp:Bool):Void
   {
     // Calling this so it gets scaled based on the resolution of the game and device's resolution.
-    var scale:Float = Math.max(Math.min(FlxG.stage.stageWidth / FlxG.width, FlxG.stage.stageHeight / FlxG.height), 1) * 0.85;
+    var scale:Float = Math.max(Math.min(FlxG.stage.stageWidth / FlxG.width, FlxG.stage.stageHeight / FlxG.height), 1);
 
     if (debugDisplay != null)
     {

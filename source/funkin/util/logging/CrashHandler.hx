@@ -4,6 +4,7 @@ import openfl.Lib;
 import openfl.events.UncaughtErrorEvent;
 import flixel.util.FlxSignal.FlxTypedSignal;
 import flixel.FlxG.FlxRenderMethod;
+import haxe.io.Path;
 
 /**
  * A custom crash handler that writes to a log file and displays a message box.
@@ -12,6 +13,8 @@ import flixel.FlxG.FlxRenderMethod;
 class CrashHandler
 {
   public static final LOG_FOLDER = 'logs';
+  static var recoveringEditorCrash:Bool = false;
+  static var handlingCrash:Bool = false;
 
   /**
    * Called before exiting the game when a standard error occurs, like a thrown exception.
@@ -47,14 +50,33 @@ class CrashHandler
    */
   static function onUncaughtError(error:UncaughtErrorEvent):Void
   {
+    final message:String = generateErrorMessage(error);
+
+    if (handlingCrash)
+    {
+      trace('Additional error while handling a crash:\n$message');
+      error.preventDefault();
+      error.stopImmediatePropagation();
+      return;
+    }
+
+    handlingCrash = true;
+
     try
     {
-      errorSignal.dispatch(generateErrorMessage(error));
+      try
+      {
+        errorSignal.dispatch(message);
+      }
+      catch (signalError:Dynamic)
+      {
+        trace('Error while notifying crash listeners: ${Std.string(signalError)}');
+      }
 
       try
       {
         #if sys
-        logError(error);
+        logErrorMessage(message);
         #end
       }
       catch (e:Dynamic)
@@ -62,7 +84,14 @@ class CrashHandler
         trace('Error while logging error: ' + e);
       }
 
-      displayError(error);
+      if (isRecoverableState() && recoverState(message))
+      {
+        error.preventDefault();
+        error.stopImmediatePropagation();
+        return;
+      }
+
+      displayErrorMessage(message);
     }
     catch (e:Dynamic)
     {
@@ -78,13 +107,37 @@ class CrashHandler
 
   static function onCriticalError(message:String):Void
   {
+    if (handlingCrash)
+    {
+      trace('Additional critical error while handling a crash:\n$message');
+      return;
+    }
+
+    handlingCrash = true;
+
     try
     {
-      criticalErrorSignal.dispatch(message);
+      try
+      {
+        criticalErrorSignal.dispatch(message);
+      }
+      catch (signalError:Dynamic)
+      {
+        trace('Error while notifying critical crash listeners: ${Std.string(signalError)}');
+      }
 
       #if sys
-      logErrorMessage(message, true);
+      try
+      {
+        logErrorMessage(message, true);
+      }
+      catch (logError:Dynamic)
+      {
+        trace('Error while logging critical error: ${Std.string(logError)}');
+      }
       #end
+
+      if (isRecoverableState() && recoverState(message)) return;
 
       displayErrorMessage(message);
     }
@@ -109,7 +162,51 @@ class CrashHandler
 
   static function displayErrorMessage(message:String):Void
   {
-    funkin.util.WindowUtil.showError("Fatal Uncaught Exception", message);
+    funkin.util.WindowUtil.showCrashError("Fatal Uncaught Exception", message);
+  }
+
+  static function isRecoverableState():Bool
+  {
+    if (recoveringEditorCrash || FlxG.game == null || FlxG.state == null) return false;
+
+    final stateClass:Null<Class<Dynamic>> = Type.getClass(FlxG.state);
+    if (stateClass == null) return false;
+
+    final stateName:String = Type.getClassName(stateClass) ?? '';
+    return stateName.startsWith('funkin.ui.debug.') || stateName.startsWith('funkin.ui.modmenu.') || stateName.startsWith('funkin.ui.options.');
+  }
+
+  static function recoverState(message:String):Bool
+  {
+    recoveringEditorCrash = true;
+
+    try
+    {
+      final stateClass:Null<Class<Dynamic>> = Type.getClass(FlxG.state);
+      final stateName:String = stateClass == null ? 'Editor' : Type.getClassName(stateClass) ?? 'Editor';
+      final editorState:Bool = stateName.startsWith('funkin.ui.debug.');
+      final title:String = editorState ? 'Editor Crashed' : 'Menu Error';
+      final label:String = editorState ? 'editor' : 'menu';
+      trace('Crash recovery requested for $stateName:\n$message');
+      funkin.util.WindowUtil.showCrashError(title,
+        'The $label hit an error, but LuaSlice will keep running.\n\nPress OK to return to the main menu.\n\n$message', message);
+
+      FlxG.sound.music?.stop();
+      funkin.util.WindowUtil.setWindowTitle(Constants.TITLE);
+      FlxG.signals.postStateSwitch.addOnce(function()
+      {
+        recoveringEditorCrash = false;
+        handlingCrash = false;
+      });
+      FlxG.switchState(() -> new funkin.ui.mainmenu.MainMenuState());
+      return true;
+    }
+    catch (recoveryError:Dynamic)
+    {
+      trace('Editor crash recovery failed: ${Std.string(recoveryError)}');
+      recoveringEditorCrash = false;
+      return false;
+    }
   }
 
   #if sys
@@ -120,9 +217,45 @@ class CrashHandler
 
   static function logErrorMessage(message:String, critical:Bool = false):Void
   {
-    FileUtil.createDirIfNotExists(LOG_FOLDER);
+    final report:String = try
+    {
+      buildCrashReport(message);
+    }
+    catch (reportError:Dynamic)
+    {
+      'LuaSlice crash report generation failed: ${Std.string(reportError)}\n\n$message\n';
+    };
 
-    sys.io.File.saveContent('$LOG_FOLDER/crash${critical ? '-critical' : ''}-${DateUtil.generateTimestamp()}.log', buildCrashReport(message));
+    final fileName:String = 'crash${critical ? '-critical' : ''}-${DateUtil.generateTimestamp()}.log';
+    final candidates:Array<String> = [];
+
+    #if mobile
+    final storageDirectory:Null<String> = lime.system.System.applicationStorageDirectory;
+    if (storageDirectory != null && storageDirectory.length > 0) candidates.push(Path.join([storageDirectory, LOG_FOLDER]));
+    candidates.push(Path.join([Sys.getCwd(), LOG_FOLDER]));
+    #else
+    candidates.push(Path.join([FileUtil.gameDirectory, LOG_FOLDER]));
+    candidates.push(Path.join([Sys.getCwd(), LOG_FOLDER]));
+    final storageDirectory:Null<String> = lime.system.System.applicationStorageDirectory;
+    if (storageDirectory != null && storageDirectory.length > 0) candidates.push(Path.join([storageDirectory, LOG_FOLDER]));
+    #end
+
+    var lastError:Null<Dynamic> = null;
+    for (directory in candidates)
+    {
+      try
+      {
+        FileUtil.createDirIfNotExists(directory);
+        sys.io.File.saveContent(Path.join([directory, fileName]), report);
+        return;
+      }
+      catch (error:Dynamic)
+      {
+        lastError = error;
+      }
+    }
+
+    throw 'Could not write crash log: ${Std.string(lastError)}';
   }
   #end
 
@@ -175,13 +308,22 @@ class CrashHandler
 
     fullContents += 'Loaded mods: \n';
 
-    if (funkin.modding.PolymodHandler.loadedModIds.length == 0)
+    final loadedMods:Array<String> = try
+    {
+      funkin.modding.PolymodHandler.loadedModIds.copy();
+    }
+    catch (error:Dynamic)
+    {
+      [];
+    };
+
+    if (loadedMods.length == 0)
     {
       fullContents += 'No mods loaded.\n';
     }
     else
     {
-      for (mod in funkin.modding.PolymodHandler.loadedModIds)
+      for (mod in loadedMods)
       {
         fullContents += '- ${mod}\n';
       }
@@ -205,9 +347,20 @@ class CrashHandler
     var fullContents = 'Generated by: ${Constants.GENERATED_BY}\n';
     fullContents += ' Git hash: ${Constants.GIT_HASH} (${Constants.GIT_HAS_LOCAL_CHANGES ? 'MODIFIED' : 'CLEAN'})\n';
     fullContents += 'System timestamp: ${DateUtil.generateTimestamp()}\n';
-    var driverInfo = FlxG?.stage?.context3D?.driverInfo ?? 'N/A';
+    var driverInfo:String = try
+    {
+      FlxG?.stage?.context3D?.driverInfo ?? 'N/A';
+    }
+    catch (error:Dynamic)
+    {
+      'N/A';
+    };
     fullContents += 'Driver info: ${driverInfo}\n';
-    #if sys
+    #if android
+    fullContents += 'Platform: Android\n';
+    #elseif ios
+    fullContents += 'Platform: iOS\n';
+    #elseif sys
     fullContents += 'Platform: ${Sys.systemName()}\n';
     #end
     fullContents += 'Render method: ${renderMethod()}\n';
@@ -218,7 +371,14 @@ class CrashHandler
 
     fullContents += '\n';
 
-    fullContents += MemoryUtil.buildGCInfo();
+    fullContents += try
+    {
+      MemoryUtil.buildGCInfo();
+    }
+    catch (error:Dynamic)
+    {
+      'Memory information unavailable: ${Std.string(error)}';
+    };
 
     return fullContents;
   }
@@ -226,9 +386,23 @@ class CrashHandler
   static function generateErrorMessage(error:UncaughtErrorEvent):String
   {
     var errorMessage:String = "";
-    var callStack:Array<haxe.CallStack.StackItem> = haxe.CallStack.exceptionStack(true);
+    var callStack:Array<haxe.CallStack.StackItem> = try
+    {
+      haxe.CallStack.exceptionStack(true);
+    }
+    catch (stackError:Dynamic)
+    {
+      [];
+    };
 
-    errorMessage += '${error.error}\n';
+    errorMessage += try
+    {
+      '${Std.string(error.error)}\n';
+    }
+    catch (stringError:Dynamic)
+    {
+      'Unknown error\n';
+    };
 
     for (stackItem in callStack)
     {
@@ -301,9 +475,12 @@ class CrashHandler
     {
       switch (FlxG.renderMethod)
       {
-        case FlxRenderMethod.DRAW_TILES: 'DRAW_TILES';
-        case FlxRenderMethod.BLITTING: 'BLITTING';
-        default: 'UNKNOWN';
+        case FlxRenderMethod.DRAW_TILES:
+          'DRAW_TILES';
+        case FlxRenderMethod.BLITTING:
+          'BLITTING';
+        default:
+          'UNKNOWN';
       }
     }
     catch (e)

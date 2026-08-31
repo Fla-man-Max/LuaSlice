@@ -1,6 +1,7 @@
 package funkin.data;
 
 import funkin.util.assets.DataAssets;
+import funkin.util.assets.ResourceCache;
 import funkin.util.VersionUtil;
 import haxe.Constraints.Constructible;
 
@@ -16,9 +17,7 @@ typedef EntryConstructorFunction = (String, ?Dynamic) -> Void;
  * @param J The type of the JSON data used when constructing.
  * @param P The type of the parameters used for `fetchEntry()`.
  */
-@:nullSafety
-@:generic
-@:autoBuild(funkin.util.macro.RegistryMacro.buildRegistry())
+@:nullSafety @:generic @:autoBuild(funkin.util.macro.RegistryMacro.buildRegistry())
 abstract class BaseRegistry<T:(IRegistryEntry<J> & Constructible<EntryConstructorFunction>), J, P>
 {
   /**
@@ -72,6 +71,7 @@ abstract class BaseRegistry<T:(IRegistryEntry<J> & Constructible<EntryConstructo
    */
   public function loadEntries():Void
   {
+    var loadStart:Float = haxe.Timer.stamp();
     clearEntries();
 
     //
@@ -133,6 +133,9 @@ abstract class BaseRegistry<T:(IRegistryEntry<J> & Constructible<EntryConstructo
         continue;
       }
     }
+    #if debug
+    log('Loaded ${countEntries()} entries in ${Math.round((haxe.Timer.stamp() - loadStart) * 1000)} ms');
+    #end
   }
 
   /**
@@ -231,7 +234,7 @@ abstract class BaseRegistry<T:(IRegistryEntry<J> & Constructible<EntryConstructo
   function loadEntryFile(id:String):JsonFile
   {
     var entryFilePath:String = Paths.json('${dataFilePath}/${id}');
-    var rawJson:String = openfl.Assets.getText(entryFilePath).trim();
+    var rawJson:String = ResourceCache.getText(entryFilePath).trim();
     return {
       fileName: entryFilePath,
       contents: rawJson

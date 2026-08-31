@@ -1,12 +1,14 @@
 package funkin.ui.debug.stageeditor.handlers;
 
 #if FEATURE_STAGE_EDITOR
+import animate.FlxAnimateFrames;
 import flixel.graphics.frames.FlxAtlasFrames;
-import openfl.display.BitmapData;
-import flixel.FlxSprite;
 import flixel.util.FlxColor;
-import openfl.display.BlendMode;
+import flixel.FlxSprite;
 import funkin.data.stage.StageData.StageDataProp;
+import haxe.io.Path;
+import openfl.display.BitmapData;
+import openfl.display.BlendMode;
 
 using StringTools;
 
@@ -15,24 +17,17 @@ using StringTools;
  */
 class AssetDataHandler
 {
-  static var state:StageEditorState;
-
-  public static function init(state:StageEditorState)
-  {
-    AssetDataHandler.state = state;
-  }
-
   /**
    * Turns an Object into Data.
    * @param obj the Object whose data to read.
    * @param useBitmaps Whether to Save object's BitmapData directly.
    * @return Data of the Object
    */
-  public static function toData(obj:StageEditorObject, useBitmaps:Bool = false):StageEditorObjectData
+  public static function toData(obj:StageEditorObject):StageEditorObjectData
   {
     var outputData:StageEditorObjectData = {
       name: obj.name,
-      assetPath: "",
+      assetPath: '',
       position: [obj.x, obj.y],
       zIndex: obj.zIndex,
       isPixel: !obj.antialiasing,
@@ -40,42 +35,46 @@ class AssetDataHandler
       alpha: obj.alpha,
       danceEvery: obj.animation.getNameList().length > 0 ? obj.danceEvery : 0,
       scroll: [obj.scrollFactor.x, obj.scrollFactor.y],
-      animations: [for (n in obj.animation.getNameList()) if (obj.animDatas.exists(n)) obj.animDatas[n]],
+      animations: [
+        for (n => d in obj.animationDatas) d
+      ],
       startingAnimation: obj.startingAnimation,
-      animType: obj.animType,
-      atlasSettings: obj.atlasSettings,
+      animType: getAnimType(obj),
       angle: obj.angle,
       flipX: obj.flipX,
       flipY: obj.flipY,
       blend: obj.blend == null ? "" : Std.string(obj.blend),
       color: obj.color.toWebString(),
-      animData: ""
+      neededFiles: obj.usedFiles.clone()
     }
 
-    if (useBitmaps)
+    if (obj.usedFiles.length > 0)
     {
-      outputData.bitmap = obj.pixels.clone();
-      outputData.animData = obj.generateXML();
-      return outputData;
-    }
-
-    if (obj.animType == 'animateatlas' && obj.sourceAssetPath != '')
-    {
-      outputData.assetPath = obj.sourceAssetPath;
-      return outputData;
-    }
-
-    for (name => bit in state.bitmaps)
-    {
-      if (areTheseBitmapsEqual(bit, obj.pixels))
+      if (outputData.animType == 'animateatlas')
       {
-        outputData.assetPath = name;
-        outputData.animData = obj.generateXML(name);
-        return outputData;
+        outputData.assetPath = Path.directory(obj.usedFiles[0].name);
+
+        // Additionally set the atlas settings here.
+        var frames:FlxAnimateFrames = cast obj.frames;
+
+        @:privateAccess
+        outputData.atlasSettings = {
+          useRenderTexture: obj.useRenderTexture,
+          applyStageMatrix: obj.applyStageMatrix,
+          swfMode: frames._settings?.swfMode ?? false,
+          cacheOnLoad: frames._settings?.cacheOnLoad ?? false,
+          filterQuality: frames._settings?.filterQuality ?? animate.FlxAnimateFrames.FilterQuality.MEDIUM
+        }
+      }
+      else
+      {
+        outputData.assetPath = Path.withoutExtension(obj.usedFiles[0].name);
       }
     }
-
-    outputData.assetPath = "#FFFFFF";
+    else // Solid color
+    {
+      outputData.assetPath = obj.color.toWebString();
+    }
 
     return outputData;
   }
@@ -87,112 +86,124 @@ class AssetDataHandler
    */
   public static function fromData(object:StageEditorObject, data:StageEditorObjectData)
   {
-    var objectName = data.name ?? "Unnamed";
-    var assetPath = data.assetPath ?? "#FFFFFF";
-    var animations = data.animations ?? [];
-    var startingAnimation = data.startingAnimation ?? "";
-    var animData = data.animData ?? "";
-    var loadedAnimateAtlas = false;
-
-    object.animType = data.animType ?? 'sparrow';
-    object.atlasSettings = data.atlasSettings;
-    object.sourceAssetPath = assetPath;
-
-    if (object.animType == 'animateatlas' && !assetPath.startsWith('#'))
+    if (data.animations != null && data.animations.length > 0)
     {
-      try
+      switch (data.animType)
       {
-        object.loadTextureAtlas(assetPath, state.stageFolder, cast data.atlasSettings);
-        loadedAnimateAtlas = object.frames != null && object.frames.numFrames > 0;
-      }
-      catch (error)
-      {
-        state.notifyChange('Texture Atlas Error', 'Could not load ${assetPath}: ${error}', true);
+        case 'sparrow':
+          var spritesheet:Null<StageEditorState.StageEditorAssetFile> = data.neededFiles.find(f -> f.name.endsWith('.png'));
+          var frameData:Null<StageEditorState.StageEditorAssetFile> = data.neededFiles.find(f -> f.name.endsWith('.xml'));
+
+          if (spritesheet != null && frameData != null)
+          {
+            object.frames = FlxAtlasFrames.fromSparrow(BitmapData.fromBytes(spritesheet.data), frameData.data.toString());
+          }
+
+        case 'packer':
+          var spritesheet:Null<StageEditorState.StageEditorAssetFile> = data.neededFiles.find(f -> f.name.endsWith('.png'));
+          var frameData:Null<StageEditorState.StageEditorAssetFile> = data.neededFiles.find(f -> f.name.endsWith('.txt'));
+
+          if (spritesheet != null && frameData != null)
+          {
+            object.frames = FlxAtlasFrames.fromSpriteSheetPacker(BitmapData.fromBytes(spritesheet.data), frameData.data.toString());
+          }
+
+        case 'animateatlas':
+          var animateJson:String = data.neededFiles.find(f -> f.name.endsWith('/Animation.json'))?.data?.toString() ?? '';
+          var spritemaps:Array<SpritemapInput> = [];
+
+          var totalSpritemaps:Int = Std.int((data.neededFiles.length - 1) / 2);
+          for (i in 0...totalSpritemaps)
+          {
+            var name:String = '/spritemap${i + 1}';
+            spritemaps.push({
+              source: BitmapData.fromBytes(data.neededFiles.find(f -> f.name.endsWith('$name.png'))?.data),
+              json: data.neededFiles.find(f -> f.name.endsWith('$name.json'))?.data?.toString() ?? ''
+            });
+          }
+
+          object.applyStageMatrix = data.atlasSettings?.applyStageMatrix ?? false;
+          object.useRenderTexture = data.atlasSettings?.useRenderTexture ?? false;
+
+          var settings:FlxAnimateSettings = {
+            swfMode: data.atlasSettings?.swfMode ?? false,
+            cacheOnLoad: data.atlasSettings?.cacheOnLoad ?? false,
+            filterQuality: cast data.atlasSettings?.filterQuality ?? animate.FlxAnimateFrames.FilterQuality.MEDIUM
+          };
+
+          object.frames = FlxAnimateFrames.fromAnimate(animateJson, spritemaps, null, data.name, true, settings);
+
+          @:privateAccess
+          cast(object.frames, FlxAnimateFrames)._settings = settings; // Settings are temporary, but we need to save them for exporting.
+        default:
+          // Do nothing.
       }
     }
-
-    if (loadedAnimateAtlas) {}
-    else if (data.bitmap != null)
+    else if (data.assetPath.startsWith("#"))
     {
-      if (animations.length > 0)
-      {
-        var bitToLoad = state.addBitmap(data.bitmap.clone(), objectName);
-        if (animData != "") object.frames = FlxAtlasFrames.fromSparrow(state.bitmaps[bitToLoad], animData);
-        else object.loadGraphic(state.bitmaps[bitToLoad]);
-      }
-      else if (areTheseBitmapsEqual(data.bitmap, getDefaultGraphic()))
-      {
-        object.loadGraphic(getDefaultGraphic());
-      }
-      else
-      {
-        var bitToLoad = state.addBitmap(data.bitmap.clone(), objectName);
-        object.loadGraphic(state.bitmaps[bitToLoad]);
-      }
+      object.loadGraphic(getDefaultGraphic());
+      object.color = FlxColor.fromString(data.assetPath);
     }
     else
+      object.loadGraphic(BitmapData.fromBytes(data.neededFiles[0].data));
+
+    object.usedFiles = data.neededFiles;
+
+    object.name = data.name;
+    object.setPosition(data.position[0], data.position[1]);
+    object.zIndex = data.zIndex;
+    object.antialiasing = !data.isPixel;
+    object.alpha = data.alpha;
+    object.danceEvery = data.danceEvery;
+    object.scrollFactor.set(data.scroll[0], data.scroll[1]);
+    object.startingAnimation = data.startingAnimation ?? "";
+    object.angle = data.angle;
+    object.blend = blendFromString(data.blend);
+    if (!data.assetPath.startsWith("#")) object.color = FlxColor.fromString(data.color);
+
+    for (anim in data.animations)
     {
-      if (animations.length > 0 && animData != "" && state.bitmaps.exists(assetPath)) // considering we're unpacking we might as well just do this instead of switch
-      {
-        if (animData.contains("</TextureAtlas>"))
-        {
-          object.frames = FlxAtlasFrames.fromSparrow(state.bitmaps[assetPath].clone(), animData);
-        }
-        else
-        {
-          object.frames = FlxAtlasFrames.fromSpriteSheetPacker(state.bitmaps[assetPath].clone(), animData);
-        }
-      }
-      else if (assetPath.startsWith("#") || !state.bitmaps.exists(assetPath))
-      {
-        object.loadGraphic(getDefaultGraphic());
-        object.color = FlxColor.fromString(assetPath.startsWith("#") ? assetPath : "#FF00FF");
-      }
-      else
-        object.loadGraphic(state.bitmaps[assetPath].clone());
+      object.addAnimation(anim);
     }
 
-    object.name = objectName;
-    var position = data.position ?? [0, 0];
-    object.setPosition(position[0] ?? 0, position[1] ?? 0);
-    object.zIndex = data.zIndex ?? 0;
-    object.antialiasing = !(data.isPixel ?? false);
-    object.alpha = data.alpha ?? 1;
-    object.danceEvery = data.danceEvery ?? 0;
-    var scroll = data.scroll ?? [1, 1];
-    object.scrollFactor.set(scroll[0] ?? 1, scroll[1] ?? 1);
-    object.startingAnimation = startingAnimation;
-    object.angle = data.angle ?? 0;
-    object.blend = blendFromString(data.blend ?? "");
-    if (!assetPath.startsWith("#")) object.color = FlxColor.fromString(data.color ?? "#FFFFFF");
-
-    for (anim in animations)
+    if (object.animation.getNameList().contains(data.startingAnimation))
     {
-      object.addAnim(anim.name, anim.prefix, anim.offsets ?? [0, 0], anim.frameIndices ?? [], anim.frameRate ?? 24, anim.looped ?? false, anim.flipX ?? false,
-        anim.flipY ?? false, anim.animType ?? 'framelabel');
+      object.startingAnimation = data.startingAnimation;
+      object.playAnimation(object.startingAnimation);
+
+      flixel.util.FlxTimer.wait(StageEditorState.TIME_BEFORE_ANIM_STOP, function()
+      {
+        if (object?.animation?.curAnim != null) object.animation.stop();
+      });
     }
 
-    if (object.animation.getNameList().contains(startingAnimation)) object.startingAnimation = startingAnimation;
-    else object.startingAnimation = "";
-
-    switch (data.scale ?? Left(1.0))
+    switch (data.scale)
     {
       case Left(value):
         object.scale.set(value, value);
 
       case Right(values):
-        object.scale.set(values[0] ?? 1, values[1] ?? values[0] ?? 1);
+        object.scale.set(values[0], values[1]);
     }
     object.updateHitbox();
 
-    object.playAnim(object.startingAnimation);
-
-    flixel.util.FlxTimer.wait(StageEditorState.TIME_BEFORE_ANIM_STOP, function()
-    {
-      if (object?.animation?.curAnim != null) object.animation.stop();
-    });
-
     return object;
+  }
+
+  /**
+   * Get the animation type of an object depending on the frames and animation count.
+   */
+  public static function getAnimType(object:StageEditorObject)
+  {
+    if (object.isAnimate) return 'animateatlas';
+
+    // For packer we check every file for the object to see if it has a .txt file.
+    for (file in object.usedFiles)
+    {
+      if (file.name.endsWith(".txt")) return 'packer';
+    }
+
+    return 'sparrow'; // Sparrow is the default value, even for static sprites.
   }
 
   /**
@@ -211,7 +222,6 @@ class AssetDataHandler
    */
   public static function blendFromString(blend:String):BlendMode
   {
-    // originally this was a MASSIVE and I do mean MASSIVE switch case, though then I found out that blendmode already has one implemented
     @:privateAccess
     return BlendMode.fromString(blend.toLowerCase().trim());
   }
@@ -221,7 +231,11 @@ class AssetDataHandler
     // the last check is for if the only frame is the standard graphic frame
     if (obj == null || obj.frames.frames.length == 0 || obj.frames.frames[0].name == null) return "";
 
-    var xml = ["<!--This XML File was automatically generated by the Stage Editor.-->", '<?xml version="1.0" encoding="UTF-8"?>', '<TextureAtlas imagePath="${haxe.io.Path.withoutDirectory(bitmapName)}.png" width="${obj.pixels.width}" height="${obj.pixels.height}">'].join("\n");
+    var xml = [
+      "<!--This XML File was automatically generated by the Stage Editor.-->",
+      '<?xml version="1.0" encoding="UTF-8"?>',
+      '<TextureAtlas imagePath="${haxe.io.Path.withoutDirectory(bitmapName)}.png" width="${obj.pixels.width}" height="${obj.pixels.height}">'
+    ].join("\n");
 
     for (daFrame in obj.frames.frames)
     {
@@ -231,31 +245,11 @@ class AssetDataHandler
     xml += "</TextureAtlas>";
     return xml;
   }
-
-  // I am aware OpenFL has it's own compare bitmap function, though I find this to be better ngl
-  static function areTheseBitmapsEqual(bitmap1:BitmapData, bitmap2:BitmapData)
-  {
-    if (bitmap1.width != bitmap2.width || bitmap1.height != bitmap2.height) return false;
-
-    var bytes1 = bitmap1.image.data;
-    var bytes2 = bitmap2.image.data;
-
-    for (i in 0...bytes1.length)
-    {
-      if (bytes1[i] != bytes2[i])
-      {
-        return false;
-      }
-    }
-
-    return true;
-  }
 }
 
 typedef StageEditorObjectData =
 {
   > StageDataProp,
-  var animData:String;
-  var ?bitmap:BitmapData;
+  var neededFiles:Array<StageEditorState.StageEditorAssetFile>;
 }
 #end

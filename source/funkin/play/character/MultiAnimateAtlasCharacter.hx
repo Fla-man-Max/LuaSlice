@@ -51,27 +51,54 @@ class MultiAnimateAtlasCharacter extends BaseCharacter
     var baseAssetPath:String = Paths.stripLibrary(_data.assetPath);
 
     var mainTexture:FlxAnimateFrames = Paths.getAnimateAtlas(baseAssetPath, baseAssetLibrary, cast _data.atlasSettings);
-    if (mainTexture == null)
-    {
-      log('Could not load main texture atlas for ${characterId}: ${_data.assetPath}');
-      return;
-    }
     textureList.push(mainTexture);
 
     this.useRenderTexture = _data.atlasSettings.useRenderTexture;
     this.applyStageMatrix = _data.atlasSettings.applyStageMatrix;
 
     mainTexture.parent.destroyOnNoUse = false;
-    if (!_usedAtlases.contains(mainTexture)) _usedAtlases.push(mainTexture);
 
     for (animation in _data.animations)
     {
       if (animation.assetPath == null) continue;
       if (addedAssetPaths.contains(animation.assetPath)) continue;
 
-      var subTexture = loadAnimationAtlas(animation);
-      if (subTexture == null) return;
-      textureList.push(subTexture);
+      switch (animation.renderType)
+      {
+        case "sparrow":
+          var subTexture:FlxAtlasFrames = Paths.getSparrowAtlas(animation.assetPath);
+          // If we don't do this, the unused textures will be removed as soon as they're loaded.
+
+          if (subTexture == null)
+          {
+            log('Multi-Animate atlas could not load subtexture: ${animation.assetPath}');
+            FlxG.log.error('Multi-Animate atlas could not load subtexture: ${animation.assetPath}');
+            return;
+          }
+          else
+          {
+            log('Concatenating sparrow atlas: ${animation.assetPath}');
+            subTexture.parent.destroyOnNoUse = false;
+            // This breaks mix-and-match for some reason.
+            // TODO: Re-enable this line once a proper fix is found.
+            // - Abnormal
+            // FunkinMemory.cacheTexture(Paths.image(animation.assetPath));
+          }
+
+          textureList.push(subTexture);
+
+          if (!_usedAtlases.contains(subTexture)) _usedAtlases.push(subTexture);
+        default:
+          var subAssetLibrary:String = Paths.getLibrary(animation.assetPath);
+          var subAssetPath:String = Paths.stripLibrary(animation.assetPath);
+
+          var subTexture:FlxAnimateFrames = Paths.getAnimateAtlas(subAssetPath, subAssetLibrary, cast animation.atlasSettings ?? _data.atlasSettings);
+
+          log('Concatenating texture atlas: ${animation.assetPath}');
+          subTexture.parent.destroyOnNoUse = false;
+
+          textureList.push(subTexture);
+      }
 
       addedAssetPaths.push(animation.assetPath);
     }
@@ -95,82 +122,28 @@ class MultiAnimateAtlasCharacter extends BaseCharacter
   {
     log('[MULTIATLASCHAR] Loading ${_data.animations.length} animations for ${characterId}');
 
-    if (this.frames == null)
-    {
-      log('[MULTIATLASCHAR] Cannot load animations for ${characterId}: frames not loaded.');
-      return;
-    }
-
     for (anim in _data.animations)
     {
-      addCharacterAnimation(anim);
+      switch (anim.renderType)
+      {
+        case "sparrow":
+          FlxAnimationUtil.addAtlasAnimation(this, anim);
+        default:
+          FlxAnimationUtil.addTextureAtlasAnimation(this, anim);
+      }
+
+      if (anim.offsets == null)
+      {
+        setAnimationOffsets(anim.name, 0, 0);
+      }
+      else
+      {
+        setAnimationOffsets(anim.name, anim.offsets[0], anim.offsets[1]);
+      }
     }
 
     var animationNames:Array<String> = this.animation.getNameList();
     log('[MULTIATLASCHAR] Successfully loaded ${animationNames.length} animations for ${characterId}');
-  }
-
-  function addCharacterAnimation(anim:AnimationData):Void
-  {
-    switch (anim.renderType)
-    {
-      case "sparrow":
-        FlxAnimationUtil.addAtlasAnimation(this, anim);
-      default:
-        FlxAnimationUtil.addTextureAtlasAnimation(this, anim);
-    }
-
-    if (anim.offsets == null)
-    {
-      setAnimationOffsets(anim.name, 0, 0);
-    }
-    else
-    {
-      setAnimationOffsets(anim.name, anim.offsets[0], anim.offsets[1]);
-    }
-  }
-
-  function loadAnimationAtlas(animation:AnimationData):Null<FlxAtlasFrames>
-  {
-    final assetPath = animation.assetPath;
-    if (assetPath == null) return null;
-
-    final result:Null<FlxAtlasFrames> = switch (animation.renderType)
-    {
-      case "sparrow":
-        var subTexture = Paths.getSparrowAtlas(assetPath);
-        if (subTexture == null)
-        {
-          log('Multi-Animate atlas could not load subtexture: $assetPath');
-          FlxG.log.error('Multi-Animate atlas could not load subtexture: $assetPath');
-          null;
-        }
-        else
-        {
-          log('Concatenating sparrow atlas: $assetPath');
-          subTexture.parent.destroyOnNoUse = false;
-          subTexture;
-        }
-      default:
-        var subAssetLibrary = Paths.getLibrary(assetPath);
-        var subAssetPath = Paths.stripLibrary(assetPath);
-        var subTexture = Paths.getAnimateAtlas(subAssetPath, subAssetLibrary, cast animation.atlasSettings ?? _data.atlasSettings);
-        if (subTexture == null)
-        {
-          log('Multi-Animate atlas could not load subtexture: $assetPath');
-          FlxG.log.error('Multi-Animate atlas could not load subtexture: $assetPath');
-          null;
-        }
-        else
-        {
-          log('Concatenating texture atlas: $assetPath');
-          subTexture.parent.destroyOnNoUse = false;
-          subTexture;
-        }
-    };
-
-    if (result != null && !_usedAtlases.contains(result)) _usedAtlases.push(result);
-    return result;
   }
 
   /**

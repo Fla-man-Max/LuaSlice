@@ -41,20 +41,4 @@ class CharSelectAtlasHandler
     }
     framesCache.clear();
   }
-
-  public static function unloadExcept(paths:Array<String>):Void
-  {
-    final stalePaths:Array<String> = [];
-    for (path in framesCache.keys())
-    {
-      if (!paths.contains(path)) stalePaths.push(path);
-    }
-
-    for (path in stalePaths)
-    {
-      final frames = framesCache.get(path);
-      framesCache.remove(path);
-      if (frames != null) frames.parent.destroyOnNoUse = true;
-    }
-  }
 }

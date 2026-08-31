@@ -12,11 +12,6 @@ import funkin.ui.Page.PageName;
 import flixel.tweens.FlxEase;
 import funkin.util.HapticUtil;
 import flixel.tweens.FlxTween;
-import flixel.math.FlxPoint;
-#if FEATURE_TOUCH_CONTROLS
-import openfl.events.MouseEvent;
-import openfl.events.TouchEvent;
-#end
 
 @:nullSafety
 class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
@@ -62,11 +57,6 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
 
   // Helper variable
   var _isMainMenuState:Bool = false;
-  #if FEATURE_TOUCH_CONTROLS
-  var rawPointerJustPressed:Bool = false;
-  var rawPointerX:Float = 0;
-  var rawPointerY:Float = 0;
-  #end
 
   public function new(navControls:NavControls = Vertical, ?wrapMode:WrapMode)
   {
@@ -77,22 +67,17 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
     {
       this.wrapMode = switch (navControls)
       {
-        case Horizontal: Horizontal;
-        case Vertical: Vertical;
-        default: Both;
+        case Horizontal:
+          Horizontal;
+        case Vertical:
+          Vertical;
+        default:
+          Both;
       }
     }
 
-    touchBuddy = new FlxSprite().makeGraphic(20, 20);
+    touchBuddy = new FlxSprite().makeGraphic(10, 10);
     _isMainMenuState = Std.isOfType(FlxG.state, funkin.ui.mainmenu.MainMenuState);
-
-    #if FEATURE_TOUCH_CONTROLS
-    if (FlxG.stage != null)
-    {
-      FlxG.stage.addEventListener(MouseEvent.MOUSE_DOWN, onRawMenuMouse);
-      FlxG.stage.addEventListener(TouchEvent.TOUCH_BEGIN, onRawMenuTouch);
-    }
-    #end
 
     super();
   }
@@ -120,10 +105,11 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
   {
     super.update(elapsed);
 
-    if (enabled && !busy && !pauseInput) updateControls();
+    if (enabled == true && busy != true && pauseInput != true) updateControls();
   }
 
-  inline function updateControls():Void
+  @:nullSafety(Off)
+  function updateControls():Void
   {
     var controls = PlayerSettings.player1.controls;
 
@@ -133,20 +119,25 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
     var newIndex = 0;
 
     // Define unified input handlers
-    final inputUp:Bool = controls.UI_UP_P || (!_isMainMenuState && SwipeUtil.swipeUp);
-    final inputDown:Bool = controls.UI_DOWN_P || (!_isMainMenuState && SwipeUtil.swipeDown);
+    final inputUp:Bool = controls.UI_UP_P || (!_isMainMenuState && SwipeUtil.swipeDown);
+    final inputDown:Bool = controls.UI_DOWN_P || (!_isMainMenuState && SwipeUtil.swipeUp);
     final inputLeft:Bool = controls.UI_LEFT_P || (!_isMainMenuState && SwipeUtil.swipeLeft);
     final inputRight:Bool = controls.UI_RIGHT_P || (!_isMainMenuState && SwipeUtil.swipeRight);
 
     // Keepin' these for keyboard/controller support on mobile platforms
     newIndex = switch (navControls)
     {
-      case Vertical: navList(inputUp, inputDown, wrapY);
-      case Horizontal: navList(inputLeft, inputRight, wrapX);
-      case Both: navList(inputLeft || inputUp, inputRight || inputDown, !wrapMode.match(None));
+      case Vertical:
+        navList(inputUp, inputDown, wrapY);
+      case Horizontal:
+        navList(inputLeft, inputRight, wrapX);
+      case Both:
+        navList(inputLeft || inputUp, inputRight || inputDown, !wrapMode.match(None));
 
-      case Columns(num): navGrid(num, inputLeft, inputRight, wrapX, inputUp, inputDown, wrapY);
-      case Rows(num): navGrid(num, inputUp, inputDown, wrapY, inputLeft, inputRight, wrapX);
+      case Columns(num):
+        navGrid(num, inputLeft, inputRight, wrapX, inputUp, inputDown, wrapY);
+      case Rows(num):
+        navGrid(num, inputUp, inputDown, wrapY, inputLeft, inputRight, wrapX);
     };
 
     #if FEATURE_TOUCH_CONTROLS
@@ -156,9 +147,7 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
       touchBuddy.setPosition(TouchUtil.touch.x, TouchUtil.touch.y);
     }
 
-    final hasPointerInput:Bool = TouchUtil.pressed || hasDirectTouchPress() || rawPointerJustPressed || FlxG.mouse.pressed;
-
-    if (funkin.mobile.input.ControlsHandler.usingExternalInputDevice && !hasPointerInput)
+    if (funkin.mobile.input.ControlsHandler.usingExternalInputDevice && !TouchUtil.pressed && !TouchUtil.justReleased)
     {
       if (newIndex != selectedIndex)
       {
@@ -166,23 +155,31 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
         selectItem(newIndex);
       }
     }
-    else if (hasPointerInput)
+    else if (TouchUtil.pressed || TouchUtil.justReleased)
     {
       for (i in 0...members.length)
       {
         final item = members[i];
         final menuCamera = item.camera ?? FlxG.camera;
-        final isTouchingItem:Bool = _isMainMenuState ? mainMenuPointerOverlaps(item, menuCamera) : TouchUtil.overlaps(item, menuCamera)
-          || directTouchOverlaps(item, menuCamera) || rawPointerOverlaps(item, menuCamera) || FlxG.mouse.overlaps(item, menuCamera);
 
-        if (item.available && isTouchingItem && (TouchUtil.justPressed || hasDirectTouchPress() || rawPointerJustPressed || FlxG.mouse.justPressed))
+        final itemOverlaps:Bool = !_isMainMenuState && TouchUtil.overlaps(item, menuCamera);
+        final itemPixelOverlap:Bool = _isMainMenuState && FlxG.pixelPerfectOverlap(touchBuddy, item, 0);
+
+        final isTouchingItem:Bool = itemOverlaps || itemPixelOverlap;
+
+        final activateItem:Bool = _isMainMenuState ? TouchUtil.justPressed : TouchUtil.justReleased && !(SwipeUtil.justSwipedAny ?? false);
+        if (item.available && isTouchingItem && activateItem)
         {
           var prevIndex:Int = selectedIndex;
 
-          if (!_isMainMenuState && selectedIndex != i)
+          if (!_isMainMenuState)
           {
+            if (selectedIndex != i)
+            {
+              FunkinSound.playOnce(Paths.sound('scrollMenu'), 0.4);
+              selectItem(i);
+            }
             newIndex = i;
-            break;
           }
           else
           {
@@ -192,12 +189,23 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
 
           if (_isMainMenuState)
           {
-            FlxTween.cancelTweensOf(item);
-            item.scale.set(prevIndex == i ? 1.1 : 0.94, prevIndex == i ? 1.1 : 0.94);
-            FlxTween.tween(item.scale, {x: 1, y: 1}, 0.3, {ease: FlxEase.backOut});
+            if (prevIndex == i)
+            {
+              FlxTween.cancelTweensOf(item);
+              item.scale.set(1.1, 1.1);
+              FlxTween.tween(item.scale, {x: 1, y: 1}, 0.3, {ease: FlxEase.backOut});
 
-            HapticUtil.vibrate(0, 0.05, 1);
-            accept();
+              HapticUtil.vibrate(0, 0.05, 1);
+              accept();
+            }
+            else
+            {
+              FlxTween.cancelTweensOf(item);
+              item.scale.set(0.94, 0.94);
+              FlxTween.tween(item.scale, {x: 1, y: 1}, 0.3, {ease: FlxEase.backOut});
+
+              HapticUtil.vibrate(0, 0.01, 0.5);
+            }
           }
           else
           {
@@ -207,8 +215,6 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
           break;
         }
       }
-
-      rawPointerJustPressed = false;
     }
 
     if (newIndex != selectedIndex && !_isMainMenuState)
@@ -229,77 +235,6 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
 
     return;
   }
-
-  #if FEATURE_TOUCH_CONTROLS
-  function hasDirectTouchPress():Bool
-  {
-    for (touch in FlxG.touches.list)
-    {
-      if (touch != null && touch.justPressed) return true;
-    }
-
-    return false;
-  }
-
-  function directTouchOverlaps(item:T, camera:flixel.FlxCamera):Bool
-  {
-    for (touch in FlxG.touches.list)
-    {
-      if (touch != null && touch.justPressed && touch.overlaps(item, camera)) return true;
-    }
-
-    return false;
-  }
-
-  function mainMenuPointerOverlaps(item:T, camera:flixel.FlxCamera):Bool
-  {
-    for (touch in FlxG.touches.list)
-    {
-      if (touch == null || !touch.justPressed) continue;
-      final point = touch.getViewPosition(camera, FlxPoint.get());
-      final bounds = item.getScreenBounds(null, camera);
-      final overlaps:Bool = bounds.containsPoint(point);
-      bounds.put();
-      point.put();
-      if (overlaps) return true;
-    }
-
-    if (rawPointerJustPressed && FlxG.stage != null)
-    {
-      final viewX:Float = rawPointerX * FlxG.width / FlxG.stage.stageWidth;
-      final viewY:Float = rawPointerY * FlxG.height / FlxG.stage.stageHeight;
-      final point = FlxPoint.get(viewX, viewY);
-      final bounds = item.getScreenBounds(null, camera);
-      final overlaps:Bool = bounds.containsPoint(point);
-      bounds.put();
-      point.put();
-      if (overlaps) return true;
-    }
-
-    return false;
-  }
-
-  function rawPointerOverlaps(item:T, camera:flixel.FlxCamera):Bool
-  {
-    if (!rawPointerJustPressed) return false;
-    final point = FlxPoint.get(rawPointerX + camera.scroll.x, rawPointerY + camera.scroll.y);
-    return item.overlapsPoint(point, true, camera);
-  }
-
-  function onRawMenuMouse(event:MouseEvent):Void
-  {
-    rawPointerJustPressed = true;
-    rawPointerX = event.stageX;
-    rawPointerY = event.stageY;
-  }
-
-  function onRawMenuTouch(event:TouchEvent):Void
-  {
-    rawPointerJustPressed = true;
-    rawPointerX = event.stageX;
-    rawPointerY = event.stageY;
-  }
-  #end
 
   function navAxis(index:Int, size:Int, prev:Bool, next:Bool, allowWrap:Bool):Int
   {
@@ -356,8 +291,6 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
 
   public function accept():Void
   {
-    if (!enabled || busy) return;
-
     var menuItem:T = members[selectedIndex];
 
     if (!menuItem.available) return;
@@ -426,14 +359,6 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
 
   override function destroy():Void
   {
-    #if FEATURE_TOUCH_CONTROLS
-    if (FlxG.stage != null)
-    {
-      FlxG.stage.removeEventListener(MouseEvent.MOUSE_DOWN, onRawMenuMouse);
-      FlxG.stage.removeEventListener(TouchEvent.TOUCH_BEGIN, onRawMenuTouch);
-    }
-    #end
-
     super.destroy();
     byName.clear();
     onChange.removeAll();

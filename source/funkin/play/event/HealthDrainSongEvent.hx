@@ -28,3 +28,5 @@ class HealthDrainSongEvent extends SongEvent
     name: 'scoreChange', title: 'Score Amount', defaultValue: -10, step: 10, type: SongEventFieldType.INTEGER
   }]);
 }
+
+

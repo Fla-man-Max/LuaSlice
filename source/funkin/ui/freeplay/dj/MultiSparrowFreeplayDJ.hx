@@ -23,8 +23,6 @@ class ScriptedMultiSparrowFreeplayDJ extends MultiSparrowFreeplayDJ implements p
  */
 class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
 {
-  var usedAtlases:Array<FlxAtlasFrames> = [];
-
   public function new(x:Float, y:Float, characterId:String)
   {
     super(x, y, characterId);
@@ -42,7 +40,9 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
 
     var assetList = [];
     for (anim in playableCharData.getAnimationsList())
+    {
       if (anim.assetPath != null && !assetList.contains(anim.assetPath)) assetList.push(anim.assetPath);
+    }
 
     var texture:FlxAtlasFrames = Paths.getSparrowAtlas(playableCharData.getAssetPath());
 
@@ -55,7 +55,6 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
     else
     {
       texture.parent.destroyOnNoUse = false;
-      usedAtlases.push(texture);
     }
 
     for (asset in assetList)
@@ -67,22 +66,11 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
         log('Concatenating multi-sparrow atlas: ${asset}');
         subTexture.parent.destroyOnNoUse = false;
         FunkinMemory.cacheTexture(Paths.image(asset));
-        if (!usedAtlases.contains(subTexture)) usedAtlases.push(subTexture);
       }
       texture.addAtlas(subTexture);
     }
 
     this.frames = texture;
-  }
-
-  public override function destroy():Void
-  {
-    for (atlas in usedAtlases)
-    {
-      if (atlas.parent != null) atlas.parent.destroyOnNoUse = true;
-    }
-    usedAtlases.resize(0);
-    super.destroy();
   }
 
   public function loadAnimations():Void
@@ -95,7 +83,7 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
     log('[MULTISPARROWDJ] Successfully loaded ${animationList.length} animations for ${characterId}');
   }
 
-  public override function update(elapsed:Float):Void
+  override public function update(elapsed:Float):Void
   {
     switch (currentState)
     {
@@ -151,7 +139,7 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
         }
         else
         {
-          FlxG.log.warn("Unrecognized animation in FistPumpIntro: " + getCurrentAnimation());
+          FlxG.log.warn('Unrecognized animation in FistPumpIntro: ' + getCurrentAnimation());
         }
 
       case FistPump:
@@ -176,7 +164,7 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
         }
         else
         {
-          FlxG.log.warn("Unrecognized animation in FistPump: " + getCurrentAnimation());
+          FlxG.log.warn('Unrecognized animation in FistPump: ' + getCurrentAnimation());
         }
 
       case IdleEasterEgg:

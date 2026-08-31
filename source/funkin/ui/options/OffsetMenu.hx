@@ -50,47 +50,38 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
   var items:TextMenuList;
   var preferenceItems:FlxTypedSpriteGroup<FlxSprite>;
   var backButton:FunkinBackButton;
-
   // Background
   var blackRect:FlxSprite;
-
   // Text for the jump-in message and count
   var jumpInText:FlxText;
   var countText:FlxText;
-
   // Elements for the offset calibration (receptor, arrows, strumline, etc)
   var arrows:Array<ArrowData> = [];
   var receptor:FunkinSprite;
   var testStrumline:Strumline;
-
   // Camera for the menu
   var menuCamera:FunkinCamera;
   // Variable to check if we're calibrating or testing
   var calibrating:Bool = false;
-
   // Variables for the offset calibration
   var appliedOffsetLerp:Float = 0;
   var savedOffset:Int = 0;
   var tempOffset:Int = 0;
-
   // Variables for transitioning between states
   var lerped:Float = 0;
   var shouldOffset:Int = 0;
   var offsetLerp:Float = 0;
   var scaleModifier:Float = 1;
-  var offsetIntroReady:Bool = false;
-
   // Variables for keeping time and beat
   var localConductor:Conductor;
   var arrowBeat:Float = 0;
-
   // Variables for differences and consistency functionality
   var _gotMad:Bool = false;
   var differences:Array<Float> = [];
-
   var msPerBeat(get, never):Float;
 
   // The milliseconds per beat, calculated from the BPM.
+
   function get_msPerBeat():Float
   {
     return 60000 / BPM;
@@ -99,90 +90,14 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
   /**
    * Key press inputs which have been received but not yet processed.
    * These are encoded with an OS timestamp, so we can account for input latency.
-  **/
+   */
   var inputPressQueue:Array<PreciseInputEvent> = [];
 
   /**
    * Key release inputs which have been received but not yet processed.
    * These are encoded with an OS timestamp, so we can account for input latency.
-  **/
+   */
   var inputReleaseQueue:Array<PreciseInputEvent> = [];
-
-  function resetOffsetRuntime(clearArrows:Bool = false):Void
-  {
-    inputPressQueue = [];
-    inputReleaseQueue = [];
-
-    testStrumline.clean();
-    testStrumline.noteData = [];
-    testStrumline.nextNoteIndex = 0;
-
-    if (clearArrows) clearOffsetArrows();
-  }
-
-  function clearOffsetArrows():Void
-  {
-    for (arrow in arrows)
-    {
-      if (arrow?.sprite == null) continue;
-      remove(arrow.sprite, true);
-      arrow.sprite.destroy();
-    }
-
-    arrows = [];
-  }
-
-  function syncOffsetAudio(applyOffsets:Bool):Void
-  {
-    var musicTime:Float = FlxG.sound.music == null ? 0 : FlxG.sound.music.time;
-
-    OptionsState.instance.drumsBG.pause();
-    OptionsState.instance.drumsBG.time = musicTime;
-    OptionsState.instance.drumsBG.resume();
-
-    localConductor.update(musicTime, applyOffsets, true);
-    _lastBeat = localConductor.currentBeatTime;
-    _lastTime = musicTime;
-  }
-
-  function nextOffsetBeat(currentBeat:Float, leadBeats:Int = 4, step:Int = 4):Float
-  {
-    var start = Math.ceil(currentBeat + leadBeats);
-    var remainder = start % step;
-    if (remainder != 0) start += step - remainder;
-    return start;
-  }
-
-  function isOffsetIntroReady(currentBeat:Float):Bool
-  {
-    if (offsetLerp < 1) return false;
-
-    if (!offsetIntroReady)
-    {
-      offsetIntroReady = true;
-      inputPressQueue = [];
-      inputReleaseQueue = [];
-
-      if (calibrating)
-      {
-        clearOffsetArrows();
-        arrowBeat = nextOffsetBeat(currentBeat, 4, 2) - 2;
-      }
-      else
-      {
-        testStrumline.clean();
-        testStrumline.noteData = [];
-        testStrumline.nextNoteIndex = 0;
-
-        arrowBeat = nextOffsetBeat(currentBeat, 4, 4);
-        _lastDirection = 0;
-
-        trace('Testing strumline starts after intro at beat: ' + arrowBeat);
-      }
-    }
-
-    return true;
-  }
 
   /**
    * Creates an arrow at the specified beat.
@@ -231,7 +146,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
 
     for (arrow in arrows)
     {
-      var diff:Float = Math.abs(arrow.beat - beat);
+      var diff:Float = arrow.beat - beat;
       if (diff < closestDiff)
       {
         closestDiff = diff;
@@ -256,9 +171,10 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
     camera = menuCamera;
 
     blackRect = new FlxSprite(0, 0);
-    blackRect.makeGraphic(FlxG.width, FlxG.height, FlxColor.BLACK);
+    blackRect.makeGraphic(FlxG.width + 50, FlxG.height + 50, FlxColor.BLACK);
     blackRect.alpha = 0;
     blackRect.scrollFactor.set(0, 0);
+    blackRect.screenCenter();
     add(blackRect);
 
     receptor = new FunkinSprite(0, 0);
@@ -333,7 +249,10 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
       // Reset calibration state and start another one.
 
       testStrumline.alpha = 0;
-      resetOffsetRuntime(true);
+
+      testStrumline.clean();
+      testStrumline.noteData = [];
+      testStrumline.nextNoteIndex = 0;
       @:privateAccess
       if (OptionsState.instance.optionsCodex.currentPage != this) return;
 
@@ -348,19 +267,20 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
 
       calibrating = true;
       MenuTypedList.pauseInput = true;
+      OptionsState.instance.drumsBG.pause();
+      OptionsState.instance.drumsBG.time = FlxG.sound.music.time;
+      OptionsState.instance.drumsBG.resume();
+      OptionsState.instance.drumsBG.fadeIn(1, 0, 1);
       canExit = false;
       differences = [];
       offsetLerp = 0;
-      offsetIntroReady = false;
       savedOffset = Preferences.globalOffset;
       Preferences.globalOffset = 0; // We save the offset and set it to 0 so the player can recalibrate.
-      syncOffsetAudio(true);
-      OptionsState.instance.drumsBG.fadeIn(1, 0, 1);
       shouldOffset = 1;
       tempOffset = 0;
       appliedOffsetLerp = 0;
 
-      arrowBeat = Math.floor(localConductor.currentBeatTime);
+      arrowBeat = Math.floor(localConductor.currentBeatTime) + 4;
       receptor.angle = 0;
 
       _gotMad = false;
@@ -373,10 +293,14 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
       if (OptionsState.instance.optionsCodex.currentPage != this) return;
 
       shouldOffset = 1;
-      testStrumline.alpha = 0;
-      resetOffsetRuntime(true);
-      syncOffsetAudio(true);
-      offsetIntroReady = false;
+      testStrumline.clean();
+      testStrumline.noteData = [];
+      testStrumline.nextNoteIndex = 0;
+
+      OptionsState.instance.drumsBG.pause();
+      OptionsState.instance.drumsBG.time = FlxG.sound.music.time;
+      OptionsState.instance.drumsBG.resume();
+      localConductor.update(FlxG.sound.music.time, true);
 
       var floored = Math.floor(localConductor.currentBeatTime);
       arrowBeat = floored - (floored % 4);
@@ -477,6 +401,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
   }
 
   // Exits the calibration and resets the offset.
+
   public function exitCalibration(cancel:Bool):Void
   {
     backButton.enabled = false;
@@ -500,6 +425,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
   }
 
   // Handles the exit for mobile devices.
+
   public function handleMobileExit():Void
   {
     if (shouldOffset == 1) exitCalibration(true);
@@ -508,6 +434,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
 
   // Returns the average of the differences in milliseconds.
   // Average is the sum of all differences divided by the number of differences.
+
   public function getAverage():Float
   {
     if (differences.length == 0) return 0;
@@ -524,6 +451,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
 
   // Returns the consistency of the differences.
   // Consistency is the average of the squared differences from the mean. (Standard deviation)
+
   public function getConsistency():Float
   {
     if (differences.length == 0) return 0;
@@ -591,12 +519,14 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
       }
       if (calibrating)
       {
-        arrowBeat = arrows.length > 0 ? lastArrowBeat : Math.floor(b);
+        arrowBeat = lastArrowBeat;
       }
       else
         arrowBeat = 4;
 
-      resetOffsetRuntime(false);
+      testStrumline.clean();
+      testStrumline.noteData = [];
+      testStrumline.nextNoteIndex = 0;
       trace('Restarting conductor');
 
       _lastTime = FlxG.sound.music.time;
@@ -631,7 +561,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
     }
 
     // Calibration logic
-    if (shouldOffset == 1 && calibrating && isOffsetIntroReady(b))
+    if (shouldOffset == 1 && calibrating)
     {
       // Lerp our offset
       if (_offsetLerpTime < 1) _offsetLerpTime += elapsed * 2;
@@ -659,7 +589,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
           arrow.sprite.alpha -= elapsed * 5;
         }
 
-        if (arrow.beat == _lastArrowBeat || arrow.sprite.alpha <= 0)
+        if (arrow.beat == _lastArrowBeat || arrow.sprite.alpha <= 0 || differences.length < 8)
         {
           toRemove.push(arrow);
           arrow.sprite.kill();
@@ -679,7 +609,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
         // Create a new arrow at the next beat division.
         arrowBeat = (arrowBeat - (arrowBeat % 2)) + 2;
         var nextBeat:Float = arrowBeat;
-        createArrow(nextBeat);
+        if (differences.length >= 8) createArrow(nextBeat);
       }
 
       // Hit a note (calibration)
@@ -711,8 +641,6 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
           differences = [];
           tempOffset = 0;
           appliedOffsetLerp = 0;
-          clearOffsetArrows();
-          arrowBeat = Math.floor(b);
           _gotMad = true;
           return;
         }
@@ -747,7 +675,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
       }
     }
     // Testing logic
-    else if (shouldOffset == 1 && isOffsetIntroReady(b))
+    else if (shouldOffset == 1)
     {
       // If we are not calibrating, we are just testing the strumline.
 
@@ -809,7 +737,6 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
         canExit = true;
         calibrating = false;
         MenuTypedList.pauseInput = false;
-        offsetIntroReady = false;
         offsetLerp = 0;
         shouldOffset = 0;
       }
@@ -889,14 +816,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
     var inputLatencyNs:Int64 = PreciseInputManager.getCurrentTimestamp() - input.timestamp;
     var inputLatencyMs:Float = inputLatencyNs.toFloat() / Constants.NS_PER_MS;
 
-    var diff:Float = note.noteData.time - localConductor.songPosition;
-
-    var totalDiff:Float = diff;
-    if (totalDiff < 0) totalDiff = diff + inputLatencyMs;
-    else
-      totalDiff = diff - inputLatencyMs;
-
-    var noteDiff:Int = Std.int(totalDiff);
+    var noteDiff:Int = Std.int(note.noteData.time - localConductor.songPosition - inputLatencyMs);
 
     addDifference(noteDiff);
 
@@ -931,8 +851,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
 
     var notesByDirection:Array<Array<NoteSprite>> = [[], [], [], []];
 
-    for (note in notesInRange)
-      notesByDirection[note.direction].push(note);
+    for (note in notesInRange) notesByDirection[note.direction].push(note);
 
     while (inputPressQueue.length > 0)
     {
@@ -975,6 +894,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
   }
 
   // Creates a button item with a callback.
+
   function createButtonItem(name:String, callback:Void->Void):Void
   {
     var item = items.createItem(funkin.ui.FullScreenScaleMode.gameNotchSize.x, (120 * items.length) + 30, name, BOLD, callback);
@@ -982,6 +902,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
   }
 
   // Creates a preference item with a number input.
+
   function createPrefItemNumber(prefName:String, prefDesc:String, onChange:Float->Void, ?valueFormatter:Float->String, defaultValue:Int, min:Int, max:Int,
       step:Float = 0.1, precision:Int, dragStepMultiplier:Float = 1):NumberPreferenceItem
   {

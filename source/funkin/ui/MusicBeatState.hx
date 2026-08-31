@@ -1,5 +1,11 @@
 package funkin.ui;
 
+#if FEATURE_LUA_SCRIPTS
+import luaslice.lua.LuaScriptManager;
+#end
+#if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+import luaslice.script.ScriptRuntimeManager;
+#end
 import funkin.modding.IScriptedClass.IEventHandler;
 import funkin.ui.mainmenu.MainMenuState;
 import flixel.FlxSubState;
@@ -8,6 +14,7 @@ import flixel.text.FlxText;
 import flixel.util.FlxColor;
 import funkin.audio.FunkinSound;
 import flixel.util.FlxSort;
+import flixel.util.typeLimit.NextState;
 import funkin.modding.PolymodHandler;
 import funkin.modding.events.ScriptEvent;
 import funkin.modding.module.ModuleHandler;
@@ -15,6 +22,7 @@ import funkin.util.SortUtil;
 import funkin.util.WindowUtil;
 import funkin.input.Controls;
 import funkin.ui.FullScreenScaleMode;
+import funkin.ui.transition.preload.hotreload.HotReloadState.HotReloadStateParams;
 #if mobile
 import funkin.graphics.FunkinCamera;
 import funkin.mobile.ui.FunkinHitbox;
@@ -33,11 +41,18 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
 {
   var controls(get, never):Controls;
 
+  #if FEATURE_LUA_SCRIPTS
+  var classLuaScriptManager:Null<LuaScriptManager>;
+  #end
+
+  #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+  var classScriptRuntimeManager:Null<ScriptRuntimeManager>;
+  #end
+
   inline function get_controls():Controls return PlayerSettings.player1.controls;
 
   public var leftWatermarkText:Null<FlxText> = null;
   public var rightWatermarkText:Null<FlxText> = null;
-
   public var conductorInUse(get, set):Conductor;
 
   var _conductorInUse:Null<Conductor>;
@@ -117,6 +132,7 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
   }
 
   // this should get moved post ui update but this is easier rn lolll
+
   public function addOptionsButton(?xPos:Float = 0, ?yPos:Float = 0, ?confirmCallback:Void->Void = null, ?instant:Bool = false):Void
   {
     if (optionsButton != null) remove(optionsButton);
@@ -138,6 +154,16 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
   {
     super.create();
 
+    #if FEATURE_LUA_SCRIPTS
+    classLuaScriptManager = LuaScriptManager.loadClassScriptsForState(this);
+    classLuaScriptManager?.callHook('onCreate', []);
+    #end
+
+    #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+    classScriptRuntimeManager = ScriptRuntimeManager.loadClassScripts(this);
+    classScriptRuntimeManager?.callHook('onCreate', []);
+    #end
+
     createWatermarkText();
 
     Conductor.beatHit.add(this.beatHit);
@@ -145,8 +171,41 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
     dispatchEvent(new ScriptEvent(STATE_CREATE));
   }
 
-  public override function destroy():Void
+  override public function destroy():Void
   {
+    #if FEATURE_LUA_SCRIPTS
+    classLuaScriptManager?.callHook('onDestroy', []);
+    classLuaScriptManager?.destroy();
+    classLuaScriptManager = null;
+    #end
+
+    #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+    classScriptRuntimeManager?.callHook('onDestroy', []);
+    classScriptRuntimeManager?.destroy();
+    classScriptRuntimeManager = null;
+    #end
+
+    #if mobile
+    if (hitbox != null)
+    {
+      remove(hitbox, true);
+      hitbox.destroy();
+      hitbox = null;
+    }
+    if (backButton != null)
+    {
+      remove(backButton, true);
+      backButton.destroy();
+      backButton = null;
+    }
+    if (optionsButton != null)
+    {
+      remove(optionsButton, true);
+      optionsButton.destroy();
+      optionsButton = null;
+    }
+    #end
+
     super.destroy();
 
     #if mobile
@@ -163,13 +222,21 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
     if (FlxG.keys.justPressed.F4)
     {
       FlxG.switchState(() -> new MainMenuState());
-      WindowUtil.setWindowTitle('LuaSlice');
+      WindowUtil.setWindowTitle(Constants.TITLE);
     }
   }
 
   override function update(elapsed:Float)
   {
     super.update(elapsed);
+
+    #if FEATURE_LUA_SCRIPTS
+    classLuaScriptManager?.callHook('onUpdate', [elapsed]);
+    #end
+
+    #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+    classScriptRuntimeManager?.callHook('onUpdate', [elapsed]);
+    #end
 
     dispatchEvent(new UpdateScriptEvent(elapsed));
   }
@@ -178,12 +245,28 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
   {
     super.onFocus();
 
+    #if FEATURE_LUA_SCRIPTS
+    classLuaScriptManager?.callHook('onFocusGained', []);
+    #end
+
+    #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+    classScriptRuntimeManager?.callHook('onFocusGained', []);
+    #end
+
     dispatchEvent(new FocusScriptEvent(FOCUS_GAINED));
   }
 
   override function onFocusLost():Void
   {
     super.onFocusLost();
+
+    #if FEATURE_LUA_SCRIPTS
+    classLuaScriptManager?.callHook('onFocusLost', []);
+    #end
+
+    #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+    classScriptRuntimeManager?.callHook('onFocusLost', []);
+    #end
 
     dispatchEvent(new FocusScriptEvent(FOCUS_LOST));
   }
@@ -213,17 +296,50 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
     ModuleHandler.callEvent(event);
   }
 
-  function reloadAssets()
+  public function getHotReloadParams():HotReloadStateParams
   {
-    PolymodHandler.forceReloadAssets();
+    return {targetState: getConstructor()};
+  }
 
-    // Create a new instance of the current state, so old data is cleared.
-    FlxG.resetState();
+  function getConstructor():NextState
+  {
+    if (this is ScriptedMusicBeatState)
+    {
+      var scriptedState:ScriptedMusicBeatState = cast this;
+      var asc:Dynamic = Reflect.field(scriptedState, '_asc');
+      var path:String = asc == null ? '' : Reflect.field(asc, 'fullyQualifiedName');
+      return () ->
+      {
+        var initializer:Dynamic = Reflect.field(ScriptedMusicBeatState, 'scriptInit');
+        var result:Dynamic = initializer == null ? null : Reflect.callMethod(ScriptedMusicBeatState, initializer, [path]);
+        return result == null ? new MainMenuState() : cast result;
+      };
+    }
+    @:privateAccess
+    return this._constructor;
+  }
+
+  public function onPreHotReload():Void
+  {
+  }
+
+  public function onPostHotReload():Void
+  {
   }
 
   public function stepHit():Bool
   {
+    if (this.subState != null && !persistentUpdate) return false;
+
     var event = new SongTimeScriptEvent(SONG_STEP_HIT, conductorInUse.currentBeat, conductorInUse.currentStep);
+
+    #if FEATURE_LUA_SCRIPTS
+    classLuaScriptManager?.callHook('onStepHit', [Std.int(conductorInUse.currentStep)]);
+    #end
+
+    #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+    classScriptRuntimeManager?.callHook('onStepHit', [Std.int(conductorInUse.currentStep)]);
+    #end
 
     dispatchEvent(event);
 
@@ -234,7 +350,17 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
 
   public function beatHit():Bool
   {
+    if (this.subState != null && !persistentUpdate) return false;
+
     var event = new SongTimeScriptEvent(SONG_BEAT_HIT, conductorInUse.currentBeat, conductorInUse.currentStep);
+
+    #if FEATURE_LUA_SCRIPTS
+    classLuaScriptManager?.callHook('onBeatHit', [Std.int(conductorInUse.currentBeat)]);
+    #end
+
+    #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+    classScriptRuntimeManager?.callHook('onBeatHit', [Std.int(conductorInUse.currentBeat)]);
+    #end
 
     dispatchEvent(event);
 
@@ -271,7 +397,7 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
     }
   }
 
-  public override function openSubState(targetSubState:FlxSubState):Void
+  override public function openSubState(targetSubState:FlxSubState):Void
   {
     var event = new SubStateScriptEvent(SUBSTATE_OPEN_BEGIN, targetSubState, true);
 
@@ -287,7 +413,7 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
     dispatchEvent(new SubStateScriptEvent(SUBSTATE_OPEN_END, targetState, true));
   }
 
-  public override function closeSubState():Void
+  override public function closeSubState():Void
   {
     var event = new SubStateScriptEvent(SUBSTATE_CLOSE_BEGIN, this.subState, true);
 

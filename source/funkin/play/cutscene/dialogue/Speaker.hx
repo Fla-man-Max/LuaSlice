@@ -100,12 +100,12 @@ class Speaker extends FlxSprite implements IDialogueScriptedClass implements IRe
    * Calls `kill()` on the group's members and then on the group itself.
    * You can revive this group later via `revive()` after this.
    */
-  public override function kill():Void
+  override public function kill():Void
   {
     super.kill();
   }
 
-  public override function revive():Void
+  override public function revive():Void
   {
     super.revive();
 
@@ -124,7 +124,6 @@ class Speaker extends FlxSprite implements IDialogueScriptedClass implements IRe
     trace('[SPEAKER] Loading spritesheet ${_data.assetPath} for ${id}');
 
     var tex:FlxFramesCollection = Paths.getSparrowAtlas(_data.assetPath);
-    if (tex == null) tex = Paths.getSparrowAtlas(_data.assetPath, 'week6');
     if (tex == null)
     {
       trace('Could not load Sparrow sprite: ${_data.assetPath}');

@@ -18,7 +18,15 @@ class SaveSystem
    */
   public function flush():Void
   {
-    FlxG.save.flush();
+    final data = Save.getDataForFlush();
+    if (data == null)
+    {
+      FlxG.save.flush();
+      return;
+    }
+
+    FlxG.save.bind(Constants.SAVE_NAME + Constants.BASE_SAVE_SLOT, Constants.SAVE_PATH);
+    FlxG.save.mergeData(data, true);
   }
 
   public function clearSlot(slot:Int):Save

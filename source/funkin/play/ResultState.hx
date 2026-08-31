@@ -29,9 +29,6 @@ import funkin.play.components.TallyCounter;
 import funkin.play.scoring.Scoring;
 import funkin.play.song.Song;
 import funkin.save.Save.SaveScoreData;
-#if FEATURE_LUA_SCRIPTS
-import LuaScriptManager;
-#end
 import funkin.ui.freeplay.charselect.PlayableCharacter;
 import funkin.ui.freeplay.FreeplayState;
 import funkin.ui.FullScreenScaleMode;
@@ -52,6 +49,7 @@ import funkin.mobile.util.AdMobUtil;
 import funkin.mobile.util.InAppReviewUtil;
 #end
 #end
+import funkin.util.DeviceUtil;
 
 /**
  * The state for the results screen after a song or week is finished.
@@ -60,24 +58,18 @@ import funkin.mobile.util.InAppReviewUtil;
 class ResultState extends MusicBeatSubState
 {
   final params:ResultsStateParams;
-
   final rank:ScoringRank;
   final songName:FlxBitmapText;
   final difficulty:FlxSprite;
   final clearPercentSmall:ClearPercentCounter;
-
   final maskShaderSongName:LeftMaskShader = new LeftMaskShader();
   final maskShaderDifficulty:LeftMaskShader = new LeftMaskShader();
-
   final resultsAnim:FunkinSprite;
   final ratingsPopin:FunkinSprite;
   final scorePopin:FunkinSprite;
-
   final bgFlash:FlxSprite;
-
   final highscoreNew:FlxSprite;
   final score:ResultScore;
-
   var characterAtlasAnimations:Array<
     {
       sprite:FunkinSprite,
@@ -91,13 +83,8 @@ class ResultState extends MusicBeatSubState
       sprite:FunkinSprite,
       delay:Float
     }> = [];
-
   var playerCharacterId:Null<String> = null;
   var playerCharacter:Null<PlayableCharacter> = null;
-  #if FEATURE_LUA_SCRIPTS
-  var luaScriptManager:Null<LuaScriptManager> = null;
-  #end
-
   var introMusicAudio:Null<FunkinSound> = null;
 
   /**
@@ -109,9 +96,7 @@ class ResultState extends MusicBeatSubState
   final cameraBG:FunkinCamera;
   final cameraScroll:FunkinCamera;
   final cameraEverything:FunkinCamera;
-
   var blackTopBar:FlxSprite = new FlxSprite();
-
   var busy:Bool = false;
 
   public var isChartingMode(get, never):Bool;
@@ -564,9 +549,16 @@ class ResultState extends MusicBeatSubState
     refresh();
 
     super.create();
-    #if FEATURE_LUA_SCRIPTS
-    luaScriptManager = LuaScriptManager.loadResultsScriptsForState(this);
-    #end
+  }
+
+  override public function destroy():Void
+  {
+    // Kill all music types to prevent audio overlap into new states.
+    if (resultsMusic != null) resultsMusic.stop();
+    if (introMusicAudio != null) introMusicAudio.stop();
+    if (FlxG.sound.music != null) FlxG.sound.music.stop();
+
+    super.destroy();
   }
 
   function getMusicPath(playerCharacter:Null<PlayableCharacter>, rank:ScoringRank):String
@@ -574,7 +566,6 @@ class ResultState extends MusicBeatSubState
     return playerCharacter?.getResultsMusicPath(rank) ?? 'resultsNORMAL';
   }
 
-  var rankTallyTimer:Null<FlxTimer> = null;
   var clearPercentTarget:Int = 100;
   var clearPercentLerp:Int = 0;
 
@@ -818,9 +809,6 @@ class ResultState extends MusicBeatSubState
   override function update(elapsed:Float):Void
   {
     maskShaderDifficulty.swagSprX = difficulty.x;
-    #if FEATURE_LUA_SCRIPTS
-    if (luaScriptManager != null) luaScriptManager.callHook('onResultsUpdate', [elapsed]);
-    #end
 
     if (movingSongStuff)
     {
@@ -1049,6 +1037,17 @@ class ResultState extends MusicBeatSubState
           }
           else
           {
+            FlxG.signals.preStateSwitch.addOnce(function()
+            {
+              #if ios
+              trace(DeviceUtil.iPhoneNumber);
+              if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
+              else
+                funkin.FunkinMemory.purgeCache();
+              #else
+              funkin.FunkinMemory.purgeCache(true);
+              #end
+            });
             FlxG.switchState(() -> targetState);
           }
         }
@@ -1069,6 +1068,17 @@ class ResultState extends MusicBeatSubState
       }
       else
       {
+        FlxG.signals.preStateSwitch.addOnce(function()
+        {
+          #if ios
+          trace(DeviceUtil.iPhoneNumber);
+          if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
+          else
+            funkin.FunkinMemory.purgeCache();
+          #else
+          funkin.FunkinMemory.purgeCache(true);
+          #end
+        });
         FlxG.switchState(() -> targetState);
       }
     }
@@ -1084,19 +1094,6 @@ class ResultState extends MusicBeatSubState
       InAppReviewUtil.requestReview();
     }
     #end
-  }
-
-  override function destroy():Void
-  {
-    #if FEATURE_LUA_SCRIPTS
-    if (luaScriptManager != null)
-    {
-      luaScriptManager.callHook('onResultsClose', []);
-      luaScriptManager.destroy();
-      luaScriptManager = null;
-    }
-    #end
-    super.destroy();
   }
 }
 
@@ -1157,7 +1154,7 @@ typedef ResultsStateParams =
   var scoreData:SaveScoreData;
 
   /**
-   * The previous score data, used for rank comparision.
+   * The previous score data, used for rank comparison.
    */
   var ?prevScoreData:SaveScoreData;
 

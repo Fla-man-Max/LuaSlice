@@ -19,6 +19,8 @@ import funkin.ui.mainmenu.MainMenuState;
 import funkin.util.MouseUtil;
 import funkin.util.SerializerUtil;
 import funkin.util.SortUtil;
+import funkin.util.WindowUtil;
+import funkin.audio.FunkinSound;
 import haxe.ui.components.DropDown;
 import haxe.ui.containers.dialogs.CollapsibleDialog;
 import haxe.ui.core.Screen;
@@ -29,37 +31,32 @@ import openfl.events.Event;
 import openfl.events.IOErrorEvent;
 import openfl.geom.Rectangle;
 import openfl.net.FileReference;
+#if mobile
+import funkin.mobile.ui.FunkinBackButton;
+#end
 
 using flixel.util.FlxSpriteUtil;
 
 class DebugBoundingState extends FlxState
 {
-  /*
-    TODAY'S TO-DO
-    - Cleaner UI
-   */
   var bg:FlxBackdrop;
-  var fileInfo:FlxText;
-
   var txtGrp:FlxTypedGroup<FlxText>;
-
   var hudCam:FlxCamera;
-
   var curView:ANIMDEBUGVIEW = SPRITESHEET;
-
   var spriteSheetView:FlxGroup;
   var offsetView:FlxGroup;
   var dropDownSetup:Bool = false;
-
   var onionSkinChar:BaseCharacter;
   var txtOffsetShit:FlxText;
-
   var offsetEditorDialog:CollapsibleDialog;
   var offsetAnimationDropdown:DropDown;
-
   var haxeUIFocused(get, default):Bool = false;
-
   var currentAnimationName(get, never):String;
+
+  #if mobile
+  var mobileBackButton:FunkinBackButton;
+  var pinchDistance:Float = 0;
+  #end
 
   function get_currentAnimationName():String
   {
@@ -76,6 +73,20 @@ class DebugBoundingState extends FlxState
   override function create():Void
   {
     Paths.setCurrentLevel('week1');
+    
+    FlxG.sound.music?.stop();
+
+    Cursor.show();
+    FunkinSound.playMusic('chartEditorLoop', {
+      startingVolume: 0.0
+    });
+    FlxG.sound.music.fadeIn(10, 0, 1);
+
+    #if mobile
+    WindowUtil.setWindowTitle('${Constants.TITLE} Animation Editor [WIP]');
+    #else
+    WindowUtil.setWindowTitle('${Constants.TITLE} Animation Editor');
+    #end
 
     hudCam = new FlxCamera();
     hudCam.bgColor.alpha = 0;
@@ -118,6 +129,12 @@ class DebugBoundingState extends FlxState
     Cursor.show();
 
     super.create();
+
+    #if mobile
+    mobileBackButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, exitEditor, 0.2, true);
+    mobileBackButton.cameras = [hudCam];
+    add(mobileBackButton);
+    #end
   }
 
   var bf:FlxSprite;
@@ -239,7 +256,10 @@ class DebugBoundingState extends FlxState
 
       if (FlxG.mouse.pressed)
       {
-        swagChar.animOffsets = [(FlxG.mouse.x - mouseOffset.x) * -1, (FlxG.mouse.y - mouseOffset.y) * -1];
+        swagChar.animOffsets = [
+          (FlxG.mouse.x - mouseOffset.x) * -1,
+          (FlxG.mouse.y - mouseOffset.y) * -1
+        ];
 
         swagChar.animationOffsets.set(swagChar.getCurrentAnimation(), swagChar.animOffsets);
 
@@ -279,25 +299,14 @@ class DebugBoundingState extends FlxState
     txtGrp.clear();
   }
 
-  function checkLibrary(library:String)
-  {
-    trace(Assets.hasLibrary(library));
-    if (Assets.getLibrary(library) == null)
-    {
-      @:privateAccess
-      if (!LimeAssets.libraryPaths.exists(library)) throw "Missing library: " + library;
-
-      // var callback = callbacks.add("library:" + library);
-      Assets.loadLibrary(library).onComplete(function(_)
-      {
-        trace('LOADED... awesomeness...');
-        // callback();
-      });
-    }
-  }
-
   override function update(elapsed:Float)
   {
+    #if mobile
+    final pinching:Bool = handlePinchZoom();
+    #else
+    final pinching:Bool = false;
+    #end
+
     if (FlxG.keys.justPressed.ONE)
     {
       var lv:DropDown = offsetEditorDialog.findComponent("swapper", DropDown);
@@ -330,15 +339,24 @@ class DebugBoundingState extends FlxState
         offsetView.active = true;
         offsetAnimationDropdown.show();
         offsetControls();
-        mouseOffsetMovement();
+        if (!pinching) mouseOffsetMovement();
     }
 
     if (FlxG.keys.justPressed.H) hudCam.visible = !hudCam.visible;
 
-    if (FlxG.keys.justPressed.F4) FlxG.switchState(() -> new MainMenuState());
+    if (FlxG.keys.justPressed.F4)
+    {
+      exitEditor();
+    }
 
-    MouseUtil.mouseCamDrag();
-    if (!haxeUIFocused) MouseUtil.mouseWheelZoom();
+    if (FlxG.mouse.justPressed || FlxG.mouse.justPressedMiddle) FunkinSound.playOnce(Paths.sound("chartingSounds/ClickDown"));
+    if (FlxG.mouse.justReleased || FlxG.mouse.justReleasedMiddle) FunkinSound.playOnce(Paths.sound("chartingSounds/ClickUp"));
+
+    if (!pinching)
+    {
+      MouseUtil.mouseCamDrag();
+      if (!haxeUIFocused) MouseUtil.mouseWheelZoom();
+    }
 
     // bg.scale.x = FlxG.camera.zoom;
     // bg.scale.y = FlxG.camera.zoom;
@@ -346,6 +364,46 @@ class DebugBoundingState extends FlxState
     bg.setGraphicSize(Std.int(bg.width / FlxG.camera.zoom));
 
     super.update(elapsed);
+  }
+
+  #if mobile
+  function handlePinchZoom():Bool
+  {
+    final touches = FlxG.touches.list.filter((touch) -> touch != null && touch.pressed);
+    if (touches.length < 2)
+    {
+      pinchDistance = 0;
+      return false;
+    }
+
+    movingCharacter = false;
+    final deltaX:Float = touches[0].gameX - touches[1].gameX;
+    final deltaY:Float = touches[0].gameY - touches[1].gameY;
+    final currentDistance:Float = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    if (pinchDistance > 0 && currentDistance > 0)
+    {
+      FlxG.camera.zoom = flixel.math.FlxMath.bound(FlxG.camera.zoom * currentDistance / pinchDistance, 0.1, 4);
+    }
+
+    pinchDistance = currentDistance;
+    return true;
+  }
+  #end
+
+  function exitEditor():Void
+  {
+    resetWindowTitle();
+    #if mobile
+    FlxG.switchState(() -> new funkin.ui.debug.DebugMenuState());
+    #else
+    FlxG.switchState(() -> new MainMenuState());
+    #end
+  }
+
+  function resetWindowTitle():Void
+  {
+    WindowUtil.setWindowTitle(Constants.TITLE);
   }
 
   override function destroy()
@@ -404,7 +462,7 @@ class DebugBoundingState extends FlxState
 
     // Keyboards controls for general WASD "movement"
     // modifies the animDrooffsetAnimationDropdownpDownMenu so that it's properly updated and shit
-    // and then it's just played and updated from the offsetAnimationDropdown callback, which is set in the loadAnimShit() function probabbly
+    // and then it's just played and updated from the offsetAnimationDropdown callback, which is set in the loadAnimShit() function probably
     if (FlxG.keys.justPressed.W || FlxG.keys.justPressed.S || FlxG.keys.justPressed.D || FlxG.keys.justPressed.A)
     {
       var suffix:String = '';
@@ -449,7 +507,8 @@ class DebugBoundingState extends FlxState
     if (FlxG.keys.justPressed.SPACE)
     {
       if (swagChar?.hasAnimation('danceLeft')) offsetAnimationDropdown.value = {id: 'danceLeft', text: 'danceLeft'};
-      else offsetAnimationDropdown.value = {id: 'idle', text: 'idle'};
+      else
+        offsetAnimationDropdown.value = {id: 'idle', text: 'idle'};
 
       playCharacterAnimation(currentAnimationName, true);
     }
@@ -502,21 +561,73 @@ class DebugBoundingState extends FlxState
 
   function buildOutputStringNew():String
   {
-    var charData:CharacterData = Reflect.copy(swagChar._data);
+    final copiedData:Dynamic = SerializerUtil.fromJSON(SerializerUtil.toJSON(swagChar._data, false));
+    if (copiedData == null) return SerializerUtil.toJSON(swagChar._data, true);
+
+    var charData:CharacterData = cast copiedData;
+    final characterIsPixel:Bool = charData.isPixel ?? CharacterDataParser.DEFAULT_ISPIXEL;
+
+    if (charData.renderType == CharacterDataParser.DEFAULT_RENDERTYPE) Reflect.deleteField(charData, 'renderType');
+    if (isZeroPair(charData.offsets)) Reflect.deleteField(charData, 'offsets');
+    if (isZeroPair(charData.cameraOffsets)) Reflect.deleteField(charData, 'cameraOffsets');
+
+    final healthIcon = charData.healthIcon;
+    if (healthIcon != null)
+    {
+      if (healthIcon.id == swagChar.characterId) Reflect.deleteField(healthIcon, 'id');
+      if (healthIcon.shouldBop == CharacterDataParser.DEFAULT_SHOULDBOP) Reflect.deleteField(healthIcon, 'shouldBop');
+      if (healthIcon.scale == CharacterDataParser.DEFAULT_SCALE) Reflect.deleteField(healthIcon, 'scale');
+      if (healthIcon.flipX == CharacterDataParser.DEFAULT_FLIPX) Reflect.deleteField(healthIcon, 'flipX');
+      if (healthIcon.isPixel == characterIsPixel) Reflect.deleteField(healthIcon, 'isPixel');
+      if (isZeroPair(healthIcon.offsets)) Reflect.deleteField(healthIcon, 'offsets');
+      if (Reflect.fields(healthIcon).length == 0) Reflect.deleteField(charData, 'healthIcon');
+    }
+
+    if (charData.startingAnimation == CharacterDataParser.DEFAULT_STARTINGANIM) Reflect.deleteField(charData, 'startingAnimation');
+    if (charData.scale == CharacterDataParser.DEFAULT_SCALE) Reflect.deleteField(charData, 'scale');
+    if (charData.isPixel == CharacterDataParser.DEFAULT_ISPIXEL) Reflect.deleteField(charData, 'isPixel');
+    if (charData.danceEvery == CharacterDataParser.DEFAULT_DANCEEVERY) Reflect.deleteField(charData, 'danceEvery');
+    if (charData.singTime == CharacterDataParser.DEFAULT_SINGTIME) Reflect.deleteField(charData, 'singTime');
+    if (charData.flipX == CharacterDataParser.DEFAULT_FLIPX) Reflect.deleteField(charData, 'flipX');
+    if (charData.applyStageMatrix == CharacterDataParser.DEFAULT_APPLYSTAGEMATRIX) Reflect.deleteField(charData, 'applyStageMatrix');
+    if (hasDefaultAtlasSettings(charData.atlasSettings)) Reflect.deleteField(charData, 'atlasSettings');
 
     for (charDataAnim in charData.animations)
     {
       var animName:String = charDataAnim.name;
       charDataAnim.offsets = swagChar.animationOffsets.get(animName);
+
+      if (charDataAnim.animType == CharacterDataParser.DEFAULT_ANIMTYPE) Reflect.deleteField(charDataAnim, 'animType');
+      if (charDataAnim.frameRate == CharacterDataParser.DEFAULT_FRAMERATE) Reflect.deleteField(charDataAnim, 'frameRate');
+      if (isZeroPair(charDataAnim.offsets)) Reflect.deleteField(charDataAnim, 'offsets');
+      if (charDataAnim.looped == CharacterDataParser.DEFAULT_LOOP) Reflect.deleteField(charDataAnim, 'looped');
+      if (charDataAnim.flipX == CharacterDataParser.DEFAULT_FLIPX) Reflect.deleteField(charDataAnim, 'flipX');
+      if (charDataAnim.flipY == CharacterDataParser.DEFAULT_FLIPY) Reflect.deleteField(charDataAnim, 'flipY');
     }
 
     return SerializerUtil.toJSON(charData, true);
   }
 
+  static function isZeroPair(value:Dynamic):Bool
+  {
+    return value != null && value.length == 2 && value[0] == 0 && value[1] == 0;
+  }
+
+  static function hasDefaultAtlasSettings(value:Dynamic):Bool
+  {
+    if (value == null) return true;
+
+    return Reflect.field(value, 'swfMode') == true
+      && Reflect.field(value, 'cacheOnLoad') == false
+      && Reflect.field(value, 'filterQuality') == 1
+      && Reflect.field(value, 'applyStageMatrix') == false
+      && Reflect.field(value, 'useRenderTexture') == false;
+  }
+
   var swagChar:BaseCharacter;
 
-  /*
-    Called when animation dropdown is changed!
+  /**
+   * Called when animation dropdown is changed!
    */
   function loadAnimShit(char:String)
   {

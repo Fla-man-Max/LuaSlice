@@ -32,7 +32,6 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
   var preferenceDesc:Array<String> = [];
   var itemDesc:FlxText;
   var itemDescBox:FunkinSprite;
-
   var menuCamera:FlxCamera;
   var hudCamera:FlxCamera;
   var camFollow:FlxObject;
@@ -52,7 +51,9 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     camera = menuCamera;
 
     add(items = new TextMenuList());
+    items.cameras = [menuCamera];
     add(preferenceItems = new FlxTypedSpriteGroup<FlxSprite>());
+    preferenceItems.cameras = [menuCamera];
 
     add(itemDescBox = new FunkinSprite());
     itemDescBox.cameras = [hudCamera];
@@ -116,52 +117,39 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     createPrefItemCheckbox('Downscroll', 'When enabled, notes move downwards toward the strumline at the bottom of the screen.', function(value:Bool):Void
     {
       Preferences.downscroll = value;
-    },
-      Preferences.downscroll, #if mobile ControlsHandler.hasExternalInputDevice
-      || Preferences.controlsScheme != FunkinHitboxControlSchemes.Arrows #end);
-    createPrefItemCheckbox('Middlescroll', 'Center the Player notes and split the Opponent notes along the sides of the screen.', function(value:Bool):Void
+    }, Preferences.downscroll);
+    #if !mobile
+    createPrefItemCheckbox('Middlescroll', 'When enabled, your notes are centered and the opponent notes are faded to the sides.', function(value:Bool):Void
     {
       Preferences.middleScroll = value;
     }, Preferences.middleScroll);
+    #end
     createPrefItemPercentage('Strumline Background', 'Show a semi-transparent background behind the strumline.', function(value:Int):Void
     {
       Preferences.strumlineBackgroundOpacity = value;
     }, Preferences.strumlineBackgroundOpacity);
     #if FEATURE_HAPTICS
-    createPrefItemEnum('Haptics', 'When enabled, the game plays haptic feedback effects.',
-      ["All" => HapticsMode.ALL, "Notes Only" => HapticsMode.NOTES_ONLY, "None" => HapticsMode.NONE,], function(key:String, value:HapticsMode):Void
+    createPrefItemEnum('Haptics', 'When enabled, the game plays haptic feedback effects.', [
+      "All" => HapticsMode.ALL,
+      "Notes Only" => HapticsMode.NOTES_ONLY,
+      "None" => HapticsMode.NONE,
+    ], function(key:String, value:HapticsMode):Void
     {
       Preferences.hapticsMode = value;
     }, switch (Preferences.hapticsMode)
       {
-        case HapticsMode.NOTES_ONLY: "Notes Only";
-        case HapticsMode.NONE: "None";
-        default: "All";
+        case HapticsMode.NOTES_ONLY:
+          "Notes Only";
+        case HapticsMode.NONE:
+          "None";
+        default:
+          "All";
       });
     createPrefItemNumber('Haptics Intensity', 'Intensity multiplier for all haptic feedback effects.', function(value:Float)
     {
       Preferences.hapticsIntensityMultiplier = value;
     }, null, Preferences.hapticsIntensityMultiplier, 0.1, 5, 0.1, 1);
     #end
-    #if mobile
-    createPrefItemCheckbox('Touch Pointers', 'Show the Kevin and Michael touch-pointer graphics.', function(value:Bool):Void
-    {
-      Preferences.touchPointers = value;
-    }, Preferences.touchPointers);
-    #end
-    createPrefItemCheckbox('Flashing Lights', 'When disabled, flashing effects are dampened. Useful for people with photosensitive epilepsy.',
-      function(value:Bool):Void
-      {
-        Preferences.flashingLights = value;
-      }, Preferences.flashingLights);
-    createPrefItemCheckbox('Camera Zooms', 'When enabled, the camera bounces during songs.', function(value:Bool):Void
-    {
-      Preferences.zoomCamera = value;
-    }, Preferences.zoomCamera);
-    createPrefItemCheckbox('Subtitles', 'When enabled, subtitles appear during some songs and cutscenes.', function(value:Bool):Void
-    {
-      Preferences.subtitles = value;
-    }, Preferences.subtitles);
     #if !mobile
     createPrefItemCheckbox('Pause on Unfocus', 'When enabled, the game automatically pauses when losing focus.', function(value:Bool):Void
     {
@@ -186,6 +174,13 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     {
       Preferences.previewOnSave = value;
     }, Preferences.previewOnSave);
+    #end
+
+    #if FEATURE_DISCORD_RPC
+    createPrefItemCheckbox('Discord RPC', 'Toggles Discord RPC.', function(value:Bool):Void
+    {
+      Preferences.enabledDiscordRPC = value;
+    }, Preferences.enabledDiscordRPC);
     #end
   }
 
@@ -226,7 +221,12 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
         thyOffset += 120;
       }
 
-      daItem.x = thyOffset + funkin.ui.FullScreenScaleMode.gameNotchSize.x;
+      final notchOffset:Float = funkin.ui.FullScreenScaleMode.gameNotchSize.x;
+      final labelX:Float = thyOffset + notchOffset;
+      daItem.x = notchOffset;
+      daItem.atlasText.x = labelX;
+      daItem.width = FlxG.width - notchOffset * 2;
+      daItem.height = 100;
     });
   }
 
@@ -243,16 +243,15 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     var checkbox:CheckboxPreferenceItem = new CheckboxPreferenceItem(funkin.ui.FullScreenScaleMode.gameNotchSize.x, 120 * (items.length - 1 + 1),
       defaultValue, available);
 
-    var menuItem = items.createItem(0, (120 * items.length) + 30, prefName, AtlasFont.BOLD, function()
+    var item = items.createItem(0, (120 * items.length) + 30, prefName, AtlasFont.BOLD, function()
     {
       var value = !checkbox.currentValue;
       onChange(value);
       checkbox.currentValue = value;
-    }, false, available);
+    }, true, available);
 
-    menuItem.camera = menuCamera;
-    checkbox.camera = menuCamera;
-
+    item.cameras = [menuCamera];
+    checkbox.cameras = [menuCamera];
     preferenceItems.add(checkbox);
     preferenceDesc.push(prefDesc);
   }
@@ -272,8 +271,8 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
   {
     var item = new NumberPreferenceItem(funkin.ui.FullScreenScaleMode.gameNotchSize.x, (120 * items.length) + 30, prefName, defaultValue, min, max, step,
       precision, onChange, valueFormatter);
-    item.camera = menuCamera;
-    item.lefthandText.camera = menuCamera;
+    item.cameras = [menuCamera];
+    item.lefthandText.cameras = [menuCamera];
     items.addItem(prefName, item);
     preferenceItems.add(item.lefthandText);
     preferenceDesc.push(prefDesc);
@@ -298,8 +297,8 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     };
     var item = new NumberPreferenceItem(funkin.ui.FullScreenScaleMode.gameNotchSize.x, (120 * items.length) + 30, prefName, defaultValue, min, max, 10, 0,
       newCallback, formatter);
-    item.camera = menuCamera;
-    item.lefthandText.camera = menuCamera;
+    item.cameras = [menuCamera];
+    item.lefthandText.cameras = [menuCamera];
     items.addItem(prefName, item);
     preferenceItems.add(item.lefthandText);
     preferenceDesc.push(prefDesc);
@@ -314,8 +313,8 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
   function createPrefItemEnum<T>(prefName:String, prefDesc:String, values:Map<String, T>, onChange:String->T->Void, defaultKey:String):Void
   {
     var item = new EnumPreferenceItem<T>(funkin.ui.FullScreenScaleMode.gameNotchSize.x, (120 * items.length) + 30, prefName, values, defaultKey, onChange);
-    item.camera = menuCamera;
-    item.lefthandText.camera = menuCamera;
+    item.cameras = [menuCamera];
+    item.lefthandText.cameras = [menuCamera];
     items.addItem(prefName, item);
     preferenceItems.add(item.lefthandText);
     preferenceDesc.push(prefDesc);

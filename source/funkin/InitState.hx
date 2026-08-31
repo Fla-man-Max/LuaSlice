@@ -10,7 +10,6 @@ import flixel.math.FlxPoint;
 import flixel.math.FlxRect;
 import flixel.system.debug.log.LogStyle;
 import flixel.util.FlxColor;
-import funkin.graphics.FunkinSprite;
 import funkin.data.dialogue.ConversationRegistry;
 import funkin.data.dialogue.DialogueBoxRegistry;
 import funkin.data.dialogue.SpeakerRegistry;
@@ -30,6 +29,7 @@ import funkin.play.notes.notekind.NoteKindManager;
 import funkin.play.PlayStatePlaylist;
 import funkin.ui.debug.charting.ChartEditorState;
 import funkin.ui.debug.stageeditor.StageEditorState;
+import funkin.ui.title.TitleState;
 import funkin.ui.title.LuaSliceUpdateState;
 import funkin.ui.transition.LoadingState;
 import funkin.util.CLIUtil;
@@ -37,6 +37,7 @@ import funkin.util.CLIUtil.CLIParams;
 import funkin.util.macro.MacroUtil;
 import funkin.util.TrackerUtil;
 import funkin.util.WindowUtil;
+import funkin.util.assets.ResourceCache;
 import openfl.display.BitmapData;
 import funkin.ui.debug.playtest.ChartPlaytestMenu;
 #if FEATURE_DISCORD_RPC
@@ -67,22 +68,25 @@ class InitState extends FlxState
   /**
    * Perform a bunch of game setup, then immediately transition to the title screen.
    */
-  public override function create():Void
+  override public function create():Void
   {
+    var startupStart:Float = haxe.Timer.stamp();
     // Setup a bunch of important Flixel stuff.
     setupShit();
-    trace('Init setup finished.');
 
     // Load player options from save data.
     // Flixel has already loaded the save data, so we can just use it.
     Preferences.init();
-    trace('Preferences initialized.');
 
     // Load controls from save data.
     PlayerSettings.init();
-    trace('Player settings initialized.');
 
     startGame();
+    #if debug
+    var startupMs:Int = Math.round((haxe.Timer.stamp() - startupStart) * 1000);
+    var cacheStats = ResourceCache.stats();
+    trace('Startup initialized in $startupMs ms; catalog ${cacheStats.catalogHits}/${cacheStats.catalogMisses}, text ${cacheStats.textHits}/${cacheStats.textMisses}');
+    #end
   }
 
   /**
@@ -98,11 +102,6 @@ class InitState extends FlxState
 
       // Setup window events (like callbacks for onWindowClose) and fullscreen keybind setup
       WindowUtil.initWindowEvents();
-
-      lime.app.Application.current.onExit.add(function(_)
-      {
-        funkin.save.Save.system.flush();
-      });
 
       #if FEATURE_DEBUG_TRACY
       funkin.util.WindowUtil.initTracy();
@@ -131,6 +130,11 @@ class InitState extends FlxState
       #if FEATURE_MOBILE_WEBVIEW
       // Setup WebView
       funkin.mobile.util.WebViewUtil.init();
+      #end
+
+      #if FEATURE_MOBILE_AGESIGNALS
+      // Setup AgeSignals
+      funkin.mobile.util.AgeSignalsUtil.init();
       #end
 
       #if android
@@ -229,7 +233,10 @@ class InitState extends FlxState
       // DISCORD API SETUP
       //
       #if FEATURE_DISCORD_RPC
-      DiscordClient.instance.init();
+      if (Preferences.enabledDiscordRPC)
+      {
+        DiscordClient.instance.init();
+      }
 
       lime.app.Application.current.onExit.add(function(exitCode)
       {
@@ -245,7 +252,9 @@ class InitState extends FlxState
       // ANDROID SETUP
       //
       #if android
-      FlxG.android.preventDefaultKeys = [flixel.input.android.FlxAndroidKey.BACK];
+      FlxG.android.preventDefaultKeys = [
+        flixel.input.android.FlxAndroidKey.BACK
+      ];
       #end
 
       //
@@ -271,7 +280,7 @@ class InitState extends FlxState
       #end
       funkin.util.plugins.WatchPlugin.initialize();
       #if mobile
-      funkin.util.plugins.TouchPointerPlugin.initialize();
+      funkin.util.plugins.TouchCursorPlugin.initialize();
       funkin.mobile.input.ControlsHandler.initInputTrackers();
       #end
 
@@ -306,23 +315,19 @@ class InitState extends FlxState
 
     ModuleHandler.buildModuleCallbacks();
     ModuleHandler.loadModuleCache();
-    trace('Calling module onCreate...');
     ModuleHandler.callOnCreate();
-    trace('Module onCreate finished.');
 
-    #if !mobile
     funkin.input.Cursor.hide();
-    #end
-    trace('Setup finished.');
 
-    #if !(html5 || mobile)
+    #if !html5
     // This fucking breaks on HTML5 builds because the "shared" library isn't loaded yet.
     funkin.FunkinMemory.initialCache();
     #end
   }
 
   #if FEATURE_LOST_FOCUS_VOLUME
-  @:noCompletion var _lastFocusVolume:Null<Float>;
+  @:noCompletion
+  var _lastFocusVolume:Null<Float>;
 
   function onLostFocus():Void
   {
@@ -334,7 +339,7 @@ class InitState extends FlxState
 
   function onGainFocus():Void
   {
-    #if (android || !mobile)
+    #if !mobile
     if (Preferences.unlockedFramerate)
     {
       FlxG.updateFramerate = 0;
@@ -348,7 +353,7 @@ class InitState extends FlxState
     #end
 
     #if FEATURE_LOST_FOCUS_VOLUME
-    if (FlxG.sound.muted || FlxG.autoPause) return;
+    if (FlxG.sound.muted || FlxG.sound.volume == 0 || FlxG.autoPause) return;
     if (_lastFocusVolume != null) FlxG.sound.volume = _lastFocusVolume;
     #end
   }
@@ -367,7 +372,7 @@ class InitState extends FlxState
 
     #if SONG
     // -DSONG=bopeebo
-    startSong(defineSong() ?? Constants.DEFAULT_SONG, defineDifficulty());
+    startSong(defineSong(), defineDifficulty());
     #elseif LEVEL
     // -DLEVEL=week1 -DDIFFICULTY=hard
     startLevel(defineLevel(), defineDifficulty());
@@ -385,11 +390,7 @@ class InitState extends FlxState
     FlxG.switchState(() -> new funkin.ui.debug.WaveformTestState());
     #elseif CHARTING
     // -DCHARTING
-    #if mobile
-    startGameNormally();
-    #else
     FlxG.switchState(() -> new funkin.ui.debug.charting.ChartEditorState());
-    #end
     #elseif STAGING
     // -DSTAGING
     FlxG.switchState(() -> new funkin.ui.debug.stageeditor.StageEditorState());
@@ -400,10 +401,10 @@ class InitState extends FlxState
     // -DRESULTS
     FlxG.switchState(() -> new funkin.play.ResultState({
       storyMode: true,
-      title: "Cum Song Erect by Kawai Sprite",
-      songId: "cum",
-      characterId: "pico",
-      difficultyId: "hard",
+      title: 'Cum Song Erect by Kawai Sprite',
+      songId: 'cum',
+      characterId: 'pico',
+      difficultyId: 'hard',
       isNewHighscore: true,
       scoreData: {
         score: 1_234_567,
@@ -446,7 +447,7 @@ class InitState extends FlxState
 
     if (params.chart.shouldLoadChart)
     {
-      #if (FEATURE_CHART_EDITOR && !mobile)
+      #if FEATURE_CHART_EDITOR
       FlxG.switchState(() -> new ChartEditorState({
         fnfcTargetPath: params.chart.chartPath,
       }));
@@ -474,7 +475,6 @@ class InitState extends FlxState
     }
     else
     {
-      // FlxG.sound.cache(Paths.music('freakyMenu/freakyMenu'));
       #if mobile
       funkin.mobile.util.FNFCProvider.onFNFCOpen.add(function(fnfcFile:String)
       {

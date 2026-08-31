@@ -3,10 +3,18 @@
 Important LuaSlice engine updates are tracked here.
 I'm making it as simple, professional, FNF style. (non-AI!!)
 
+## [0.0.8] - 2026-08-23 | Funkin v0.8.6 Port
+
+### Changed
+
+- Ported LuaSlice to Funkin v0.8.6, and added and removed some stuff.
+
 ## [0.0.7] - 2026-07-29 | Story Mode and Chart Editor Bugfixes
 
 ### Added
 
+- Added the Animation Editor. Made by the Nova Utils Team.
+- Added the Level Editor. Made by the Nova Utils Team.
 - Added a Automatic update system before the title intro when a newer LuaSlice version comes out.
 - Added a Stage Editor conversion window for converting stage layout data between the Base Game, Psych Engine v1.0.4, and Codename Engine.
 - Added support for Base Game `.fnfs` packages and JSON, Psych Engine JSON, and Codename Engine XML stage files in the converter.
@@ -15,6 +23,8 @@ I'm making it as simple, professional, FNF style. (non-AI!!)
 
 ### Changed
 
+- Improved Lag Adjustment with precise input timestamps, outlier-resistant averaging, and rounded final calibration values.
+- Reworked gameplay input handling so keyboard, controller, and touch presses and releases are processed in their original timestamp order.
 - Moved judgement ratings and combo numbers farther right when Middlescroll is enabled on desktop, or when Strumline Background is between 90% and 100% on all builds.
 - Split the Opponent strumline background across its left and right lanes when Middlescroll is enabled.
 - Replaced the unreleased trace only GitHub version check with an in-game release check that quietly continues when offline.
@@ -22,6 +32,16 @@ I'm making it as simple, professional, FNF style. (non-AI!!)
 
 ### Fixed
 
+- Fixed Retry and F5 HUD-effect resets making Middlescroll Opponent receptors and notes fully opaque instead of restoring their 90% visibility.
+- Fixed large mod textures causing gameplay audio to buffer-loop and song progression to stall when memory optimization ran immediately after playback began.
+- Fixed duplicate bindings and keyboard, controller, and touch source-ID collisions causing lost, repeated, or mismatched inputs.
+- Fixed fast inputs judging against the current frame instead of the input's actual song position, and made stacked note selection favor the closest valid note.
+- Fixed input offset compensation being applied inconsistently to early inputs.
+- Fixed normal and Chart Editor options reverting because a repeated save load could leave the active preferences attached to an outdated save object.
+- Restored the original mobile HUD positions for the health bar, health icons, score, subtitles, ratings, and combo numbers.
+- Restored the Freeplay rank glow, colored trail, and vignette after completing a song on Android.
+- Fixed Shader events failing for animated fragment shaders, scripted HXC shader updates, `_amount` uniforms, case-sensitive shader names, and the Remove Existing Shaders option.
+- Fixed rapid multi-touch Hitbox input leaving mobile strumline receptors falsely pressed or retriggering duplicate press animations.
 - Fixed Chart Editor auto-save only counting from the first edit instead of restarting after each new change.
 - Fixed Chart Editor metadata, BPM, time-signature, difficulty, audio-offset, and Freeplay-preview changes not consistently activating auto-save.
 - Fixed a failed Chart Editor backup clearing the unsaved state instead of keeping the chart dirty and scheduling another auto-save attempt.

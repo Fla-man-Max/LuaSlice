@@ -20,9 +20,6 @@ import funkin.play.PlayStatePlaylist;
 import funkin.play.song.Song;
 import funkin.save.Save;
 import funkin.save.Save.SaveScoreData;
-#if FEATURE_LUA_SCRIPTS
-import LuaScriptManager;
-#end
 import funkin.ui.mainmenu.MainMenuState;
 import funkin.ui.MusicBeatState;
 import funkin.ui.transition.LoadingState;
@@ -31,7 +28,6 @@ import funkin.util.MathUtil;
 import funkin.util.SwipeUtil;
 import funkin.util.TouchUtil;
 import funkin.ui.FullScreenScaleMode;
-import openfl.Assets;
 #if FEATURE_DISCORD_RPC
 import funkin.api.discord.DiscordClient;
 #end
@@ -42,18 +38,14 @@ class StoryMenuState extends MusicBeatState
   static final BACKGROUND_HEIGHT:Int = 400;
 
   var currentDifficultyId:String = 'normal';
-
   var currentLevelId:String = 'tutorial';
   var currentLevel:Level;
   var isLevelUnlocked:Bool;
   var currentLevelTitle:LevelTitle;
-
   var highScore:Int = 42069420;
   var highScoreLerp:Int = 12345678;
-
   var exitingMenu:Bool = false;
   var selectedLevel:Bool = false;
-
   //
   // RENDER OBJECTS
   //
@@ -67,11 +59,6 @@ class StoryMenuState extends MusicBeatState
    * The score text at the top.
    */
   var scoreText:FlxText;
-
-  /**
-   * The mode text at the top-middle.
-   */
-  var modeText:FlxText;
 
   /**
    * The list of songs on the left.
@@ -114,11 +101,7 @@ class StoryMenuState extends MusicBeatState
   var levelList:Array<String> = [];
 
   var difficultySprites:Map<String, FlxSprite>;
-
   var stickerSubState:StickerSubState;
-  #if FEATURE_LUA_SCRIPTS
-  var luaScriptManager:Null<LuaScriptManager> = null;
-  #end
 
   static var rememberedLevelId:Null<String> = null;
   static var rememberedDifficulty:Null<String> = Constants.DEFAULT_DIFFICULTY;
@@ -186,7 +169,7 @@ class StoryMenuState extends MusicBeatState
     updateProps();
 
     // x on tracklistText is set/updated later, we dont need to init it
-    tracklistText = new FlxText(0, levelBackground.x + levelBackground.height + 100, 0, "Tracks", 32);
+    tracklistText = new FlxText(0, levelBackground.x + levelBackground.height + 100, 0, 'Tracks', 32);
     tracklistText.setFormat('VCR OSD Mono', 32);
     tracklistText.alignment = CENTER;
     tracklistText.color = 0xFFE55777;
@@ -200,6 +183,7 @@ class StoryMenuState extends MusicBeatState
     levelTitleText = new FlxText(Math.max((FlxG.width * 0.7), FlxG.width - FullScreenScaleMode.gameNotchSize.x), 10, 0, 'LEVEL 1');
     levelTitleText.setFormat('VCR OSD Mono', 32, FlxColor.WHITE, RIGHT);
     levelTitleText.alpha = 0.7;
+    levelTitleText.visible = !Preferences.isLowQualityMinimal();
     levelTitleText.zIndex = 1000;
     add(levelTitleText);
 
@@ -241,10 +225,6 @@ class StoryMenuState extends MusicBeatState
 
     #if FEATURE_TOUCH_CONTROLS
     FlxG.touches.swipeThreshold.y = 100;
-    #end
-
-    #if FEATURE_LUA_SCRIPTS
-    luaScriptManager = LuaScriptManager.loadStoryScriptsForState(this);
     #end
   }
 
@@ -294,29 +274,18 @@ class StoryMenuState extends MusicBeatState
       }
       else
       {
-        try
-        {
-          difficultySprite.loadGraphic(Paths.image('storymenu/difficulties/${diff}'));
-        }
-        catch (_:Dynamic)
-        {
-          var difficultyText:FlxText = new FlxText(difficultySprite.x, difficultySprite.y, 240, diff.toUpperCase(), 32);
-          difficultyText.setFormat(Paths.font('vcr.ttf'), 32, FlxColor.WHITE, CENTER);
-          difficultySprite = difficultyText;
-        }
+        difficultySprite.loadGraphic(Paths.image('storymenu/difficulties/${diff}'));
       }
 
       difficultySprites.set(diff, difficultySprite);
 
-      var defaultSprite = difficultySprites.get(Constants.DEFAULT_DIFFICULTY);
-      if (defaultSprite != null) difficultySprite.x += (defaultSprite.width - difficultySprite.width) / 2;
+      difficultySprite.x += (difficultySprites.get(Constants.DEFAULT_DIFFICULTY).width - difficultySprite.width) / 2;
     }
     difficultySprite.alpha = 0;
 
     difficultySprite.y = leftDifficultyArrow.y - 15;
     var targetY:Float = leftDifficultyArrow.y + 10;
-    var defaultSprite = difficultySprites.get(Constants.DEFAULT_DIFFICULTY);
-    if (defaultSprite != null) targetY -= (difficultySprite.height - defaultSprite.height) / 2;
+    targetY -= (difficultySprite.height - difficultySprites.get(Constants.DEFAULT_DIFFICULTY).height) / 2;
     FlxTween.tween(difficultySprite, {y: targetY, alpha: 1}, 0.07);
 
     add(difficultySprite);
@@ -362,22 +331,6 @@ class StoryMenuState extends MusicBeatState
     }
 
     super.update(elapsed);
-    #if FEATURE_LUA_SCRIPTS
-    if (luaScriptManager != null) luaScriptManager.callHook('onStoryUpdate', [elapsed]);
-    #end
-  }
-
-  override function destroy():Void
-  {
-    #if FEATURE_LUA_SCRIPTS
-    if (luaScriptManager != null)
-    {
-      luaScriptManager.callHook('onStoryClose', []);
-      luaScriptManager.destroy();
-      luaScriptManager = null;
-    }
-    #end
-    super.destroy();
   }
 
   function handleKeyPresses():Void
@@ -413,7 +366,7 @@ class StoryMenuState extends MusicBeatState
           changeDifficulty(0);
         }
 
-        final wheelAmount:Int = Std.int(FlxMath.bound(FlxG.mouse.wheel, -1, 1));
+        final wheelAmount:Int = Math.round(FlxMath.bound(FlxG.mouse.deltaWheel.y, -1, 1));
 
         if (wheelAmount != 0)
         {
@@ -475,7 +428,9 @@ class StoryMenuState extends MusicBeatState
         for (i in 0...levelTitles.members.length)
         {
           final item = levelTitles.members[i];
-          final selectedItem = levelTitles.members[levelList.indexOf(currentLevelId)];
+          final selectedItem = levelTitles.members[
+            levelList.indexOf(currentLevelId)
+          ];
 
           if (!TouchUtil.pressAction(item, null, false)) continue;
 
@@ -547,20 +502,10 @@ class StoryMenuState extends MusicBeatState
   {
     // "For now, NO erect in story mode" -Dave
 
-    var difficultyList:Array<String> = currentLevel.getDifficulties();
-
-    var nonErectDifficulties:Array<String> = difficultyList.filter(e -> !Constants.DEFAULT_DIFFICULTY_LIST_ERECT.contains(e));
-    if (nonErectDifficulties.length > 0) difficultyList = nonErectDifficulties;
-
-    if (difficultyList.length == 0) difficultyList = [Constants.DEFAULT_DIFFICULTY];
-
+    var difficultyList:Array<String> = currentLevel.getDifficulties().filter(e -> Constants.DEFAULT_DIFFICULTY_LIST.contains(e));
+    // Use this line to displays all difficulties
+    // var difficultyList:Array<String> = currentLevel.getDifficulties();
     var currentIndex:Int = difficultyList.indexOf(currentDifficultyId);
-
-    if (currentIndex < 0)
-    {
-      currentIndex = difficultyList.indexOf(Constants.DEFAULT_DIFFICULTY);
-      if (currentIndex < 0) currentIndex = 0;
-    }
 
     currentIndex += change;
 
@@ -599,7 +544,7 @@ class StoryMenuState extends MusicBeatState
 
   function funnyMusicThing():Void
   {
-    if (currentDifficultyId == "nightmare")
+    if (currentDifficultyId == 'nightmare')
     {
       FlxG.sound.music.fadeOut(FADE_OUT_TIME, 0.0);
     }
@@ -609,7 +554,7 @@ class StoryMenuState extends MusicBeatState
     }
   }
 
-  public override function dispatchEvent(event:ScriptEvent):Void
+  override public function dispatchEvent(event:ScriptEvent):Void
   {
     // super.dispatchEvent(event) dispatches event to module scripts.
     super.dispatchEvent(event);
@@ -727,8 +672,7 @@ class StoryMenuState extends MusicBeatState
           ease: FlxEase.linear,
           onComplete: function(_)
           {
-            remove(oldBackground, true);
-            oldBackground.destroy();
+            remove(oldBackground);
           }
         });
 
@@ -749,6 +693,12 @@ class StoryMenuState extends MusicBeatState
 
   function updateProps():Void
   {
+    if (Preferences.isLowQualityMinimal())
+    {
+      levelProps.clear();
+      return;
+    }
+
     for (ind => prop in currentLevel.buildProps(levelProps.members))
     {
       prop.x += (FullScreenScaleMode.gameCutoutSize.x / 4);

@@ -3,7 +3,6 @@ package funkin.data.song;
 import funkin.ui.debug.charting.ChartEditorState;
 import funkin.data.event.SongEventRegistry;
 import funkin.play.event.SongEvent;
-import funkin.play.event.ShaderSongEvent;
 import funkin.data.event.SongEventSchema;
 import funkin.data.song.SongRegistry;
 import thx.semver.Version;
@@ -23,25 +22,18 @@ class SongMetadata implements ICloneable<SongMetadata>
    * A semantic versioning string for the song data format.
    *
    */
-  @:jcustomparse(funkin.data.DataParse.semverVersion)
-  @:jcustomwrite(funkin.data.DataWrite.semverVersion)
+  @:jcustomparse(funkin.data.DataParse.semverVersion) @:jcustomwrite(funkin.data.DataWrite.semverVersion)
   public var version:Version;
 
   @:default("Unknown")
   public var songName:String;
-
   @:default("Unknown")
   public var artist:String;
-
   @:optional
   public var charter:Null<String> = null;
-
-  @:optional
-  @:default(96)
+  @:optional @:default(96)
   public var divisions:Null<Int>; // Optional field
-
-  @:optional
-  @:default(false)
+  @:optional @:default(false)
   public var looped:Bool;
 
   /**
@@ -57,11 +49,8 @@ class SongMetadata implements ICloneable<SongMetadata>
   public var playData:SongPlayData;
 
   public var generatedBy:String;
-
-  @:optional
-  @:default(funkin.data.song.SongData.SongTimeFormat.MILLISECONDS)
+  @:optional @:default(funkin.data.song.SongData.SongTimeFormat.MILLISECONDS)
   public var timeFormat:SongTimeFormat;
-
   public var timeChanges:Array<SongTimeChange>;
 
   /**
@@ -168,9 +157,7 @@ enum abstract SongTimeFormat(String) from String to String
 class SongTimeChange implements ICloneable<SongTimeChange>
 {
   public static final DEFAULT_SONGTIMECHANGE:SongTimeChange = new SongTimeChange(0, 100);
-
   public static final DEFAULT_SONGTIMECHANGES:Array<SongTimeChange> = [DEFAULT_SONGTIMECHANGE];
-
   static final DEFAULT_BEAT_TUPLETS:Array<Int> = [4, 4, 4, 4];
   static final DEFAULT_BEAT_TIME:Null<Float> = null; // Later, null gets detected and recalculated.
 
@@ -184,8 +171,7 @@ class SongTimeChange implements ICloneable<SongTimeChange>
    * Time in beats (int). The game will calculate further beat values based on this one,
    * so it can do it in a simple linear fashion.
    */
-  @:optional
-  @:alias("b")
+  @:optional @:alias("b")
   public var beatTime:Float;
 
   /**
@@ -198,17 +184,13 @@ class SongTimeChange implements ICloneable<SongTimeChange>
   /**
    * Time signature numerator (int). Optional, defaults to 4.
    */
-  @:default(4)
-  @:optional
-  @:alias("n")
+  @:default(4) @:optional @:alias("n")
   public var timeSignatureNum:Int;
 
   /**
    * Time signature denominator (int). Optional, defaults to 4. Should only ever be a power of two.
    */
-  @:default(4)
-  @:optional
-  @:alias("d")
+  @:default(4) @:optional @:alias("d")
   public var timeSignatureDen:Int;
 
   /**
@@ -216,8 +198,7 @@ class SongTimeChange implements ICloneable<SongTimeChange>
    * It can either be an array of length `n` (see above) or a single integer number.
    * Optional, defaults to `[4]`.
    */
-  @:optional
-  @:alias("bt")
+  @:optional @:alias("bt")
   public var beatTuplets:Array<Int>;
 
   public function new(timeStamp:Float, bpm:Float, timeSignatureNum:Int = 4, timeSignatureDen:Int = 4, ?beatTime:Float, ?beatTuplets:Array<Int>)
@@ -260,31 +241,27 @@ class SongOffsets implements ICloneable<SongOffsets>
    * Setting this to `-5000.0` means the chart start 5 seconds into the song.
    * Setting this to `5000.0` means there will be 5 seconds of silence before the song starts.
    */
-  @:optional
-  @:default(0)
+  @:optional @:default(0)
   public var instrumental:Float;
 
   /**
    * Apply different offsets to different alternate instrumentals.
    */
-  @:optional
-  @:default([])
+  @:optional @:default([])
   public var altInstrumentals:Map<String, Float>;
 
   /**
    * The offset, in milliseconds, to apply to the song's vocals, relative to the song's base instrumental.
    * These are applied ON TOP OF the instrumental offset.
    */
-  @:optional
-  @:default([])
+  @:optional @:default([])
   public var vocals:Map<String, Float>;
 
   /**
    * The offset, in milliseconds, to apply to the songs vocals, relative to each alternate instrumental.
    * This is useful for the circumstance where, for example, an alt instrumental has a few seconds of lead in before the song starts.
    */
-  @:optional
-  @:default([])
+  @:optional @:default([])
   public var altVocals:Map<String, Map<String, Float>>;
 
   public function new(instrumental:Float = 0.0, ?altInstrumentals:Map<String, Float>, ?vocals:Map<String, Float>, ?altVocals:Map<String, Map<String, Float>>)
@@ -366,30 +343,21 @@ class SongMusicData implements ICloneable<SongMusicData>
    * A semantic versioning string for the song data format.
    *
    */
-  @:jcustomparse(funkin.data.DataParse.semverVersion)
-  @:jcustomwrite(funkin.data.DataWrite.semverVersion)
+  @:jcustomparse(funkin.data.DataParse.semverVersion) @:jcustomwrite(funkin.data.DataWrite.semverVersion)
   public var version:Version;
 
   @:default("Unknown")
   public var songName:String;
-
   @:default("Unknown")
   public var artist:String;
-
-  @:optional
-  @:default(96)
+  @:optional @:default(96)
   public var divisions:Null<Int>; // Optional field
-
-  @:optional
-  @:default(false)
+  @:optional @:default(false)
   public var looped:Null<Bool>;
-
   // @:default(funkin.data.song.SongRegistry.DEFAULT_GENERATEDBY)
   public var generatedBy:String;
-
   // @:default(funkin.data.song.SongData.SongTimeFormat.MILLISECONDS)
   public var timeFormat:SongTimeFormat;
-
   // @:default(funkin.data.song.SongData.SongTimeChange.DEFAULT_SONGTIMECHANGES)
   public var timeChanges:Array<SongTimeChange>;
 
@@ -446,8 +414,7 @@ class SongPlayData implements ICloneable<SongPlayData>
   /**
    * The variations this song has. The associated metadata files should exist.
    */
-  @:default([])
-  @:optional
+  @:default([]) @:optional
   public var songVariations:Array<String>;
 
   /**
@@ -474,9 +441,7 @@ class SongPlayData implements ICloneable<SongPlayData>
    * The difficulty ratings for this song as displayed in Freeplay.
    * Key is a difficulty ID.
    */
-  @:optional
-  @:default(['normal' => 0])
-  @:order(funkin.util.Constants.DEFAULT_DIFFICULTY_LIST_FULL)
+  @:optional @:default(['normal' => 0]) @:order(funkin.util.Constants.DEFAULT_DIFFICULTY_LIST_FULL)
   public var ratings:Map<String, Int>;
 
   /**
@@ -485,6 +450,13 @@ class SongPlayData implements ICloneable<SongPlayData>
    */
   @:optional
   public var album:Null<String>;
+
+  /**
+   * An external image link for the opponent's health icon.
+   * This is used for Discord Rich Presence.
+   */
+  @:optional
+  public var discordRPCImage:String;
 
   /**
    * The sticker pack for the song to use during transitions.
@@ -498,8 +470,7 @@ class SongPlayData implements ICloneable<SongPlayData>
    * Defaults to 0 seconds in.
    * @since `2.2.2`
    */
-  @:optional
-  @:default(funkin.util.Constants.DEFAULT_PREVIEW_START_TIME)
+  @:optional @:default(funkin.util.Constants.DEFAULT_PREVIEW_START_TIME)
   public var previewStart:Float;
 
   /**
@@ -507,8 +478,7 @@ class SongPlayData implements ICloneable<SongPlayData>
    * Defaults to 20% seconds in.
    * @since `2.2.2`
    */
-  @:optional
-  @:default(funkin.util.Constants.DEFAULT_PREVIEW_END_TIME)
+  @:optional @:default(funkin.util.Constants.DEFAULT_PREVIEW_END_TIME)
   public var previewEnd:Float;
 
   public function new()
@@ -548,29 +518,18 @@ class SongPlayData implements ICloneable<SongPlayData>
  */
 class SongCharacterData implements ICloneable<SongCharacterData>
 {
-  @:optional
-  @:default('')
+  @:optional @:default('')
   public var player:String = '';
-
-  @:optional
-  @:default('')
+  @:optional @:default('')
   public var girlfriend:String = '';
-
-  @:optional
-  @:default('')
+  @:optional @:default('')
   public var opponent:String = '';
-
-  @:optional
-  @:default('')
+  @:optional @:default('')
   public var instrumental:String = '';
-
-  @:optional
-  @:default([])
+  @:optional @:default([])
   public var altInstrumentals:Array<String> = [];
-
   @:optional
   public var opponentVocals:Null<Array<String>> = null;
-
   @:optional
   public var playerVocals:Null<Array<String>> = null;
 
@@ -609,16 +568,13 @@ class SongCharacterData implements ICloneable<SongCharacterData>
 
 class SongChartData implements ICloneable<SongChartData>
 {
-  @:jcustomparse(funkin.data.DataParse.semverVersion)
-  @:jcustomwrite(funkin.data.DataWrite.semverVersion)
+  @:jcustomparse(funkin.data.DataParse.semverVersion) @:jcustomwrite(funkin.data.DataWrite.semverVersion)
   public var version:Version;
-
   @:order(funkin.util.Constants.DEFAULT_DIFFICULTY_LIST_FULL)
   public var scrollSpeed:Map<String, Float>;
   public var events:Array<SongEventData>;
   @:order(funkin.util.Constants.DEFAULT_DIFFICULTY_LIST_FULL)
   public var notes:Map<String, Array<SongNoteData>>;
-
   public var generatedBy:String;
 
   /**
@@ -745,10 +701,7 @@ class SongEventDataRaw implements ICloneable<SongEventDataRaw>
    * This can allow the event to include information used for custom behavior.
    * Data type depends on the event kind. It can be anything that's JSON serializable.
    */
-  @:alias("v")
-  @:optional
-  @:jcustomparse(funkin.data.DataParse.dynamicValue)
-  @:jcustomwrite(funkin.data.DataWrite.dynamicValue)
+  @:alias("v") @:optional
   public var value:Dynamic = null;
 
   /**
@@ -954,7 +907,6 @@ class SongEventDataRaw implements ICloneable<SongEventDataRaw>
 
     for (fieldName in eventSchema.listAllFieldNames())
     {
-      if (!shouldDisplayTooltipField(fieldName, valueStruct)) continue;
       var fieldValue:Dynamic = valueStruct.exists(fieldName) ? valueStruct.get(fieldName) : eventSchema.getDefaultFieldValue(fieldName);
 
       var title:String = eventSchema.getByName(fieldName)?.title ?? 'UnknownField';
@@ -978,61 +930,6 @@ class SongEventDataRaw implements ICloneable<SongEventDataRaw>
     }
 
     return result;
-  }
-
-  function shouldDisplayTooltipField(fieldName:String, valueStruct:haxe.DynamicAccess<Dynamic>):Bool
-  {
-    if (this.eventKind != 'Shader') return true;
-    final action = Std.string(valueStruct.get('action') ?? 'apply');
-    final targetType = Std.string(valueStruct.get('targetType') ?? 'camera');
-    final shader = Std.string(valueStruct.get('shader') ?? '');
-    final applying = action == 'apply';
-    for (base in ['property', 'valueType', 'value', 'boolValue', 'color', 'valueX', 'valueY'])
-    {
-      final slot = shaderTooltipSlot(fieldName, base);
-      if (slot == 0) continue;
-      final suffix = slot == 1 ? '' : Std.string(slot);
-      final property = Std.string(valueStruct.get('property${suffix}') ?? '');
-      final valueType = Std.string(valueStruct.get('valueType${suffix}') ?? ShaderSongEvent.getUniformValueTypeForShader(shader, property));
-      if (base == 'property') return applying && property != '';
-      if (base == 'valueType') return false;
-      if (!applying || property == '') return false;
-      return switch (base)
-      {
-        case 'value': valueType == 'number' || valueType == 'integer';
-        case 'boolValue': valueType == 'bool';
-        case 'color': valueType == 'color';
-        case 'valueX', 'valueY': valueType == 'position';
-        default: false;
-      };
-    }
-    var hasNumericProperty = false;
-    for (slot in 1...(ShaderSongEvent.MAX_PROPERTY_SLOTS + 1))
-    {
-      final suffix = slot == 1 ? '' : Std.string(slot);
-      final property = Std.string(valueStruct.get('property${suffix}') ?? '');
-      if (property == '') continue;
-      final valueType = Std.string(valueStruct.get('valueType${suffix}') ?? ShaderSongEvent.getUniformValueTypeForShader(shader, property));
-      if (valueType == 'number' || valueType == 'integer') hasNumericProperty = true;
-    }
-    return switch (fieldName)
-    {
-      case 'characterTarget': targetType == 'character';
-      case 'cameraTarget': targetType == 'camera';
-      case 'target': targetType == 'stageobject' || targetType == 'overlay';
-      case 'ignoreTransparentPixels': applying && targetType != 'camera' && shader.startsWith('frag:');
-      case 'fadeIn': applying && hasNumericProperty;
-      case 'fadeOut': !applying || hasNumericProperty;
-      default: true;
-    }
-  }
-
-  static function shaderTooltipSlot(fieldName:String, base:String):Int
-  {
-    if (fieldName == base) return 1;
-    if (!fieldName.startsWith(base)) return 0;
-    final parsed = Std.parseInt(fieldName.substr(base.length));
-    return parsed != null && parsed >= 2 && parsed <= ShaderSongEvent.MAX_PROPERTY_SLOTS ? parsed : 0;
   }
 }
 
@@ -1069,7 +966,6 @@ abstract SongEventData(SongEventDataRaw) from SongEventDataRaw to SongEventDataR
   {
     if (this == null) return other == null;
     if (other == null) return false;
-
     return this.time == other.time && this.eventKind == other.eventKind && this.value == other.value;
   }
 
@@ -1085,7 +981,6 @@ abstract SongEventData(SongEventDataRaw) from SongEventDataRaw to SongEventDataR
   {
     if (this == null) return other != null;
     if (other == null) return true;
-
     return this.time != other.time || this.eventKind != other.eventKind || this.value != other.value;
   }
 
@@ -1099,6 +994,7 @@ abstract SongEventData(SongEventDataRaw) from SongEventDataRaw to SongEventDataR
   @:op(A > B)
   public function op_greaterThan(other:SongEventData):Bool
   {
+    if (this == null || other == null) return false;
     return this.time > other.time;
   }
 
@@ -1112,6 +1008,7 @@ abstract SongEventData(SongEventDataRaw) from SongEventDataRaw to SongEventDataR
   @:op(A < B)
   public function op_lessThan(other:SongEventData):Bool
   {
+    if (this == null || other == null) return false;
     return this.time < other.time;
   }
 
@@ -1125,6 +1022,7 @@ abstract SongEventData(SongEventDataRaw) from SongEventDataRaw to SongEventDataR
   @:op(A >= B)
   public function op_greaterThanOrEquals(other:SongEventData):Bool
   {
+    if (this == null || other == null) return false;
     return this.time >= other.time;
   }
 
@@ -1138,6 +1036,7 @@ abstract SongEventData(SongEventDataRaw) from SongEventDataRaw to SongEventDataR
   @:op(A <= B)
   public function op_lessThanOrEquals(other:SongEventData):Bool
   {
+    if (this == null || other == null) return false;
     return this.time <= other.time;
   }
 
@@ -1180,9 +1079,7 @@ class SongNoteDataRaw implements ICloneable<SongNoteDataRaw>
    * Length of the note, if applicable.
    * Defaults to 0 for single notes.
    */
-  @:alias("l")
-  @:default(0)
-  @:optional
+  @:alias("l") @:default(0) @:optional
   public var length(default, set):Float;
 
   function set_length(value:Float):Float
@@ -1196,9 +1093,7 @@ class SongNoteDataRaw implements ICloneable<SongNoteDataRaw>
    * This can allow the note to include information used for custom behavior.
    * Defaults to `null` for no kind.
    */
-  @:alias("k")
-  @:optional
-  @:isVar
+  @:alias("k") @:optional @:isVar
   public var kind(get, set):Null<String> = null;
 
   function get_kind():Null<String>
@@ -1218,9 +1113,7 @@ class SongNoteDataRaw implements ICloneable<SongNoteDataRaw>
    * The parameters for the note.
    * Used for custom behavior on custom note kinds. Defaults to an empty array.
    */
-  @:alias("p")
-  @:default([])
-  @:optional
+  @:alias("p") @:default([]) @:optional
   public var params:Array<NoteParamData>;
 
   public function new(time:Float, data:Int, length:Float = 0, kind:String = '', ?params:Array<NoteParamData>)
@@ -1535,10 +1428,7 @@ class NoteParamData implements ICloneable<NoteParamData>
 {
   @:alias("n")
   public var name:String;
-
   @:alias("v")
-  @:jcustomparse(funkin.data.DataParse.dynamicValue)
-  @:jcustomwrite(funkin.data.DataWrite.dynamicValue)
   public var value:Dynamic;
 
   public function new(name:String, value:Dynamic)

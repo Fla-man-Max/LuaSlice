@@ -21,8 +21,7 @@ import haxe.ui.events.UIEvent;
  */
 // @:nullSafety // TODO: Fix null safety when used with HaxeUI build macros.
 
-@:access(funkin.ui.debug.charting.ChartEditorState)
-@:build(haxe.ui.ComponentBuilder.build("assets/exclude/data/ui/chart-editor/toolboxes/offsets.xml"))
+@:access(funkin.ui.debug.charting.ChartEditorState) @:build(haxe.ui.ComponentBuilder.build('assets/exclude/data/ui/chart-editor/toolboxes/offsets.xml'))
 class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
 {
   var waveformContainer:Absolute;
@@ -42,17 +41,13 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
   var playheadSprite:SpriteWrapper;
 
   static final TICK_LABEL_X_OFFSET:Float = 4.0;
-
   static final PLAYHEAD_RIGHT_PAD:Float = 10.0;
-
   static final BASE_SCALE:Float = 64.0;
   static final MIN_SCALE:Float = 4.0;
   static final WAVEFORM_ZOOM_MULT:Float = 1.5;
-
   static final MAGIC_SCALE_BASE_TIME:Float = 5.0;
 
   var waveformScale:Float = BASE_SCALE;
-
   var playheadAbsolutePos(get, set):Float;
 
   function get_playheadAbsolutePos():Float
@@ -83,11 +78,8 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
   var waveformMagicFactor:Float = 1.0;
 
   var audioPreviewTracks:SoundGroup;
-
   var tickTiledSprite:FlxTiledSprite;
-
   var tickLabels:Array<Label> = [];
-
   // Local store of the audio offsets, so we can detect when they change.
   var audioPreviewPlayerOffset:Float = 0;
   var audioPreviewOpponentOffset:Float = 0;
@@ -207,7 +199,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
         playheadRelativePos = playheadRelativePos.clamp(0, waveformScrollview.width - PLAYHEAD_RIGHT_PAD);
         var diff = playheadRelativePos - prevPlayheadRelativePos;
 
-        if (diff != 0 && waveformPlayer.waveform.waveformData != null)
+        if (diff != 0)
         {
           // We have to change the song time to match the playhead position when we move it.
           var currentWaveformIndex:Int = Std.int(playheadAbsolutePos * (waveformScale / BASE_SCALE * waveformMagicFactor));
@@ -286,7 +278,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     var opponentVoice = chartEditorState.audioVocalTrackGroup.getOpponentVoice();
     if (opponentVoice != null) audioPreviewTracks.add(opponentVoice.clone());
 
-    // Build player waveform. Building.......... Done! loll
+    // Build player waveform.
     // waveformPlayer.waveform.forceUpdate = true;
     waveformPlayer.waveform.waveformData = playerVoice?.waveformData;
     // Set the width and duration to render the full waveform, with the clipRect applied we only render a segment of it.
@@ -294,7 +286,8 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
 
     // Build opponent waveform.
     // waveformOpponent.waveform.forceUpdate = true;
-    // so we null check. ANDDD null check. Null check. yes yes!
+    // note: if song only has one set of vocals (Vocals.ogg/mp3) then this is null and crashes charting editor
+    // so we null check
     waveformOpponent.waveform.waveformData = opponentVoice?.waveformData;
     waveformOpponent.waveform.duration = (opponentVoice?.length ?? 1000.0) / Constants.MS_PER_SEC;
 
@@ -319,16 +312,14 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
 
     var numberOfTicks:Int = Math.floor(waveformInstrumental.waveform.width / chartEditorState.offsetTickBitmap.width * 2) + 1;
 
-    var pointsPerSecond = (waveformInstrumental.waveform.waveformData != null) ? waveformInstrumental.waveform.waveformData.pointsPerSecond() : 100.0;
-
     for (index in 0...numberOfTicks)
     {
       var tickPos = chartEditorState.offsetTickBitmap.width / 2 * index;
-      var tickTime = tickPos * (waveformScale / BASE_SCALE * waveformMagicFactor) / pointsPerSecond;
+      var tickTime = tickPos * (waveformScale / BASE_SCALE * waveformMagicFactor) / waveformInstrumental.waveform.waveformData.pointsPerSecond();
 
       var tickLabel:Label = new Label();
       tickLabel.text = formatTime(tickTime);
-      tickLabel.styleNames = "offset-ticks-label";
+      tickLabel.styleNames = 'offset-ticks-label';
       tickLabel.height = labelHeight;
       // Positioning within offsetTicksContainer is absolute (relative to the container itself).
       tickLabel.top = labelYPos;
@@ -341,19 +332,19 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
 
   function formatTime(seconds:Float):String
   {
-    if (seconds <= 0) return "0.0";
+    if (seconds <= 0) return '0.0';
 
     var integerSeconds = Math.floor(seconds);
     var decimalSeconds = Math.floor((seconds - integerSeconds) * 10);
 
-    if (integerSeconds < 60)
+    if (integerSeconds < Constants.SECS_PER_MIN)
     {
       return '${integerSeconds}.${decimalSeconds}';
     }
     else
     {
-      var integerMinutes = Math.floor(integerSeconds / 60);
-      var remainingSeconds = integerSeconds % 60;
+      var integerMinutes = Math.floor(integerSeconds / Constants.SECS_PER_MIN);
+      var remainingSeconds = integerSeconds % Constants.SECS_PER_MIN;
       var remainingSecondsPad:String = remainingSeconds < 10 ? '0$remainingSeconds' : '$remainingSeconds';
 
       return '${integerMinutes}:${remainingSecondsPad}${decimalSeconds > 0 ? '.$decimalSeconds' : ''}';
@@ -396,12 +387,9 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     playheadAbsolutePos = targetPlayheadPos;
 
     // Move the audio preview to the playhead position.
-    if (waveformPlayer.waveform.waveformData != null)
-    {
-      var currentWaveformIndex:Int = Std.int(playheadAbsolutePos * (waveformScale / BASE_SCALE * waveformMagicFactor));
-      var targetSongTimeSeconds:Float = waveformPlayer.waveform.waveformData.indexToSeconds(currentWaveformIndex);
-      audioPreviewTracks.time = targetSongTimeSeconds * Constants.MS_PER_SEC;
-    }
+    var currentWaveformIndex:Int = Std.int(playheadAbsolutePos * (waveformScale / BASE_SCALE * waveformMagicFactor));
+    var targetSongTimeSeconds:Float = waveformPlayer.waveform.waveformData.indexToSeconds(currentWaveformIndex);
+    audioPreviewTracks.time = targetSongTimeSeconds * Constants.MS_PER_SEC;
   }
 
   public function onStartDragWaveform(waveform:Waveform):Void
@@ -423,7 +411,6 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     var deltaMousePosition = newDragMousePosition - dragMousePosition;
 
     if (deltaMousePosition == 0) return;
-    if (dragWaveform != null && getWaveform(dragWaveform).waveform.waveformData == null) return;
 
     var deltaPixels:Float = deltaMousePosition * (waveformScale / BASE_SCALE * waveformMagicFactor);
     var deltaMilliseconds:Float = switch (dragWaveform)
@@ -455,16 +442,6 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     dragMousePosition = newDragMousePosition;
 
     refresh();
-  }
-  
-  function getWaveform(target:Waveform):WaveformPlayer
-  {
-    return switch (target)
-    {
-      case PLAYER: waveformPlayer;
-      case OPPONENT: waveformOpponent;
-      case INSTRUMENTAL: waveformInstrumental;
-    }
   }
 
   public function onStopDragWaveform(event:MouseEvent):Void
@@ -641,21 +618,21 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
         if (trackInst != null)
         {
           trackInst.muted = true;
-          offsetInstrumentalMute.text = trackInst.muted ? "Unmute" : "Mute";
+          offsetInstrumentalMute.text = trackInst.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.PLAYER:
         var trackPlayer = audioPreviewTracks.members[1];
         if (trackPlayer != null)
         {
           trackPlayer.muted = true;
-          offsetPlayerMute.text = trackPlayer.muted ? "Unmute" : "Mute";
+          offsetPlayerMute.text = trackPlayer.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.OPPONENT:
         var trackOpponent = audioPreviewTracks.members[2];
         if (trackOpponent != null)
         {
           trackOpponent.muted = true;
-          offsetOpponentMute.text = trackOpponent.muted ? "Unmute" : "Mute";
+          offsetOpponentMute.text = trackOpponent.muted ? 'Unmute' : 'Mute';
         }
     }
   }
@@ -669,21 +646,21 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
         if (trackInst != null)
         {
           trackInst.muted = false;
-          offsetInstrumentalMute.text = trackInst.muted ? "Unmute" : "Mute";
+          offsetInstrumentalMute.text = trackInst.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.PLAYER:
         var trackPlayer = audioPreviewTracks.members[1];
         if (trackPlayer != null)
         {
           trackPlayer.muted = false;
-          offsetPlayerMute.text = trackPlayer.muted ? "Unmute" : "Mute";
+          offsetPlayerMute.text = trackPlayer.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.OPPONENT:
         var trackOpponent = audioPreviewTracks.members[2];
         if (trackOpponent != null)
         {
           trackOpponent.muted = false;
-          offsetOpponentMute.text = trackOpponent.muted ? "Unmute" : "Mute";
+          offsetOpponentMute.text = trackOpponent.muted ? 'Unmute' : 'Mute';
         }
     }
   }
@@ -697,21 +674,21 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
         if (trackInst != null)
         {
           trackInst.muted = !trackInst.muted;
-          offsetInstrumentalMute.text = trackInst.muted ? "Unmute" : "Mute";
+          offsetInstrumentalMute.text = trackInst.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.PLAYER:
         var trackPlayer = audioPreviewTracks.members[1];
         if (trackPlayer != null)
         {
           trackPlayer.muted = !trackPlayer.muted;
-          offsetPlayerMute.text = trackPlayer.muted ? "Unmute" : "Mute";
+          offsetPlayerMute.text = trackPlayer.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.OPPONENT:
         var trackOpponent = audioPreviewTracks.members[2];
         if (trackOpponent != null)
         {
           trackOpponent.muted = !trackOpponent.muted;
-          offsetOpponentMute.text = trackOpponent.muted ? "Unmute" : "Mute";
+          offsetOpponentMute.text = trackOpponent.muted ? 'Unmute' : 'Mute';
         }
     }
   }
@@ -739,7 +716,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     }
   }
 
-  public override function update(elapsed:Float)
+  override public function update(elapsed:Float)
   {
     super.update(elapsed);
 
@@ -747,12 +724,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     {
       trace('Playback time: ${audioPreviewTracks.time}');
 
-      var targetScrollPos:Float = 0;
-      if (waveformInstrumental.waveform.waveformData != null)
-      {
-        targetScrollPos = waveformInstrumental.waveform.waveformData.secondsToIndex(audioPreviewTracks.time / Constants.MS_PER_SEC) / (waveformScale / BASE_SCALE * waveformMagicFactor);
-      }
-      
+      var targetScrollPos:Float = waveformInstrumental.waveform.waveformData.secondsToIndex(audioPreviewTracks.time / Constants.MS_PER_SEC) / (waveformScale / BASE_SCALE * waveformMagicFactor);
       // waveformScrollview.hscrollPos = targetScrollPos;
       var prevPlayheadAbsolutePos = playheadAbsolutePos;
       playheadAbsolutePos = targetScrollPos;
@@ -821,12 +793,11 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     //   Math.min(waveformScrollview.hscrollPos + waveformScrollview.width, waveformContainer.width));
   }
 
-  public override function refresh():Void
+  override public function refresh():Void
   {
     super.refresh();
 
-    var pointsPerSecond = (waveformInstrumental.waveform.waveformData != null) ? waveformInstrumental.waveform.waveformData.pointsPerSecond() : 100.0;
-    waveformMagicFactor = MAGIC_SCALE_BASE_TIME / (chartEditorState.offsetTickBitmap.width / pointsPerSecond);
+    waveformMagicFactor = MAGIC_SCALE_BASE_TIME / (chartEditorState.offsetTickBitmap.width / waveformInstrumental.waveform.waveformData.pointsPerSecond());
 
     var currentZoomFactor = waveformScale / BASE_SCALE * waveformMagicFactor;
 

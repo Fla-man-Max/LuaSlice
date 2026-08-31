@@ -12,7 +12,7 @@ class BlackoutSongEvent extends SongEvent
     data.getFloat('hold') ?? 1, data.getFloat('fadeOut') ?? 0.5, data.getString('camera') ?? 'hud', data.getBool('keepHud') ?? false,
     data.getBool('instant') ?? false, data.getDynamic('color') ?? '#000000');
   public override function getEventSchema():SongEventSchema return new SongEventSchema([{
-    name: 'color', title: 'Color', defaultValue: '#000000', type: SongEventFieldType.COLOR
+      name: 'color', title: 'Color', defaultValue: '#000000', type: SongEventFieldType.COLOR
   }, {
     name: 'fadeIn', title: 'Fade In', defaultValue: 0.5, min: 0, step: 0.1, type: SongEventFieldType.FLOAT, units: 'seconds'
   }, {

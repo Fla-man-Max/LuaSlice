@@ -1,10 +1,5 @@
 package funkin.ui.haxeui.components;
 
-import animate.internal.Timeline;
-import flixel.FlxG;
-import flixel.graphics.frames.FlxFrame.FlxFrameAngle;
-import flixel.math.FlxMatrix;
-import flixel.math.FlxRect;
 import funkin.modding.events.ScriptEvent.GhostMissNoteScriptEvent;
 import funkin.modding.events.ScriptEvent.NoteScriptEvent;
 import funkin.modding.events.ScriptEvent.HoldNoteScriptEvent;
@@ -37,207 +32,6 @@ typedef AnimationInfo =
 class CharacterPlayer extends Box
 {
   public var character:Null<BaseCharacter>;
-  public var artworkOffsetX:Float = 0;
-  public var artworkOffsetY:Float = 0;
-  var artworkBoundsCacheKey:String = '';
-  var animationArtworkBounds:Map<String, Array<Float>> = new Map<String, Array<Float>>();
-  var referenceArtworkBounds:Null<Array<Float>> = null;
-  var previewArtworkBounds:Null<Array<Float>> = null;
-  var measuringArtworkBounds:Bool = false;
-
-  public function setArtworkOffset(x:Float, y:Float):Void
-  {
-    if (artworkOffsetX == x && artworkOffsetY == y) return;
-    artworkOffsetX = x;
-    artworkOffsetY = y;
-    invalidateComponentLayout();
-  }
-
-  public function getArtworkBounds():Array<Float>
-  {
-    if (character == null) return [0, 0, 0, 0];
-
-    positionCharacter();
-    final camera = character.camera ?? FlxG.camera;
-    final matrix = new FlxMatrix();
-    var visibleBounds:FlxRect;
-
-    if (character.isAnimate && character.timeline != null)
-    {
-      @:privateAccess final timelineBounds:FlxRect = character.timeline._bounds;
-      visibleBounds = character.timeline.getBounds(character.animation.frameIndex, false, null, null, true, true);
-      matrix.identity();
-      matrix.translate(-timelineBounds.x, -timelineBounds.y);
-      @:privateAccess character.prepareAnimateMatrix(matrix, camera, timelineBounds);
-      Timeline.applyMatrixToRect(visibleBounds, matrix);
-    }
-    else
-    {
-      final frame = character.frame;
-      if (frame == null) return [0, 0, 0, 0];
-
-      final rotated:Bool = frame.angle == FlxFrameAngle.ANGLE_90 || frame.angle == FlxFrameAngle.ANGLE_NEG_90;
-      final frameWidth:Float = rotated ? frame.frame.height : frame.frame.width;
-      final frameHeight:Float = rotated ? frame.frame.width : frame.frame.height;
-      visibleBounds = FlxRect.get(0, 0, frameWidth, frameHeight);
-      @:privateAccess frame.prepareMatrix(matrix, FlxFrameAngle.ANGLE_0, character.checkFlipX(), character.checkFlipY());
-      @:privateAccess character.prepareDrawMatrix(matrix, camera);
-      Timeline.applyMatrixToRect(visibleBounds, matrix);
-    }
-
-    final bounds:Array<Float> = [
-      visibleBounds.x - cachedScreenX - artworkOffsetX,
-      visibleBounds.y - cachedScreenY - artworkOffsetY,
-      visibleBounds.width,
-      visibleBounds.height
-    ];
-    visibleBounds.put();
-    return bounds;
-  }
-
-  public function getAnimationArtworkBounds(?name:String):Array<Float>
-  {
-    ensureArtworkBoundsCacheState();
-    final animationName:String = name ?? character?.animation.name ?? '';
-    final bounds:Array<Float> = measureAnimationArtworkBounds(animationName);
-    mergePreviewArtworkBounds(bounds);
-    return bounds;
-  }
-
-  public function getReferenceArtworkBounds():Array<Float>
-  {
-    ensureArtworkBoundsCacheState();
-    if (referenceArtworkBounds != null) return referenceArtworkBounds;
-
-    if (character?.animation.exists('idle'))
-    {
-      referenceArtworkBounds = measureAnimationArtworkBounds('idle');
-    }
-    else
-    {
-      final danceLeft:Null<Array<Float>> = character?.animation.exists('danceLeft') ? measureAnimationArtworkBounds('danceLeft') : null;
-      final danceRight:Null<Array<Float>> = character?.animation.exists('danceRight') ? measureAnimationArtworkBounds('danceRight') : null;
-      if (danceLeft != null && danceRight != null)
-      {
-        referenceArtworkBounds = [
-          Math.min(danceLeft[0], danceRight[0]),
-          Math.min(danceLeft[1], danceRight[1]),
-          Math.max(danceLeft[2], danceRight[2]),
-          Math.max(danceLeft[3], danceRight[3])
-        ];
-      }
-      else
-      {
-        referenceArtworkBounds = danceLeft ?? danceRight ?? getArtworkBoundsAsEdges();
-      }
-    }
-    mergePreviewArtworkBounds(referenceArtworkBounds);
-    return referenceArtworkBounds;
-  }
-
-  public function getPreviewArtworkBounds():Array<Float>
-  {
-    getReferenceArtworkBounds();
-    getAnimationArtworkBounds();
-    return previewArtworkBounds ?? getArtworkBoundsAsEdges();
-  }
-
-  function mergePreviewArtworkBounds(bounds:Array<Float>):Void
-  {
-    if (previewArtworkBounds == null)
-    {
-      previewArtworkBounds = bounds.copy();
-      return;
-    }
-
-    previewArtworkBounds[0] = Math.min(previewArtworkBounds[0], bounds[0]);
-    previewArtworkBounds[1] = Math.min(previewArtworkBounds[1], bounds[1]);
-    previewArtworkBounds[2] = Math.max(previewArtworkBounds[2], bounds[2]);
-    previewArtworkBounds[3] = Math.max(previewArtworkBounds[3], bounds[3]);
-  }
-
-  function getArtworkBoundsAsEdges():Array<Float>
-  {
-    final bounds:Array<Float> = getArtworkBounds();
-    return [bounds[0], bounds[1], bounds[0] + bounds[2], bounds[1] + bounds[3]];
-  }
-
-  function invalidateArtworkBounds():Void
-  {
-    artworkBoundsCacheKey = '';
-    animationArtworkBounds.clear();
-    referenceArtworkBounds = null;
-    previewArtworkBounds = null;
-  }
-
-  function ensureArtworkBoundsCacheState():Void
-  {
-    if (character == null) return;
-
-    final frameCount:Int = character.frames?.frames?.length ?? 0;
-    final cacheKey:String = '${character.characterId}:$frameCount:${character.scale.x}:${character.scale.y}:${character.flipX}:${character.flipY}';
-    if (artworkBoundsCacheKey == cacheKey) return;
-
-    invalidateArtworkBounds();
-    artworkBoundsCacheKey = cacheKey;
-  }
-
-  @:access(funkin.play.stage.Bopper)
-  function measureAnimationArtworkBounds(animationName:String):Array<Float>
-  {
-    ensureArtworkBoundsCacheState();
-    if (character == null || animationName == '') return getArtworkBoundsAsEdges();
-
-    final cachedBounds:Null<Array<Float>> = animationArtworkBounds.get(animationName);
-    if (cachedBounds != null) return cachedBounds;
-
-    final animation = character.animation.getByName(animationName);
-    if (animation == null || animation.numFrames <= 0) return getArtworkBoundsAsEdges();
-
-    final currentName:Null<String> = character.animation.name;
-    final currentFrame:Int = character.animation.curAnim?.curFrame ?? 0;
-    final currentPaused:Bool = character.animation.paused;
-    final currentFinished:Bool = character.animation.finished;
-    final currentOffsets:Array<Float> = character.animOffsets.copy();
-    measuringArtworkBounds = true;
-    final offsets:Null<Array<Float>> = character.animationOffsets.get(animationName);
-    character.animOffsets = offsets == null ? [0, 0] : offsets;
-    character.animation.play(animationName, true, false, 0);
-    var bounds:Null<Array<Float>> = null;
-
-    for (frame in 0...animation.numFrames)
-    {
-      animation.curFrame = frame;
-      final frameBounds:Array<Float> = getArtworkBoundsAsEdges();
-      if (frameBounds[2] > frameBounds[0] && frameBounds[3] > frameBounds[1])
-      {
-        if (bounds == null)
-        {
-          bounds = frameBounds;
-        }
-        else
-        {
-          bounds[0] = Math.min(bounds[0], frameBounds[0]);
-          bounds[1] = Math.min(bounds[1], frameBounds[1]);
-          bounds[2] = Math.max(bounds[2], frameBounds[2]);
-          bounds[3] = Math.max(bounds[3], frameBounds[3]);
-        }
-      }
-    }
-
-    if (currentName != null && character.animation.exists(currentName))
-    {
-      character.animation.play(currentName, true, false, currentFrame);
-    }
-    character.animOffsets = currentOffsets;
-    character.animation.paused = currentPaused;
-    character.animation.finished = currentFinished;
-    measuringArtworkBounds = false;
-
-    final measuredBounds:Array<Float> = bounds ?? getArtworkBoundsAsEdges();
-    animationArtworkBounds.set(animationName, measuredBounds);
-    return measuredBounds;
-  }
 
   public function new(defaultToBf:Bool = true)
   {
@@ -267,7 +61,7 @@ class CharacterPlayer extends Box
 
   function get_charName():String
   {
-    return character?.characterName ?? "Unknown";
+    return character?.characterName ?? 'Unknown';
   }
 
   // possible haxeui bug: if listener is added after event is dispatched, event is "lost"... is it smart to "collect and redispatch"? Not sure
@@ -284,8 +78,6 @@ class CharacterPlayer extends Box
   public function loadCharacter(id:String):Void
   {
     if (id == null) return;
-
-    invalidateArtworkBounds();
 
     if (character != null)
     {
@@ -320,8 +112,6 @@ class CharacterPlayer extends Box
     character.animation.onFinish.add(onFinish);
     add(character);
 
-    invalidateArtworkBounds();
-
     invalidateComponentLayout();
 
     if (hasEvent(AnimationEvent.LOADED))
@@ -354,7 +144,6 @@ class CharacterPlayer extends Box
     if (character != null)
     {
       character.flipX = !character.flipX;
-      invalidateArtworkBounds();
     }
 
     return flip = value;
@@ -369,7 +158,6 @@ class CharacterPlayer extends Box
     if (character != null)
     {
       character.setScale(value);
-      invalidateArtworkBounds();
     }
 
     return targetScale = value;
@@ -377,13 +165,11 @@ class CharacterPlayer extends Box
 
   function onFrame(name:String, frameNumber:Int, frameIndex:Int):Void
   {
-    if (measuringArtworkBounds) return;
     dispatch(new AnimationEvent(AnimationEvent.FRAME));
   }
 
   function onFinish(name:String):Void
   {
-    if (measuringArtworkBounds) return;
     dispatch(new AnimationEvent(AnimationEvent.END));
   }
 
@@ -396,14 +182,9 @@ class CharacterPlayer extends Box
   {
     super.repositionChildren();
 
-    positionCharacter();
-  }
-
-  function positionCharacter():Void
-  {
     if (character == null) return;
-    character.x = this.cachedScreenX + artworkOffsetX + (-character.globalOffsets[0] * character.scale.x);
-    character.y = this.cachedScreenY + artworkOffsetY + (-character.globalOffsets[1] * character.scale.y);
+    character.x = this.cachedScreenX + (-character.globalOffsets[0] * character.scale.x);
+    character.y = this.cachedScreenY + (-character.globalOffsets[1] * character.scale.y);
   }
 
   /**
@@ -453,7 +234,8 @@ class CharacterPlayer extends Box
       character.onNoteHit(event);
 
       if ((event.note.noteData.getMustHitNote() && characterType == BF)
-        || (!event.note.noteData.getMustHitNote() && characterType == DAD)) character.holdTimer = -event.note.noteData?.length / 1000;
+        || (!event.note.noteData.getMustHitNote()
+          && characterType == DAD)) character.holdTimer = -event.note.noteData?.length / Constants.MS_PER_SEC;
       // At least i tried yaknow?
     }
   }
@@ -489,11 +271,10 @@ class CharacterPlayer extends Box
   }
 }
 
-@:access(funkin.ui.haxeui.components.CharacterPlayer)
-@:access(funkin.play.character.BaseCharacter)
+@:access(funkin.ui.haxeui.components.CharacterPlayer) @:access(funkin.play.character.BaseCharacter)
 private class Layout extends DefaultLayout
 {
-  public override function resizeChildren():Void
+  override public function resizeChildren():Void
   {
     super.resizeChildren();
 
@@ -505,10 +286,9 @@ private class Layout extends DefaultLayout
     }
 
     character.cornerPosition.set(0, 0);
-    player.positionCharacter();
   }
 
-  public override function calcAutoSize(exclusions:Array<Component> = null):Size
+  override public function calcAutoSize(?exclusions:Array<Component>):Size
   {
     var player:CharacterPlayer = cast(_component, CharacterPlayer);
     var character:BaseCharacter = player.character;

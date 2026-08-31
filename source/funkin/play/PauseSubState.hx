@@ -24,7 +24,6 @@ import funkin.ui.FullScreenScaleMode;
 import funkin.ui.transition.stickers.StickerSubState;
 import funkin.util.SwipeUtil;
 import funkin.util.TouchUtil;
-import funkin.api.newgrounds.Referral;
 #if FEATURE_MOBILE_ADVERTISEMENTS
 import funkin.mobile.util.AdMobUtil;
 #end
@@ -38,7 +37,6 @@ typedef PauseSubStateParams =
    * Which mode to start in. Dictates what entries are displayed.
    */
   ?mode:PauseMode,
-
   /**
    * Whether the game paused because the window lost focus.
    */
@@ -57,50 +55,71 @@ class PauseSubState extends MusicBeatSubState
   /**
    * Pause menu entries for when the game is paused during a song.
    */
-  static final PAUSE_MENU_ENTRIES_STANDARD:Array<PauseMenuEntry> = [{text: 'Resume', callback: resume}, {
-    text: 'Restart Song',
-    callback: restartPlayState
-  }, {
-    text: 'Change Difficulty',
-    callback: switchMode.bind(_, Difficulty)
-  }, {
-    text: 'Enable Practice Mode',
-    callback: enablePracticeMode,
-    filter: () -> !(PlayState.instance?.isPracticeMode ?? false)
-  }, {text: 'Exit to Menu', callback: quitToMenu},];
+  static final PAUSE_MENU_ENTRIES_STANDARD:Array<PauseMenuEntry> = [
+    {text: 'Resume', callback: resume},
+    {
+      text: 'Restart Song',
+      callback: restartPlayState
+    },
+    {
+      text: 'Change Difficulty',
+      callback: switchMode.bind(_, Difficulty)
+    },
+    {
+      text: 'Enable Practice Mode',
+      callback: enablePracticeMode,
+      filter: () -> !(PlayState.instance?.isPracticeMode ?? false)
+    },
+    {text: 'Exit to Menu', callback: quitToMenu},
+  ];
 
   /**
    * Pause menu entries for when the game is paused in the Chart Editor preview.
    */
-  static final PAUSE_MENU_ENTRIES_CHARTING:Array<PauseMenuEntry> = [{text: 'Resume', callback: resume}, {
-    text: 'Restart Song',
-    callback: restartPlayState
-  }, {text: 'Return to Chart Editor', callback: quitToChartEditor},];
+  static final PAUSE_MENU_ENTRIES_CHARTING:Array<PauseMenuEntry> = [
+    {text: 'Resume', callback: resume},
+    {
+      text: 'Restart Song',
+      callback: restartPlayState
+    },
+    {text: 'Return to Chart Editor', callback: quitToChartEditor},
+  ];
 
   /**
    * Pause menu entries for when the user selects "Change Difficulty".
    */
-  static final PAUSE_MENU_ENTRIES_DIFFICULTY:Array<PauseMenuEntry> = [{
-    text: 'Back',
-    callback: switchMode.bind(_, Standard)
-  } // Other entries are added dynamically.
+  static final PAUSE_MENU_ENTRIES_DIFFICULTY:Array<PauseMenuEntry> = [
+    {
+      text: 'Back',
+      callback: switchMode.bind(_, Standard)
+    } // Other entries are added dynamically.
   ];
 
   /**
    * Pause menu entries for when the game is paused during a video cutscene.
    */
-  static final PAUSE_MENU_ENTRIES_VIDEO_CUTSCENE:Array<PauseMenuEntry> = [{text: 'Resume', callback: resume}, {
-    text: 'Skip Cutscene',
-    callback: skipVideoCutscene
-  }, {text: 'Restart Cutscene', callback: restartVideoCutscene}, {text: 'Exit to Menu', callback: quitToMenu},];
+  static final PAUSE_MENU_ENTRIES_VIDEO_CUTSCENE:Array<PauseMenuEntry> = [
+    {text: 'Resume', callback: resume},
+    {
+      text: 'Skip Cutscene',
+      callback: skipVideoCutscene
+    },
+    {text: 'Restart Cutscene', callback: restartVideoCutscene},
+    {text: 'Exit to Menu', callback: quitToMenu},
+  ];
 
   /**
    * Pause menu entries for when the game is paused during a conversation.
    */
-  static final PAUSE_MENU_ENTRIES_CONVERSATION:Array<PauseMenuEntry> = [{text: 'Resume', callback: resume}, {
-    text: 'Skip Dialogue',
-    callback: skipConversation
-  }, {text: 'Restart Dialogue', callback: restartConversation}, {text: 'Exit to Menu', callback: quitToMenu},];
+  static final PAUSE_MENU_ENTRIES_CONVERSATION:Array<PauseMenuEntry> = [
+    {text: 'Resume', callback: resume},
+    {
+      text: 'Skip Dialogue',
+      callback: skipConversation
+    },
+    {text: 'Restart Dialogue', callback: restartConversation},
+    {text: 'Exit to Menu', callback: quitToMenu},
+  ];
 
   /**
    * Duration for the music to fade in when the pause menu is opened.
@@ -113,7 +132,6 @@ class PauseSubState extends MusicBeatSubState
   static final MUSIC_FINAL_VOLUME:Float = 0.75;
 
   static final CHARTER_FADE_DELAY:Float = 15.0;
-
   static final CHARTER_FADE_DURATION:Float = 0.75;
 
   /**
@@ -232,7 +250,7 @@ class PauseSubState extends MusicBeatSubState
   // ===============
   // Audio Variables
   // ===============
-  var pauseMusic:Null<FunkinSound>;
+  var pauseMusic:FunkinSound;
 
   // ===============
   // Constructor
@@ -253,7 +271,7 @@ class PauseSubState extends MusicBeatSubState
   /**
    * Called when the state is first loaded.
    */
-  public override function create():Void
+  override public function create():Void
   {
     // Add banner ad when game is state is first loaded.
     #if FEATURE_MOBILE_ADVERTISEMENTS
@@ -268,7 +286,7 @@ class PauseSubState extends MusicBeatSubState
 
     startPauseMusic();
 
-    if (lostFocus && Preferences.autoPause) pauseMusic?.pause();
+    if (lostFocus && Preferences.autoPause) pauseMusic.pause();
 
     buildBackground();
 
@@ -285,7 +303,7 @@ class PauseSubState extends MusicBeatSubState
    * Called every frame.
    * @param elapsed The time elapsed since the last frame, in seconds.
    */
-  public override function update(elapsed:Float):Void
+  override public function update(elapsed:Float):Void
   {
     super.update(elapsed);
 
@@ -295,7 +313,7 @@ class PauseSubState extends MusicBeatSubState
   /**
    * Called when the state is closed.
    */
-  public override function destroy():Void
+  override public function destroy():Void
   {
     // #if FEATURE_MOBILE_ADVERTISEMENTS
     // extension.admob.Admob.onEvent.remove(onBannerEvent);
@@ -307,7 +325,7 @@ class PauseSubState extends MusicBeatSubState
     dataFadeTimer = null;
     hapticTimer.cancel();
     hapticTimer = null;
-    pauseMusic?.stop();
+    pauseMusic.stop();
     onPause = null;
   }
 
@@ -352,18 +370,11 @@ class PauseSubState extends MusicBeatSubState
   function startPauseMusic():Void
   {
     var pauseMusicPath:String = Paths.music('breakfast$musicSuffix/breakfast$musicSuffix');
-    pauseMusic = FunkinSound.load(pauseMusicPath, 0, true, true, false, false, null, null, true);
-
-    if (pauseMusic == null && musicSuffix != '')
-    {
-      pauseMusicPath = Paths.music('breakfast/breakfast');
-      pauseMusic = FunkinSound.load(pauseMusicPath, 0, true, true, false, false, null, null, true);
-    }
+    pauseMusic = FunkinSound.load(pauseMusicPath, 0, true, true);
 
     if (pauseMusic == null)
     {
-      FlxG.log.warn('Could not play pause music: $pauseMusicPath');
-      return;
+      FlxG.log.warn('Could not play pause music: ${pauseMusicPath} does not exist!');
     }
 
     // Start playing at a random point in the song.
@@ -374,19 +385,19 @@ class PauseSubState extends MusicBeatSubState
   /**
    * Called when the game loses focus. Used to temporarily pause the sound.
    */
-  public override function onFocusLost():Void
+  override public function onFocusLost():Void
   {
     super.onFocusLost();
-    if (Preferences.autoPause) pauseMusic?.pause();
+    if (Preferences.autoPause) pauseMusic.pause();
   }
 
   /**
    * Called when the game loses focus. Used to temporarily pause the sound.
    */
-  public override function onFocus():Void
+  override public function onFocus():Void
   {
     super.onFocus();
-    if (Preferences.autoPause) pauseMusic?.resume();
+    if (Preferences.autoPause) pauseMusic.resume();
   }
 
   /**
@@ -403,14 +414,41 @@ class PauseSubState extends MusicBeatSubState
     add(background);
 
     #if mobile
-    pauseButton = FunkinSprite.createSparrow(0, 0, "pauseButton");
-    pauseButton.animation.addByIndices('idle', 'pause', [0], "", 24, false);
-    pauseButton.animation.addByIndices('hold', 'pause', [5], "", 24, false);
-    pauseButton.animation.addByIndices('confirm', 'pause',
-      [6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32], "", 24, false);
+    pauseButton = FunkinSprite.createSparrow(0, 0, 'pauseButton');
+    pauseButton.animation.addByIndices('idle', 'pause', [0], '', 24, false);
+    pauseButton.animation.addByIndices('hold', 'pause', [5], '', 24, false);
+    pauseButton.animation.addByIndices('confirm', 'pause', [
+      6,
+      7,
+      8,
+      9,
+      10,
+      11,
+      12,
+      13,
+      14,
+      15,
+      16,
+      17,
+      18,
+      19,
+      20,
+      21,
+      22,
+      23,
+      24,
+      25,
+      26,
+      27,
+      28,
+      29,
+      30,
+      31,
+      32
+    ], '', 24, false);
     pauseButton.scale.set(0.8, 0.8);
     pauseButton.updateHitbox();
-    pauseButton.animation.play("confirm");
+    pauseButton.animation.play('confirm');
     pauseButton.setPosition((FlxG.width - pauseButton.width) - 35, 35);
 
     pauseCircle = FunkinSprite.create(0, 0, 'pauseCircle');
@@ -576,7 +614,7 @@ class PauseSubState extends MusicBeatSubState
     #if mobile
     HapticUtil.vibrate(0, 0.05, 0.5);
 
-    pauseButton.animation.play("confirm");
+    pauseButton.animation.play('confirm');
     pauseCircle.scale.set(0.84 * 1.4, 0.8 * 1.4);
     pauseCircle.alpha = 0.4;
     FlxTween.tween(pauseCircle.scale, {x: 0.84 * 0.8, y: 0.8 * 0.8}, 0.4, {ease: FlxEase.backInOut});
@@ -811,7 +849,6 @@ class PauseSubState extends MusicBeatSubState
     // If targetMode is null, keep the current mode.
     if (targetMode == null) targetMode = this.currentMode;
 
-    var previousMode:PauseMode = this.currentMode;
     this.currentMode = targetMode;
 
     resetSelection();
@@ -840,33 +877,25 @@ class PauseSubState extends MusicBeatSubState
   public function configureLuaPauseMenu(config:Dynamic, customCallback:String->Void):Bool
   {
     if (config == null) return false;
-    var mode = readLuaString(config, 'mode', '');
+    final mode = readLuaString(config, 'mode', '');
     if (mode != '' && mode != getLuaPauseMenuMode()) return false;
 
-    var optionsConfig = Reflect.field(config, 'options');
-    var items:Dynamic = Reflect.field(config, 'items');
-    if (Std.isOfType(items, Array))
-    {
-      for (item in cast(items, Array<Dynamic>))
-      {
-        applyLuaPauseMenuItem(item, optionsConfig, customCallback);
-      }
-    }
-
+    final items:Dynamic = Reflect.field(config, 'items');
+    if (!Std.isOfType(items, Array)) return false;
+    for (item in cast(items, Array<Dynamic>)) applyLuaPauseMenuItem(item, customCallback);
     return true;
   }
 
-  function applyLuaPauseMenuItem(item:Dynamic, optionsConfig:Dynamic, customCallback:String->Void):Void
+  function applyLuaPauseMenuItem(item:Dynamic, customCallback:String->Void):Void
   {
     if (item == null) return;
-
-    var id = readLuaString(item, 'id', '');
-    var match = readLuaString(item, 'match', id);
-    var label = readLuaString(item, 'label', match);
-    var hidden = readLuaBool(item, 'hidden', false);
-    var position = readLuaInt(item, 'position', 999);
-    var target = readLuaString(item, 'target', 'none');
-    var callbackName = readLuaString(item, 'callback', '');
+    final id = readLuaString(item, 'id', '');
+    final match = readLuaString(item, 'match', id);
+    final label = readLuaString(item, 'label', match);
+    final hidden = readLuaBool(item, 'hidden', false);
+    final position = readLuaInt(item, 'position', 999);
+    final target = readLuaString(item, 'target', 'none');
+    final callbackName = readLuaString(item, 'callback', '');
     var entry = findLuaPauseMenuEntry(match);
 
     if (hidden)
@@ -875,13 +904,12 @@ class PauseSubState extends MusicBeatSubState
       return;
     }
 
-    var callbackId = id == '' ? label : id;
-    var itemOptions = Reflect.hasField(item, 'options') ? Reflect.field(item, 'options') : optionsConfig;
-    var callback = function(state:PauseSubState)
+    final callbackId = id == '' ? label : id;
+    final callback = function(state:PauseSubState):Void
     {
-      if (callbackName != '' && customCallback != null) customCallback(callbackName);
-      if (state.openLuaPauseMenuTarget(target, itemOptions)) return;
-      if (callbackName == '' && customCallback != null) customCallback(callbackId);
+      if (callbackName != '') customCallback(callbackName);
+      if (state.openLuaPauseMenuTarget(target)) return;
+      if (callbackName == '') customCallback(callbackId);
     };
 
     if (entry == null)
@@ -894,14 +922,13 @@ class PauseSubState extends MusicBeatSubState
       entry.text = label;
       entry.callback = callback;
     }
-
     moveLuaPauseMenuEntry(entry, position);
   }
 
   function findLuaPauseMenuEntry(text:String):Null<PauseMenuEntry>
   {
-    if (text == '') return null;
-    var key = text.toLowerCase();
+    final key = text.toLowerCase();
+    if (key == '') return null;
     for (entry in currentMenuEntries)
     {
       if (entry != null && entry.text.toLowerCase() == key) return entry;
@@ -912,101 +939,55 @@ class PauseSubState extends MusicBeatSubState
   function moveLuaPauseMenuEntry(entry:PauseMenuEntry, position:Int):Void
   {
     currentMenuEntries.remove(entry);
-    var index = position - 1;
-    if (index < 0) index = 0;
-    if (index > currentMenuEntries.length) index = currentMenuEntries.length;
-    currentMenuEntries.insert(index, entry);
+    currentMenuEntries.insert(Std.int(Math.max(0, Math.min(position - 1, currentMenuEntries.length))), entry);
   }
 
-  public function openLuaPauseMenuTarget(target:String, ?optionsConfig:Dynamic):Bool
+  public function openLuaPauseMenuTarget(target:String):Bool
   {
-    var targetRaw = target == null ? '' : target;
-    var targetKey = targetRaw.toLowerCase();
-    if (targetKey == '' || targetKey == 'none') return false;
-
-    switch (targetKey)
+    final targetRaw = target ?? '';
+    switch (targetRaw.toLowerCase())
     {
-      case 'resume' | 'backtosong' | 'back_to_song' | 'song' | 'back':
-        resume(this);
-        return true;
-      case 'restart' | 'restartsong' | 'restart_song':
-        restartPlayState(this);
-        return true;
-      case 'changedifficulty' | 'change_difficulty' | 'difficulty' | 'difficultymenu':
-        switchMode(this, PauseMode.Difficulty);
-        return true;
-      case 'practicemode' | 'practice_mode' | 'practice':
-        enablePracticeMode(this);
-        return true;
-      case 'options' | 'optionsstate':
-        if (optionsConfig != null || !funkin.ui.options.OptionsState.hasPendingLuaPauseReturn())
-        {
-          funkin.ui.options.OptionsState.prepareLuaPauseReturn(optionsConfig);
-        }
-        FlxG.switchState(() -> new funkin.ui.options.OptionsState());
-        return true;
-      case 'story' | 'storymode' | 'story_mode':
-        FlxG.switchState(() -> new StoryMenuState());
-        return true;
-      case 'freeplay' | 'freeplaystate':
-        FlxG.switchState(() -> FreeplayState.build({character: FreeplayState.rememberedCharacterId}));
-        return true;
-      case 'credits' | 'creditsstate':
-        FlxG.switchState(() -> new funkin.ui.credits.CreditsState());
-        return true;
-      case 'merch':
-        Referral.doMerchReferral();
-        return true;
-      case 'upgrade':
-        #if FEATURE_MOBILE_IAP
-        funkin.mobile.util.InAppPurchasesUtil.purchase(funkin.mobile.util.InAppPurchasesUtil.UPGRADE_PRODUCT_ID, FlxG.resetState);
-        return true;
-        #else
-        return false;
-        #end
-      case 'mainmenu' | 'menu' | 'exit' | 'exittomenu' | 'exit_to_menu':
-        quitToMenu(this);
-        return true;
-      case 'callback' | 'lua' | 'script' | 'luag':
-        return false;
+      case '' | 'none': return false;
+      case 'resume' | 'backtosong' | 'back_to_song' | 'song' | 'back': resume(this); return true;
+      case 'restart' | 'restartsong' | 'restart_song': restartPlayState(this); return true;
+      case 'changedifficulty' | 'change_difficulty' | 'difficulty' | 'difficultymenu': switchMode(this, PauseMode.Difficulty); return true;
+      case 'practicemode' | 'practice_mode' | 'practice': enablePracticeMode(this); return true;
+      case 'options' | 'optionsstate': FlxG.switchState(() -> new funkin.ui.options.OptionsState()); return true;
+      case 'story' | 'storymode' | 'story_mode': FlxG.switchState(() -> new StoryMenuState()); return true;
+      case 'freeplay' | 'freeplaystate': FlxG.switchState(() -> FreeplayState.build()); return true;
+      case 'mainmenu' | 'menu' | 'exit' | 'exittomenu' | 'exit_to_menu': quitToMenu(this); return true;
+      case 'callback' | 'lua' | 'script' | 'luag': return false;
       default:
         try
         {
-          var stateClass = Type.resolveClass(targetRaw);
-          if (stateClass == null) return false;
-          var stateInstance = Type.createInstance(stateClass, []);
-          if (!Std.isOfType(stateInstance, FlxState)) return false;
+          final stateClass = Type.resolveClass(targetRaw);
+          final stateInstance:Dynamic = stateClass == null ? null : Type.createInstance(stateClass, []);
+          if (stateInstance == null || !Std.isOfType(stateInstance, FlxState)) return false;
           FlxG.switchState(() -> cast(stateInstance, FlxState));
           return true;
         }
-        catch (e)
-        {
-          trace('[LuaPauseMenu] Failed to open target ${targetRaw}: ${e}');
-          return false;
-        }
+        catch (_:Dynamic) return false;
     }
   }
 
   static function readLuaString(data:Dynamic, field:String, fallback:String):String
   {
     if (data == null || !Reflect.hasField(data, field)) return fallback;
-    var value = Reflect.field(data, field);
+    final value:Dynamic = Reflect.field(data, field);
     return value == null ? fallback : Std.string(value);
   }
 
   static function readLuaBool(data:Dynamic, field:String, fallback:Bool):Bool
   {
     if (data == null || !Reflect.hasField(data, field)) return fallback;
-    var value = Reflect.field(data, field);
-    if (Std.isOfType(value, Bool)) return value;
-    return Std.string(value).toLowerCase() == 'true';
+    final value:Dynamic = Reflect.field(data, field);
+    return Std.isOfType(value, Bool) ? value : Std.string(value).toLowerCase() == 'true';
   }
 
   static function readLuaInt(data:Dynamic, field:String, fallback:Int):Int
   {
     if (data == null || !Reflect.hasField(data, field)) return fallback;
-    var value = Std.parseInt(Std.string(Reflect.field(data, field)));
-    return value == null ? fallback : value;
+    return Std.parseInt(Std.string(Reflect.field(data, field))) ?? fallback;
   }
   #end
 

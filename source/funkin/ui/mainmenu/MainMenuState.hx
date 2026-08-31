@@ -5,7 +5,6 @@ import flixel.addons.transition.FlxTransitionableState;
 import funkin.ui.debug.DebugMenuSubState;
 #end
 import flixel.FlxObject;
-import flixel.FlxState;
 import flixel.FlxSubState;
 import flixel.FlxSprite;
 import flixel.effects.FlxFlicker;
@@ -33,12 +32,8 @@ import funkin.util.WindowUtil;
 import funkin.mobile.ui.FunkinButton;
 import funkin.util.MathUtil;
 import funkin.util.TouchUtil;
-import funkin.api.newgrounds.Referral;
 import funkin.ui.mainmenu.UpgradeSparkle;
 import flixel.group.FlxSpriteGroup.FlxTypedSpriteGroup;
-#if FEATURE_LUA_SCRIPTS
-import LuaScriptManager;
-#end
 #if FEATURE_DISCORD_RPC
 import funkin.api.discord.DiscordClient;
 #end
@@ -47,57 +42,33 @@ import funkin.api.newgrounds.NewgroundsClient;
 #end
 #if mobile
 import funkin.mobile.input.ControlsHandler;
-import funkin.mobile.ui.FunkinHotReloadButton;
 import funkin.mobile.util.InAppPurchasesUtil;
+#if FEATURE_POLYMOD_MODS
+import funkin.mobile.ui.mainmenu.FunkinModsButton;
+import funkin.mobile.ui.mainmenu.MobileModMenuWIPSubState;
+#end
 #end
 
 @:nullSafety
 class MainMenuState extends MusicBeatState
 {
   var menuItems:Null<MenuTypedList<AtlasMenuItem>>;
-
   var bg:Null<FlxSprite>;
   var magenta:FlxSprite;
   var camFollow:FlxObject;
-
   #if mobile
   var gyroPan:Null<FlxPoint>;
-  var hotReloadButton:Null<FunkinHotReloadButton>;
+  #if FEATURE_POLYMOD_MODS
+  var modsButton:Null<FunkinModsButton>;
   #end
-
+  #end
   var overrideMusic:Bool = false;
   var uiStateMachine:UIStateMachine = new UIStateMachine();
   var canInteract(get, never):Bool;
-  #if FEATURE_LUA_SCRIPTS
-  var luaScriptManager:Null<LuaScriptManager>;
-  #end
 
   function get_canInteract():Bool
   {
     return uiStateMachine.canInteract();
-  }
-
-  function lockMenuInput(state:UIState):Void
-  {
-    uiStateMachine.transition(state);
-    if (menuItems != null)
-    {
-      menuItems.busy = true;
-      menuItems.enabled = false;
-    }
-
-    #if mobile
-    if (optionsButton != null)
-    {
-      optionsButton.active = false;
-      optionsButton.enabled = false;
-    }
-    if (backButton != null)
-    {
-      backButton.active = false;
-      backButton.enabled = false;
-    }
-    #end
   }
 
   static var rememberedSelectedIndex:Int = 0;
@@ -115,7 +86,7 @@ class MainMenuState extends MusicBeatState
     uiStateMachine.transition(EnteringMainMenu);
 
     upgradeSparkles = new FlxTypedSpriteGroup<UpgradeSparkle>();
-    magenta = makeMenuGraphic('menuBGMagenta', FlxColor.MAGENTA);
+    magenta = new FlxSprite(Paths.image('menuBGMagenta'));
     camFollow = new FlxObject(0, 0, 1, 1);
 
     // TODO: enabling and disabling keys is a lil quirky,
@@ -144,17 +115,13 @@ class MainMenuState extends MusicBeatState
     hasUpgraded = true;
     #end
 
-    #if mobile
-    hasUpgraded = true;
-    #end
-
     if (!overrideMusic) playMenuMusic();
 
     // We want the state to always be able to begin with being able to accept inputs and show the anims of the menu items.
     persistentUpdate = true;
     persistentDraw = true;
 
-    bg = makeMenuGraphic('menuBG', 0xFF102030);
+    bg = new FlxSprite(Paths.image('menuBG'));
     bg.scrollFactor.x = #if !mobile 0 #else 0.17 #end; // we want a lil x scroll on mobile
     bg.scrollFactor.y = 0.17;
     bg.setGraphicSize(Std.int(FlxG.width * 1.2));
@@ -180,7 +147,7 @@ class MainMenuState extends MusicBeatState
     menuItems.onAcceptPress.add(_ ->
     {
       FlxFlicker.flicker(magenta, 1.1, 0.15, false, true);
-      lockMenuInput(Interacting);
+      uiStateMachine.transition(Interacting);
     });
 
     menuItems.enabled = true;
@@ -190,6 +157,7 @@ class MainMenuState extends MusicBeatState
       FlxG.signals.preStateSwitch.addOnce(() ->
       {
         funkin.FunkinMemory.clearFreeplay();
+        funkin.FunkinMemory.purgeCache();
       });
       startExitState(() -> new StoryMenuState());
     });
@@ -198,7 +166,7 @@ class MainMenuState extends MusicBeatState
     {
       persistentDraw = true;
       persistentUpdate = false;
-      rememberSelectedMenuItem();
+      rememberedSelectedIndex = menuItems?.selectedIndex ?? 0;
       // Freeplay has its own custom transition
       FlxTransitionableState.skipNextTransIn = true;
       FlxTransitionableState.skipNextTransOut = true;
@@ -226,17 +194,7 @@ class MainMenuState extends MusicBeatState
       }));
     });
 
-    if (hasUpgraded)
-    {
-      #if FEATURE_OPEN_URL
-      // In order to prevent popup blockers from triggering,
-      // we need to open the link as an immediate result of a keypress event,
-      // so we can't wait for the flicker animation to complete.
-      var hasPopupBlocker:Bool = #if web true #else false #end;
-      createMenuItem('merch', 'mainmenu/merch', selectMerch, hasPopupBlocker);
-      #end
-    }
-    else
+    if (!hasUpgraded)
     {
       add(upgradeSparkles);
 
@@ -257,31 +215,26 @@ class MainMenuState extends MusicBeatState
       });
     }
 
-    #if FEATURE_OPEN_URL
-    createMenuItem('discord', 'mainmenu/discord', function()
-    {
-      WindowUtil.openURL('https://discord.gg/sCr5rpPwBn');
-      uiStateMachine.transition(Idle);
-      if (menuItems != null)
-      {
-        menuItems.busy = false;
-        menuItems.enabled = true;
-      }
-    }, #if web true #else false #end);
-    #end
-
     createMenuItem('credits', 'mainmenu/credits', function()
     {
       startExitState(() -> new funkin.ui.credits.CreditsState());
     });
 
-    #if FEATURE_LUA_SCRIPTS
-    luaScriptManager = LuaScriptManager.loadMainMenuScriptsForState(this);
-    #end
+    // Reset position of menu items.
+    final spacing:Float = 160;
+    final top:Float = (FlxG.height - (spacing * (menuItems.length - 1))) / 2;
 
-    positionMenuItems();
+    for (index => menuItem in menuItems)
+    {
+      menuItem.x = FlxG.width / 2;
+      menuItem.y = top + spacing * index;
+      menuItem.scrollFactor.x = #if !mobile 0.0 #else 0.4 #end; // we want a lil scroll on mobile, for the cute gyro effect
+      // This one affects how much the menu items move when you scroll between them.
+      menuItem.scrollFactor.y = 0.4;
 
-    clampRememberedSelectedIndex();
+      if (index == 1) camFollow.setPosition(menuItem.getGraphicMidpoint().x, menuItem.getGraphicMidpoint().y);
+    }
+
     menuItems.selectItem(rememberedSelectedIndex);
 
     if (!hasUpgraded)
@@ -333,35 +286,34 @@ class MainMenuState extends MusicBeatState
     // TODO: This is absolutely disgusting but what the hell sure, fix it later -Zack
     addBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, goBack, 1.0);
 
-    if (camControls == null)
-    {
-      camControls = new funkin.graphics.FunkinCamera('camControls');
-      FlxG.cameras.add(camControls, false);
-      camControls.bgColor = 0x0;
-    }
-    hotReloadButton = new FunkinHotReloadButton(FlxG.width - 180, 20, function()
-    {
-      FlxG.resetState();
-    }, 0.6);
-    hotReloadButton.cameras = [camControls];
-    add(hotReloadButton);
-
     if (!ControlsHandler.usingExternalInputDevice)
     {
       addOptionsButton(35, FlxG.height - 210, goOptions);
     }
 
+    #if FEATURE_POLYMOD_MODS
+    final newModsButton:FunkinModsButton = new FunkinModsButton(35, 20,
+      openMobileModMenuNotice);
+    if (camControls != null) newModsButton.cameras = [camControls];
+    modsButton = newModsButton;
+    add(newModsButton);
+    #end
+
     backButton?.onConfirmStart.add(() ->
     {
-      lockMenuInput(Interacting);
+      uiStateMachine.transition(Interacting);
       trace('BACK: Interact Start');
     });
 
     optionsButton?.onConfirmStart.add(() ->
     {
-      lockMenuInput(Interacting);
+      uiStateMachine.transition(Interacting);
       trace('OPTIONS: Interact Start');
     });
+
+    #if FEATURE_POLYMOD_MODS
+    modsButton?.onConfirmStart.add(() -> uiStateMachine.transition(Interacting));
+    #end
     #end
 
     super.create();
@@ -370,11 +322,19 @@ class MainMenuState extends MusicBeatState
     initLeftWatermarkText();
   }
 
+  #if (mobile && FEATURE_POLYMOD_MODS)
+  function openMobileModMenuNotice():Void
+  {
+    persistentUpdate = false;
+    openSubState(new MobileModMenuWIPSubState());
+  }
+  #end
+
   function initLeftWatermarkText():Void
   {
     if (leftWatermarkText == null) return;
 
-    leftWatermarkText.text = 'V-slice: v0.8.5 | LuaSlice: ${Constants.LUASLICE_VERSION}';
+    leftWatermarkText.text = 'LuaSlice: ${Constants.LUASLICE_VERSION} | FNF: ${Constants.VERSION}';
 
     #if FEATURE_NEWGROUNDS
     if (NewgroundsClient.instance.isLoggedIn())
@@ -401,30 +361,6 @@ class MainMenuState extends MusicBeatState
     if (snap) FlxG.camera.snapToTarget();
   }
 
-  static function makeMenuGraphic(path:String, fallbackColor:FlxColor):FlxSprite
-  {
-    var sprite = new FlxSprite();
-    var graphic = try Paths.image(path) catch (_:Dynamic) null;
-
-    if (graphic == null || !funkin.Assets.exists(graphic, openfl.utils.AssetType.IMAGE))
-    {
-      sprite.makeGraphic(1, 1, fallbackColor);
-    }
-    else
-    {
-      try
-      {
-        sprite.loadGraphic(graphic);
-      }
-      catch (_:Dynamic)
-      {
-        sprite.makeGraphic(1, 1, fallbackColor);
-      }
-    }
-
-    return sprite;
-  }
-
   function createMenuItem(name:String, atlas:String, callback:Void->Void, fireInstantly:Bool = false):Void
   {
     if (menuItems == null) return;
@@ -438,141 +374,6 @@ class MainMenuState extends MusicBeatState
     item.centered = true;
     item.changeAnim('idle');
     menuItems.addItem(name, item);
-  }
-
-  public function addLuaMenuItem(name:String, atlas:String, position:Int, animName:String, target:String, callback:Void->Void):Bool
-  {
-    if (menuItems == null || name == '') return false;
-
-    var existing = menuItems.getItem(name);
-    if (existing != null)
-    {
-      menuItems.remove(existing, true);
-      existing.destroy();
-    }
-
-    var cleanAtlas = cleanLuaMenuAssetPath(atlas);
-    var item:Null<AtlasMenuItem> = null;
-    try
-    {
-      item = new AtlasMenuItem(animName == '' ? name : animName, Paths.getSparrowAtlas(cleanAtlas), function()
-      {
-        uiStateMachine.transition(Idle);
-        rememberSelectedMenuItem();
-        if (openLuaMenuTarget(target)) return;
-        if (callback != null) callback();
-      });
-    }
-    catch (e)
-    {
-      trace('[LuaMainMenu] Failed to add Lua menu item ${name}: ${e}');
-      return false;
-    }
-
-    if (item == null) return false;
-    item.ID = menuItems.length;
-    item.scrollFactor.set();
-    item.centered = true;
-    item.changeAnim('idle');
-    menuItems.addItem(name, item);
-
-    menuItems.members.remove(item);
-    var index = position - 1;
-    if (index < 0) index = 0;
-    if (index > menuItems.members.length) index = menuItems.members.length;
-    menuItems.members.insert(index, item);
-
-    positionMenuItems();
-    return true;
-  }
-
-  public function openLuaMenuTarget(target:String):Bool
-  {
-    var targetRaw = target == null ? '' : target;
-    var targetKey = targetRaw.toLowerCase();
-    if (targetKey == '' || targetKey == 'none' || targetKey == 'lua') return false;
-
-    switch (targetKey)
-    {
-      case 'story' | 'storymode' | 'story_mode':
-        startExitState(() -> new StoryMenuState());
-        return true;
-      case 'options' | 'optionsstate':
-        startExitState(() -> new funkin.ui.options.OptionsState());
-        return true;
-      case 'credits' | 'creditsstate':
-        startExitState(() -> new funkin.ui.credits.CreditsState());
-        return true;
-      case 'freeplay' | 'freeplaystate':
-        lockMenuInput(Interacting);
-        persistentDraw = true;
-        persistentUpdate = false;
-        rememberSelectedMenuItem();
-        FlxTransitionableState.skipNextTransIn = true;
-        FlxTransitionableState.skipNextTransOut = true;
-        openSubState(new FreeplayState({character: FreeplayState.rememberedCharacterId}));
-        return true;
-      default:
-        try
-        {
-          var stateClass = Type.resolveClass(targetRaw);
-          if (stateClass == null) return false;
-          var stateInstance = Type.createInstance(stateClass, []);
-          if (!Std.isOfType(stateInstance, FlxState)) return false;
-          startExitState(() -> cast(stateInstance, FlxState));
-          return true;
-        }
-        catch (e)
-        {
-          trace('[LuaMainMenu] Failed to open target ${targetRaw}: ${e}');
-          return false;
-        }
-    }
-  }
-
-  function cleanLuaMenuAssetPath(path:String):String
-  {
-    if (StringTools.startsWith(path, 'images:')) return path.substr('images:'.length);
-    if (StringTools.startsWith(path, 'images/')) return path.substr('images/'.length);
-    return path == '' ? 'mainmenu/storymode' : path;
-  }
-
-  function positionMenuItems():Void
-  {
-    if (menuItems == null) return;
-
-    final spacing:Float = 160;
-    final top:Float = (FlxG.height - (spacing * (menuItems.length - 1))) / 2;
-
-    for (index => menuItem in menuItems)
-    {
-      menuItem.ID = index;
-      menuItem.x = FlxG.width / 2;
-      menuItem.y = top + spacing * index;
-      menuItem.scrollFactor.x = #if !mobile 0.0 #else 0.4 #end;
-      menuItem.scrollFactor.y = 0.4;
-
-      if (index == 1) camFollow.setPosition(menuItem.getGraphicMidpoint().x, menuItem.getGraphicMidpoint().y);
-    }
-  }
-
-  function rememberSelectedMenuItem():Void
-  {
-    if (menuItems == null || menuItems.length <= 0) return;
-    rememberedSelectedIndex = menuItems.selectedIndex;
-    clampRememberedSelectedIndex();
-  }
-
-  function clampRememberedSelectedIndex():Void
-  {
-    if (menuItems == null || menuItems.length <= 0)
-    {
-      rememberedSelectedIndex = 0;
-      return;
-    }
-
-    if (rememberedSelectedIndex < 0) rememberedSelectedIndex = 0;
-    if (rememberedSelectedIndex >= menuItems.length) rememberedSelectedIndex = menuItems.length - 1;
   }
 
   var buttonGrp:Array<FlxSprite> = [];
@@ -594,11 +395,6 @@ class MainMenuState extends MusicBeatState
     if (!(subState is flixel.addons.transition.Transition))
     {
       uiStateMachine.transition(Idle);
-      if (menuItems != null)
-      {
-        menuItems.busy = false;
-        menuItems.enabled = true;
-      }
 
       #if FEATURE_TOUCH_CONTROLS
       // we want to reset our backButton + optionsButton if we are returning to the main menu from a substate like freeplay
@@ -609,6 +405,10 @@ class MainMenuState extends MusicBeatState
 
       optionsButton?.animation.play('idle');
       optionsButton?.resetCallbacks();
+
+      #if (mobile && FEATURE_POLYMOD_MODS)
+      modsButton?.resetCallbacks();
+      #end
       #end
     }
 
@@ -627,11 +427,6 @@ class MainMenuState extends MusicBeatState
     WindowUtil.openURL(Constants.URL_ITCH);
   }
 
-  function selectMerch()
-  {
-    Referral.doMerchReferral();
-    uiStateMachine.transition(Idle);
-  }
   #end
 
   public function openPrompt(prompt:Prompt, onClose:Void->Void):Void
@@ -652,8 +447,8 @@ class MainMenuState extends MusicBeatState
   {
     if (menuItems == null) return;
 
-    lockMenuInput(Exiting); // Start fade out
-    rememberSelectedMenuItem();
+    uiStateMachine.transition(Exiting); // Start fade out
+    rememberedSelectedIndex = menuItems.selectedIndex;
 
     // the fadeout duration for the initial alpha tweens, not the screen wipe fadeout!
     var fadeOutDuration:Float = 0.4;
@@ -667,6 +462,9 @@ class MainMenuState extends MusicBeatState
     #if mobile
     if (optionsButton != null) FlxTween.tween(optionsButton, {alpha: 0}, fadeOutDuration, {ease: FlxEase.quadOut});
     if (backButton != null) FlxTween.tween(backButton, {alpha: 0}, fadeOutDuration, {ease: FlxEase.quadOut});
+    #if FEATURE_POLYMOD_MODS
+    if (modsButton != null) FlxTween.tween(modsButton, {alpha: 0}, fadeOutDuration, {ease: FlxEase.quadOut});
+    #end
     #end
 
     FlxTimer.wait(fadeOutDuration, () ->
@@ -679,14 +477,11 @@ class MainMenuState extends MusicBeatState
   override function update(elapsed:Float):Void
   {
     super.update(elapsed);
-    #if FEATURE_LUA_SCRIPTS
-    luaScriptManager?.callHook('onUpdate', [elapsed]);
-    #end
 
     Conductor.instance.update();
 
     #if mobile
-    if (gyroPan != null && bg != null && !ControlsHandler.usingExternalInputDevice #if android && false #end)
+    if (gyroPan != null && bg != null && !ControlsHandler.usingExternalInputDevice)
     {
       gyroPan.add(FlxG.gyroscope.pitch * -1.25, FlxG.gyroscope.roll * -1.25);
 
@@ -719,18 +514,14 @@ class MainMenuState extends MusicBeatState
       backButton.active = canInteract || backButton.confirming;
       backButton.enabled = backButton.active;
     }
+    #if FEATURE_POLYMOD_MODS
+    if (modsButton != null)
+    {
+      modsButton.active = canInteract || modsButton.confirming;
+      modsButton.enabled = modsButton.active;
+    }
     #end
-  }
-
-  override function destroy():Void
-  {
-    #if FEATURE_LUA_SCRIPTS
-    luaScriptManager?.callHook('onDestroy', []);
-    luaScriptManager?.destroy();
-    luaScriptManager = null;
     #end
-
-    super.destroy();
   }
 
   function handleInputs():Void
@@ -857,8 +648,8 @@ class MainMenuState extends MusicBeatState
 
   function goBack():Void
   {
-    lockMenuInput(Exiting);
-    rememberSelectedMenuItem();
+    uiStateMachine.transition(Exiting);
+    rememberedSelectedIndex = menuItems?.selectedIndex ?? 0;
     FunkinSound.playOnce(Paths.sound('cancelMenu'));
 
     FlxG.switchState(() -> new TitleState());

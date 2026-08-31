@@ -3,15 +3,11 @@ package funkin.util.plugins;
 import funkin.ui.ScriptedMusicBeatState;
 import flixel.FlxG;
 import flixel.FlxBasic;
+import flixel.addons.transition.FlxTransitionableState;
 import funkin.ui.MusicBeatState;
 import funkin.ui.MusicBeatSubState;
-#if FEATURE_LUA_SCRIPTS
-import funkin.play.PlayState;
-import funkin.play.GameOverSubState;
-#end
-#if FEATURE_CHART_EDITOR
-import funkin.ui.debug.charting.ChartEditorState;
-#end
+import funkin.ui.transition.preload.hotreload.HotReloadState;
+import funkin.ui.transition.preload.hotreload.HotReloadState.HotReloadStateParams;
 #if android
 import funkin.external.android.CallbackUtil;
 #end
@@ -23,6 +19,8 @@ import funkin.external.android.CallbackUtil;
 @:nullSafety
 class ReloadAssetsDebugPlugin extends FlxBasic
 {
+  public static var hotReloadInProgress:Bool = false;
+
   public function new()
   {
     super();
@@ -37,7 +35,7 @@ class ReloadAssetsDebugPlugin extends FlxBasic
     FlxG.plugins.addPlugin(new ReloadAssetsDebugPlugin());
   }
 
-  public override function update(elapsed:Float):Void
+  override public function update(elapsed:Float):Void
   {
     super.update(elapsed);
 
@@ -46,12 +44,13 @@ class ReloadAssetsDebugPlugin extends FlxBasic
     #else
     if (FlxG.keys.justPressed.F5)
     #end
+    if (!hotReloadInProgress)
     {
-      reload(true);
+      reload();
     }
   }
 
-  public override function destroy():Void
+  override public function destroy():Void
   {
     super.destroy();
 
@@ -63,59 +62,28 @@ class ReloadAssetsDebugPlugin extends FlxBasic
     #end
   }
 
-  var path:String = "";
+  var path:String = '';
 
   @:noCompletion
-  function reload(luaHotReload:Bool = false):Void
+  function reload():Void
   {
+    if (hotReloadInProgress) return;
+    hotReloadInProgress = true;
+    FlxTransitionableState.skipNextTransIn = true;
+
     var state:Dynamic = FlxG.state;
-    #if FEATURE_LUA_SCRIPTS
-    var playState:Null<PlayState> = null;
-    if (!(state is PlayState) && state?.subState is PlayState)
+    var params:HotReloadStateParams = {};
+    if (state is MusicBeatState || state is MusicBeatSubState)
     {
-      playState = cast state.subState;
+      state.onPreHotReload();
+      params = state.getHotReloadParams();
     }
-
-    if (luaHotReload && playState != null && !playState.isGameOverState && GameOverSubState.instance == null)
-    {
-      playState.reloadLuaScriptsFromDisk();
-      return;
-    }
-    #end
-
-    #if FEATURE_CHART_EDITOR
-    if (state is ChartEditorState)
-    {
-      (cast state : ChartEditorState).reloadAssets();
-      return;
-    }
-    #end
-
-    var isScripted:Bool = state is ScriptedMusicBeatState;
-    if (isScripted)
-    {
-      var s:ScriptedMusicBeatState = cast FlxG.state;
-      @:privateAccess
-      path = s._asc.fullyQualifiedName;
-      trace("Current scripted state path: " + path);
-    }
-
-    if ((state is MusicBeatState || state is MusicBeatSubState) && !isScripted) state.reloadAssets();
     else
     {
-      funkin.modding.PolymodHandler.forceReloadAssets();
-
-      trace("Reloaded assets, checking for scripted state. Scripted: " + isScripted + ", Path: " + path);
-      if (isScripted)
-      {
-        trace("Reloading scripted state: " + path);
-        var state:Dynamic = ScriptedMusicBeatState.scriptInit(path);
-        FlxG.switchState(state);
-      }
-
-      // Create a new instance of the current state, so old data is cleared.
-      if (!isScripted) FlxG.resetState();
+      @:privateAccess
+      params.targetState = state._constructor;
     }
+    FlxG.switchState(() -> new HotReloadState(params));
   }
 
   #if android
@@ -124,7 +92,7 @@ class ReloadAssetsDebugPlugin extends FlxBasic
   {
     if (requestCode == CallbackUtil.DATA_FOLDER_CLOSED)
     {
-      reload(false);
+      reload();
     }
   }
   #end

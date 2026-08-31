@@ -12,7 +12,9 @@ import funkin.modding.PolymodHandler;
 import funkin.util.SortUtil;
 import funkin.util.WindowUtil;
 import flixel.util.FlxSort;
+import flixel.util.typeLimit.NextState;
 import funkin.input.Controls;
+import funkin.ui.transition.preload.hotreload.HotReloadState.HotReloadStateParams;
 #if mobile
 import funkin.graphics.FunkinCamera;
 import funkin.mobile.ui.FunkinHitbox;
@@ -29,7 +31,6 @@ class MusicBeatSubState extends FlxSubState implements IEventHandler
 {
   public var leftWatermarkText:Null<FlxText> = null;
   public var rightWatermarkText:Null<FlxText> = null;
-
   public var conductorInUse(get, set):Conductor;
 
   var _conductorInUse:Null<Conductor>;
@@ -123,8 +124,23 @@ class MusicBeatSubState extends FlxSubState implements IEventHandler
     initConsoleHelpers();
   }
 
-  public override function destroy():Void
+  override public function destroy():Void
   {
+    #if mobile
+    if (hitbox != null)
+    {
+      remove(hitbox, true);
+      hitbox.destroy();
+      hitbox = null;
+    }
+    if (backButton != null)
+    {
+      remove(backButton, true);
+      backButton.destroy();
+      backButton = null;
+    }
+    #end
+
     super.destroy();
 
     #if mobile
@@ -143,11 +159,11 @@ class MusicBeatSubState extends FlxSubState implements IEventHandler
     if (FlxG.keys.justPressed.F4)
     {
       FlxG.switchState(() -> new MainMenuState());
-      WindowUtil.setWindowTitle('LuaSlice');
+      WindowUtil.setWindowTitle(Constants.TITLE);
     }
 
     // Display Conductor info in the watch window.
-    FlxG.watch.addQuick("musicTime", FlxG.sound.music?.time ?? 0.0);
+    FlxG.watch.addQuick('musicTime', FlxG.sound.music?.time ?? 0.0);
     Conductor.watchQuick(conductorInUse);
 
     dispatchEvent(new UpdateScriptEvent(elapsed));
@@ -171,12 +187,35 @@ class MusicBeatSubState extends FlxSubState implements IEventHandler
   {
   }
 
-  function reloadAssets()
+  public function getHotReloadParams():HotReloadStateParams
   {
-    PolymodHandler.forceReloadAssets();
+    return {targetState: getConstructor()};
+  }
 
-    // Restart the current state, so old data is cleared.
-    FlxG.resetState();
+  function getConstructor():NextState
+  {
+    if (this is ScriptedMusicBeatSubState)
+    {
+      var scriptedState:ScriptedMusicBeatSubState = cast this;
+      var asc:Dynamic = Reflect.field(scriptedState, '_asc');
+      var path:String = asc == null ? '' : Reflect.field(asc, 'fullyQualifiedName');
+      return () ->
+      {
+        var initializer:Dynamic = Reflect.field(ScriptedMusicBeatSubState, 'scriptInit');
+        var result:Dynamic = initializer == null ? null : Reflect.callMethod(ScriptedMusicBeatSubState, initializer, [path]);
+        return result == null ? new MainMenuState() : cast result;
+      };
+    }
+    @:privateAccess
+    return this._constructor;
+  }
+
+  public function onPreHotReload():Void
+  {
+  }
+
+  public function onPostHotReload():Void
+  {
   }
 
   /**
@@ -195,6 +234,8 @@ class MusicBeatSubState extends FlxSubState implements IEventHandler
    */
   public function stepHit():Bool
   {
+    if (this.subState != null && !persistentUpdate) return false;
+
     var event:ScriptEvent = new SongTimeScriptEvent(SONG_STEP_HIT, conductorInUse.currentBeat, conductorInUse.currentStep);
 
     dispatchEvent(event);
@@ -211,6 +252,8 @@ class MusicBeatSubState extends FlxSubState implements IEventHandler
    */
   public function beatHit():Bool
   {
+    if (this.subState != null && !persistentUpdate) return false;
+
     var event:ScriptEvent = new SongTimeScriptEvent(SONG_BEAT_HIT, conductorInUse.currentBeat, conductorInUse.currentStep);
 
     dispatchEvent(event);
@@ -272,7 +315,7 @@ class MusicBeatSubState extends FlxSubState implements IEventHandler
     }
   }
 
-  public override function openSubState(targetSubState:FlxSubState):Void
+  override public function openSubState(targetSubState:FlxSubState):Void
   {
     var event = new SubStateScriptEvent(SUBSTATE_OPEN_BEGIN, targetSubState, true);
 
@@ -288,7 +331,7 @@ class MusicBeatSubState extends FlxSubState implements IEventHandler
     dispatchEvent(new SubStateScriptEvent(SUBSTATE_OPEN_END, targetState, true));
   }
 
-  public override function closeSubState():Void
+  override public function closeSubState():Void
   {
     var event = new SubStateScriptEvent(SUBSTATE_CLOSE_BEGIN, this.subState, true);
 
