@@ -223,13 +223,7 @@ class ModMenuItem extends FunkinSpriteGroup
     if (iconAssetPath != null)
     {
       modIcon.loadGraphic(Paths.image(iconAssetPath));
-      add(modIcon);
-
-      modIcon.scrollFactor.set();
-      modIcon.antialiasing = true;
-      modIcon.setGraphicSize(ICON_HEIGHT, ICON_HEIGHT);
-      modIcon.localScale.set(modIcon.scale.x, modIcon.scale.y);
-      modIcon.updateHitbox();
+      finishModIcon();
     }
     else if (mod != null)
     {
@@ -240,13 +234,7 @@ class ModMenuItem extends FunkinSpriteGroup
       else
       {
         trace('No icon found for mod ${mod.id}, using fallback');
-        modIcon.loadGraphic(Paths.image('ui/mods/fallback-icon'));
-        add(modIcon);
-        modIcon.scrollFactor.set();
-        modIcon.antialiasing = true;
-        modIcon.setGraphicSize(ICON_HEIGHT, ICON_HEIGHT);
-        modIcon.localScale.set(modIcon.scale.x, modIcon.scale.y);
-        modIcon.updateHitbox();
+        useFallbackModIcon();
       }
     }
 
@@ -335,29 +323,50 @@ class ModMenuItem extends FunkinSpriteGroup
 
   function loadModIcon(bytes:haxe.io.Bytes):Void
   {
-
-
     var future = openfl.utils.ByteArray.loadFromBytes(bytes);
 
     future.onComplete((openFlBytes:openfl.utils.ByteArray) ->
     {
-      trace('Loaded icon bytes!');
-      var bitmapData = openfl.display.BitmapData.fromBytes(openFlBytes);
-      modIcon.loadGraphic(bitmapData);
-      add(modIcon);
-
-      modIcon.scrollFactor.set();
-      modIcon.antialiasing = true;
-
-      modIcon.setGraphicSize(ICON_HEIGHT, ICON_HEIGHT);
-      modIcon.localScale.set(modIcon.scale.x, modIcon.scale.y);
-
-      modIcon.updateHitbox();
+      try
+      {
+        var bitmapData = openfl.display.BitmapData.fromBytes(openFlBytes);
+        if (bitmapData == null)
+        {
+          useFallbackModIcon();
+          return;
+        }
+        modIcon.loadGraphic(bitmapData);
+        finishModIcon();
+      }
+      catch (error)
+      {
+        trace('Could not decode the icon for mod ${getModId()}: ${error}');
+        useFallbackModIcon();
+      }
     });
     future.onError((error) ->
     {
-      trace(error);
+      trace('Could not load the icon for mod ${getModId()}: ${error}');
+      useFallbackModIcon();
     });
+  }
+
+  function useFallbackModIcon():Void
+  {
+    if (!exists || children == null) return;
+    modIcon.loadGraphic(Paths.image('ui/mods/fallback-icon'));
+    finishModIcon();
+  }
+
+  function finishModIcon():Void
+  {
+    if (!exists || children == null) return;
+    if (!children.contains(modIcon)) add(modIcon);
+    modIcon.scrollFactor.set();
+    modIcon.antialiasing = true;
+    modIcon.setGraphicSize(ICON_HEIGHT, ICON_HEIGHT);
+    modIcon.localScale.set(modIcon.scale.x, modIcon.scale.y);
+    modIcon.updateHitbox();
   }
 
   public function getModId():String

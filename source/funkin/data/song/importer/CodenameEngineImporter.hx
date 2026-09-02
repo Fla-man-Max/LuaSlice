@@ -21,7 +21,9 @@ class CodenameEngineImporter
     {
       var cleanInput = input.trim();
       if (cleanInput.length > 0 && cleanInput.charCodeAt(0) == 0xFEFF) cleanInput = cleanInput.substr(1);
-      return Json.parse(cleanInput);
+      final parsed:Dynamic = Json.parse(cleanInput);
+      final wrappedSong:Dynamic = field(parsed, 'song');
+      return arrayValue(field(wrappedSong, 'strumLines')).length > 0 ? wrappedSong : parsed;
     }
     catch (error)
     {
@@ -41,7 +43,7 @@ class CodenameEngineImporter
     return cleanName == '' ? 'normal' : cleanName;
   }
 
-  public static function migrateMetadata(chart:Dynamic, difficulty:String = 'normal', ?externalMetadata:Dynamic):SongMetadata
+  public static function migrateMetadata(chart:Dynamic, difficulty:String = 'normal', ?externalMetadata:Dynamic, ?externalEvents:Dynamic):SongMetadata
   {
     final embeddedMetadata = field(chart, 'meta');
     final sourceMetadata = externalMetadata ?? embeddedMetadata;
@@ -52,9 +54,9 @@ class CodenameEngineImporter
     metadata.generatedBy = 'Chart Editor Import (Codename Engine)';
     metadata.playData.difficulties = [difficulty];
     metadata.playData.songVariations = [];
-    metadata.playData.stage = mapStage(nonEmptyString(field(chart, 'stage'), 'stage'));
+    metadata.playData.stage = mapStage(nonEmptyString(field(chart, 'stage') ?? field(sourceMetadata, 'stage'), 'stage'));
     metadata.playData.characters = migrateCharacters(chart);
-    metadata.timeChanges = migrateTimeChanges(chart, validBpm(field(sourceMetadata, 'bpm') ?? field(chart, 'bpm'), Constants.DEFAULT_BPM));
+    metadata.timeChanges = migrateTimeChanges(chart, validBpm(field(sourceMetadata, 'bpm') ?? field(chart, 'bpm'), Constants.DEFAULT_BPM), externalEvents);
     return metadata;
   }
 
@@ -118,18 +120,24 @@ class CodenameEngineImporter
     return new SongCharacterData(player, girlfriend, opponent);
   }
 
-  static function migrateTimeChanges(chart:Dynamic, baseBpm:Float):Array<SongTimeChange>
+  static function migrateTimeChanges(chart:Dynamic, baseBpm:Float, ?externalEvents:Dynamic):Array<SongTimeChange>
   {
     final result = [new SongTimeChange(0, baseBpm)];
-    for (event in arrayValue(field(chart, 'events')))
+    final sources = [arrayValue(field(chart, 'events'))];
+    if (externalEvents != null) sources.push(arrayValue(field(externalEvents, 'events')));
+
+    for (source in sources)
     {
-      if (stringValue(field(event, 'name'), '').toLowerCase().trim() != 'bpm change') continue;
-      final params = arrayValue(field(event, 'params'));
-      if (params.length == 0) continue;
-      final bpm = validBpm(params[0], baseBpm);
-      final time = Math.max(0, floatValue(field(event, 'time'), 0));
-      if (time == 0) result[0] = new SongTimeChange(0, bpm);
-      else result.push(new SongTimeChange(time, bpm));
+      for (event in source)
+      {
+        if (eventName(event) != 'bpm change') continue;
+        final params = paramsValue(field(event, 'params'));
+        if (params.length == 0) continue;
+        final bpm = validBpm(params[0], baseBpm);
+        final time = Math.max(0, floatValue(field(event, 'time'), 0));
+        if (time == 0) result[0] = new SongTimeChange(0, bpm);
+        else result.push(new SongTimeChange(time, bpm));
+      }
     }
     result.sort((a, b) -> a.timeStamp < b.timeStamp ? -1 : (a.timeStamp > b.timeStamp ? 1 : 0));
     return result;
@@ -139,12 +147,12 @@ class CodenameEngineImporter
   {
     for (rawEvent in source)
     {
-      final name = stringValue(field(rawEvent, 'name'), '').trim();
-      if (name == '' || name.toLowerCase() == 'bpm change') continue;
+      final name = eventName(rawEvent);
+      if (name == '' || name == 'bpm change') continue;
       final time = floatValue(field(rawEvent, 'time'), 0);
-      final params = arrayValue(field(rawEvent, 'params'));
+      final params = paramsValue(field(rawEvent, 'params'));
 
-      switch (name.toLowerCase())
+      switch (name)
       {
         case 'camera movement':
           output.push(new SongEventData(time, 'FocusCamera', {char: mapCameraTarget(params.length > 0 ? intValue(params[0], 0) : 0, strumLines)}));
@@ -161,7 +169,7 @@ class CodenameEngineImporter
             id: params.length > 1 ? stringValue(params[1], '') : ''
           }));
         default:
-          output.push(new SongEventData(time, name, {params: params}));
+          output.push(new SongEventData(time, stringValue(field(rawEvent, 'name'), name).trim(), {params: params}));
       }
     }
   }
@@ -223,7 +231,23 @@ class CodenameEngineImporter
       case 'limo': 'limoRide';
       case 'mall': 'mallXmas';
       case 'tank': 'tankmanBattlefield';
+      case 'school-evil' | 'schoolevil': 'schoolEvil';
       default: stage;
+    };
+  }
+
+  static function eventName(event:Dynamic):String
+  {
+    final name = stringValue(field(event, 'name'), '').trim();
+    if (name != '') return name.toLowerCase();
+
+    return switch (intValue(field(event, 'type'), 0))
+    {
+      case -1: 'hscript call';
+      case 1: 'camera movement';
+      case 2: 'bpm change';
+      case 3: 'alt animation toggle';
+      default: '';
     };
   }
 
@@ -241,6 +265,12 @@ class CodenameEngineImporter
   static inline function arrayValue(value:Dynamic):Array<Dynamic>
   {
     return Std.isOfType(value, Array) ? cast value : [];
+  }
+
+  static function paramsValue(value:Dynamic):Array<Dynamic>
+  {
+    if (Std.isOfType(value, Array)) return cast value;
+    return value == null ? [] : [value];
   }
 
   static function stringArray(value:Dynamic):Array<String>

@@ -67,6 +67,7 @@ import funkin.ui.debug.stageeditor.StageEditorState;
 import funkin.api.discord.DiscordClient;
 #end
 #if FEATURE_TOUCH_CONTROLS
+import flixel.input.touch.FlxTouch;
 import funkin.util.TouchUtil;
 import funkin.util.SwipeUtil;
 import funkin.mobile.input.ControlsHandler;
@@ -1760,6 +1761,10 @@ class FreeplayState extends MusicBeatSubState
   var _moveLength:Float = 0;
   var _flickEnded:Bool = true;
   var _pressedOnCapsule:Bool = false;
+  var _scrollTouchId:Int = -1;
+  var _scrollTouchViewY:Float = 0;
+  var _scrollFlickActive:Bool = false;
+  var _scrollTouchPoint:FlxPoint = new FlxPoint();
   var draggingDifficulty:Bool = false;
 
   function handleInputs(elapsed:Float):Void
@@ -1777,7 +1782,9 @@ class FreeplayState extends MusicBeatSubState
 
     handleDirectionalInput(elapsed);
 
-    final wheelAmount:Int = Math.round(FlxMath.bound(FlxG.mouse.deltaWheel.y, -1, 1));
+    var wheelDelta:Float = FlxG.mouse.deltaWheel.y;
+    if (wheelDelta == 0 && FlxG.mouse.wheel != 0) wheelDelta = FlxG.mouse.wheel;
+    final wheelAmount:Int = Math.round(FlxMath.bound(wheelDelta, -1, 1));
 
     if (wheelAmount != 0)
     {
@@ -2029,44 +2036,59 @@ class FreeplayState extends MusicBeatSubState
 
   function handleTouchSelectionScroll(elapsed:Float):Void
   {
-    final hasTouchInput:Bool = TouchUtil.pressed || TouchUtil.justPressed || TouchUtil.justReleased;
-    if (draggingDifficulty || (ControlsHandler.usingExternalInputDevice && !hasTouchInput)) return;
-    if (TouchUtil.pressAction(currentCapsule.theActualHitbox, funnyCam) && _moveLength < 0.05) return;
-
-    if (TouchUtil.justPressed)
+    if (draggingDifficulty)
     {
-      _moveLength = 0;
-      _pressedOnCapsule = touchOverlapsSongList();
+      finishTouchSelectionScroll();
+      return;
     }
 
     final framerateMultiplier:Float = (FlxG.updateFramerate / 60);
-    final touch = FlxG.touches.getFirst();
-    if (touch != null && touch.pressed && _pressedOnCapsule)
+    var activeTouch:Null<FlxTouch> = null;
+
+    for (touch in FlxG.touches.list)
     {
-      final delta = touch.deltaViewY * framerateMultiplier;
-      if (Math.isFinite(delta) && Math.abs(delta) >= 2)
+      if (touch == null) continue;
+
+      if (_scrollTouchId == -1 && touch.justPressed && canStartTouchSelectionScroll(touch))
+      {
+        _scrollTouchId = touch.touchPointID;
+        touch.getViewPosition(funnyCam, _scrollTouchPoint);
+        _scrollTouchViewY = _scrollTouchPoint.y;
+        _pressedOnCapsule = true;
+        _scrollFlickActive = true;
+        _flickEnded = true;
+      }
+
+      if (touch.touchPointID == _scrollTouchId)
+      {
+        activeTouch = touch;
+      }
+    }
+
+    if (activeTouch != null && activeTouch.pressed && _pressedOnCapsule)
+    {
+      activeTouch.getViewPosition(funnyCam, _scrollTouchPoint);
+      final delta:Float = _scrollTouchPoint.y - _scrollTouchViewY;
+      _scrollTouchViewY = _scrollTouchPoint.y;
+
+      if (Math.isFinite(delta) && delta != 0)
       {
         var dpiScale = FlxG.stage.window.display.dpi / 160;
-
         dpiScale = dpiScale.clamp(0.5, #if android 1 #else 2 #end);
 
-        var moveLength = delta / FlxG.updateFramerate / dpiScale;
+        final moveLength:Float = delta / 60 / dpiScale;
         _moveLength += Math.abs(moveLength);
         curSelectedFloat -= moveLength;
         updateSongsScroll();
       }
     }
-    else if (TouchUtil.justReleased && _moveLength > 0)
+    else if (_scrollTouchId != -1)
     {
-      _moveLength = 0.0;
-      changeSelection(0);
-    }
-    if (!_pressedOnCapsule && TouchUtil.justReleased)
-    {
-      FlxG.touches.flickManager.destroy();
+      _scrollTouchId = -1;
+      _pressedOnCapsule = false;
     }
 
-    if (FlxG.touches.flickManager.initialized)
+    if (activeTouch == null && _scrollFlickActive && FlxG.touches.flickManager.initialized)
     {
       var flickVelocity = FlxG.touches.flickManager.velocity.y * framerateMultiplier;
       if (Math.isFinite(flickVelocity))
@@ -2081,14 +2103,9 @@ class FreeplayState extends MusicBeatSubState
         updateSongsScroll();
       }
     }
-    else if (!_flickEnded)
+    else if (activeTouch == null && _scrollFlickActive && !FlxG.touches.flickManager.initialized)
     {
-      _flickEnded = true;
-      if (_moveLength > 0)
-      {
-        _moveLength = 0.0;
-        changeSelection(0);
-      }
+      finishTouchSelectionScroll();
     }
 
     curSelectedFloat = curSelectedFloat.clamp(0, grpCapsules.countLiving() - 1);
@@ -2102,30 +2119,40 @@ class FreeplayState extends MusicBeatSubState
     if (!TouchUtil.pressed && (curSelected == 0 || curSelected == grpCapsules.countLiving() - 1) && FlxG.touches.flickManager.initialized)
     {
       FlxG.touches.flickManager.destroy();
-      _flickEnded = true;
-      if (_moveLength > 0)
-      {
-        _moveLength = 0.0;
-        changeSelection(0);
-      }
+      finishTouchSelectionScroll();
     }
   }
 
-  function touchOverlapsSongList():Bool
+  private function canStartTouchSelectionScroll(touch:FlxTouch):Bool
   {
-    if (TouchUtil.overlaps(capsuleHitbox, funnyCam)) return true;
+    if (touch.overlaps(capsuleHitbox, funnyCam)) return true;
 
     for (capsule in grpCapsules.members)
     {
       if (capsule == null || !capsule.visible || capsule.theActualHitbox == null) continue;
-      if (TouchUtil.overlaps(capsule.theActualHitbox, funnyCam)) return true;
+      if (touch.overlaps(capsule.theActualHitbox, funnyCam)) return true;
     }
 
-    if (TouchUtil.touch == null) return false;
+    touch.getViewPosition(funnyCam, _scrollTouchPoint);
+    return _scrollTouchPoint.x >= FlxG.width * 0.4
+      && _scrollTouchPoint.y >= 100
+      && _scrollTouchPoint.y <= FlxG.height - 20
+      && !touch.overlaps(diffSelLeft, funnyCam)
+      && !touch.overlaps(diffSelRight, funnyCam);
+  }
 
-    final touchX:Float = TouchUtil.touch.gameX;
-    final touchY:Float = TouchUtil.touch.gameY;
-    return touchX >= 0 && touchX <= FlxG.width && touchY >= 80 && touchY <= FlxG.height - 80;
+  private function finishTouchSelectionScroll():Void
+  {
+    _scrollTouchId = -1;
+    _pressedOnCapsule = false;
+    _scrollFlickActive = false;
+    _flickEnded = true;
+
+    if (_moveLength > 0)
+    {
+      _moveLength = 0;
+      changeSelection(0);
+    }
   }
 
   function handleTouchFavoritesAndDifficulties()

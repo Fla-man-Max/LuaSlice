@@ -1214,7 +1214,7 @@ class ChartEditorDialogHandler
       var songMetadata:Null<SongMetadata> = null;
       var songChartData:Null<SongChartData> = null;
 
-      if (path.ext != fileExt)
+      if ((path.ext ?? '').toLowerCase() != fileExt)
       {
         state.error('Failure', 'Given file extension ".${path.ext}" was not the requested extension ".$fileExt"');
         return;
@@ -1250,27 +1250,36 @@ class ChartEditorDialogHandler
           loadedText = 'Converted Psych Engine chart';
 
         case 'codename':
-          final codenameData:Dynamic = CodenameEngineImporter.parseRaw(content, path.toString());
-          if (!CodenameEngineImporter.isChart(codenameData))
+          try
           {
-            state.error('Failure', 'Failed to parse Codename Engine chart (${path.file}.${path.ext})');
+            final codenameData:Dynamic = CodenameEngineImporter.parseRaw(content, path.toString());
+            if (!CodenameEngineImporter.isChart(codenameData))
+            {
+              state.error('Failure', 'Failed to parse Codename Engine chart (${path.file}.${path.ext})');
+              return;
+            }
+
+            var codenameMetadata:Dynamic = null;
+            var codenameEvents:Dynamic = null;
+            #if sys
+            final songFolder = haxe.io.Path.normalize(haxe.io.Path.join([path.dir ?? '', '..']));
+            final metadataPath = haxe.io.Path.join([songFolder, 'meta.json']);
+            final eventsPath = haxe.io.Path.join([songFolder, 'events.json']);
+            if (sys.FileSystem.exists(metadataPath)) codenameMetadata = CodenameEngineImporter.parseRaw(FileUtil.readStringFromPath(metadataPath), metadataPath);
+            if (sys.FileSystem.exists(eventsPath)) codenameEvents = CodenameEngineImporter.parseRaw(FileUtil.readStringFromPath(eventsPath), eventsPath);
+            #end
+
+            final codenameDifficulty = CodenameEngineImporter.inferDifficulty(path.file);
+            songMetadata = CodenameEngineImporter.migrateMetadata(codenameData, codenameDifficulty, codenameMetadata, codenameEvents);
+            songChartData = CodenameEngineImporter.migrateChartData(codenameData, codenameDifficulty, codenameEvents);
+            loadedText = 'Converted Codename Engine chart';
+          }
+          catch (error)
+          {
+            trace('[CodenameEngineImporter] Conversion failed for ${path.toString()}: ${error}');
+            state.error('Codename Engine Import Failed', 'Could not convert ${path.file}.${path.ext}: ${Std.string(error)}');
             return;
           }
-
-          var codenameMetadata:Dynamic = null;
-          var codenameEvents:Dynamic = null;
-          #if sys
-          final songFolder = haxe.io.Path.normalize(haxe.io.Path.join([path.dir ?? '', '..']));
-          final metadataPath = haxe.io.Path.join([songFolder, 'meta.json']);
-          final eventsPath = haxe.io.Path.join([songFolder, 'events.json']);
-          if (sys.FileSystem.exists(metadataPath)) codenameMetadata = CodenameEngineImporter.parseRaw(FileUtil.readStringFromPath(metadataPath), metadataPath);
-          if (sys.FileSystem.exists(eventsPath)) codenameEvents = CodenameEngineImporter.parseRaw(FileUtil.readStringFromPath(eventsPath), eventsPath);
-          #end
-
-          final codenameDifficulty = CodenameEngineImporter.inferDifficulty(path.file);
-          songMetadata = CodenameEngineImporter.migrateMetadata(codenameData, codenameDifficulty, codenameMetadata);
-          songChartData = CodenameEngineImporter.migrateChartData(codenameData, codenameDifficulty, codenameEvents);
-          loadedText = 'Converted Codename Engine chart';
         case 'stepmania':
           var stepmaniaData:Null<StepManiaData> = StepManiaImporter.parseStepManiaFile(content);
 
@@ -1312,11 +1321,20 @@ class ChartEditorDialogHandler
         state.error('Failure', 'Failed to load song (${path.file}.${path.ext})');
         return;
       }
-      state.loadSong([
-        Constants.DEFAULT_VARIATION => songMetadata
-      ], [
-        Constants.DEFAULT_VARIATION => songChartData
-      ]);
+      try
+      {
+        state.loadSong([
+          Constants.DEFAULT_VARIATION => songMetadata
+        ], [
+          Constants.DEFAULT_VARIATION => songChartData
+        ]);
+      }
+      catch (error)
+      {
+        trace('[ChartEditorDialogHandler] Failed to load imported chart ${path.toString()}: ${error}');
+        state.error('Import Failed', 'The chart was converted, but could not be loaded: ${Std.string(error)}');
+        return;
+      }
 
       dialog.hideDialog(DialogButton.APPLY);
       state.success('Success', '$loadedText (${path.file}.${path.ext})');
