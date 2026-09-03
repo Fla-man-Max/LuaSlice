@@ -972,12 +972,6 @@ class ModMenuState extends MusicBeatState
     }
     else if (Path.isAbsolute(path) && FileUtil.directoryExists(path))
     {
-      if (!FileUtil.pathExists(Path.join([path, PolymodConfig.modMetadataFile])))
-      {
-        WindowUtil.showError('Failed to move folder', 'Could not find polymod metadata inside the folder, are you sure this is a mod pack?');
-        return;
-      }
-
       try
       {
         FileUtil.copyDirectory(path, Path.join([PolymodHandler.MOD_FOLDER, Path.withoutDirectory(path)]));

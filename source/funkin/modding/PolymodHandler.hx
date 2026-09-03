@@ -24,6 +24,9 @@ import funkin.util.assets.ResourceCache;
 import polymod.backends.PolymodAssets.PolymodAssetType;
 import polymod.format.ParseRules.TextFileFormat;
 import polymod.Polymod;
+import haxe.io.Path;
+import luaslice.modding.ModSelection;
+import luaslice.modding.ModMetadataRepair;
 
 typedef AssetReloadTask =
 {
@@ -90,6 +93,7 @@ class PolymodHandler
   // Use SysZipFileSystem on native and MemoryZipFilesystem on web.
   static var modFileSystem:Null<ZipFileSystem> = null;
   static var cachedModMetadata:Null<Array<ModMetadata>> = null;
+  static var metadataRepair:ModMetadataRepair = new ModMetadataRepair();
 
   /**
    * If the mods folder doesn't exist, create it.
@@ -125,7 +129,8 @@ class PolymodHandler
     createModRoot();
     #end
     trace('Initializing Polymod (using all mods)...');
-    loadModsByDir(getAllModDirs());
+    var mods = getAllMods(true);
+    loadModsByDir([for (mod in mods) mod.dirName], false);
   }
 
   /**
@@ -138,7 +143,14 @@ class PolymodHandler
     createModRoot();
     #end
     trace('Initializing Polymod (using configured mods)...');
-    loadModsByDir(Save.instance.enabledModDirs.value);
+    var fileSystem = refreshModFileSystem();
+    var metadata = prepareModMetadata(fileSystem);
+
+    var saved = Save.instance;
+    var selection = ModSelection.reconcile(saved.enabledModDirs.value, saved.knownModDirs.value, metadata.installed, metadata.ready, #if mobile true #else false #end);
+    if (!ModSelection.matches(saved.enabledModDirs.value, selection.enabled)) saved.enabledModDirs.value = selection.enabled;
+    if (!ModSelection.matches(saved.knownModDirs.value, selection.known)) saved.knownModDirs.value = selection.known;
+    loadModsByDir(selection.enabled, false);
   }
 
   /**
@@ -159,10 +171,22 @@ class PolymodHandler
    * Load all the mods with the directories they're in.
    * @param dirs The ORDERED list of mod ids to load.
    */
-  public static function loadModsByDir(dirs:Array<String>):Void
+  public static function loadModsByDir(dirs:Array<String>, refresh:Bool = true):Void
   {
     ResourceCache.beginGeneration();
     cachedModMetadata = null;
+    var fileSystem = refresh ? refreshModFileSystem() : (modFileSystem ?? refreshModFileSystem());
+    if (dirs.length > 0)
+    {
+      var metadata = prepareModMetadata(fileSystem);
+      dirs = dirs.filter(dir -> metadata.ready.contains(dir));
+      for (dir in metadata.created)
+        if (!dirs.contains(dir)) dirs.push(dir);
+    }
+    dirs = dirs.filter((dir) -> {
+      var path = Path.join([MOD_FOLDER, dir]);
+      return fileSystem.exists(path) && fileSystem.isDirectory(path);
+    });
     if (dirs.length == 0)
     {
       trace('You attempted to load zero mods.');
@@ -173,8 +197,6 @@ class PolymodHandler
     }
 
     buildImports();
-
-    if (modFileSystem == null) modFileSystem = buildFileSystem();
 
     var loadedModList:Array<ModMetadata> = polymod.Polymod.init({
       // Root directory for all mods.
@@ -192,7 +214,7 @@ class PolymodHandler
       // A map telling Polymod what the asset type is for unfamiliar file extensions.
       // extensionMap: [],
 
-      customFilesystem: modFileSystem,
+      customFilesystem: fileSystem,
 
       frameworkParams: buildFrameworkParams(),
 
@@ -212,6 +234,7 @@ class PolymodHandler
     if (loadedModList == null)
     {
       trace('An error occurred! Failed when loading mods!');
+      loadedModList = [];
     }
     else
     {
@@ -279,6 +302,27 @@ class PolymodHandler
       modRoot: MOD_FOLDER,
       autoScan: true
     });
+  }
+
+  static function refreshModFileSystem():ZipFileSystem
+  {
+    cachedModMetadata = null;
+    return modFileSystem = buildFileSystem();
+  }
+
+  static function prepareModMetadata(fileSystem:ZipFileSystem):ModMetadataScan
+  {
+    var result = metadataRepair.scan(MOD_FOLDER, fileSystem, funkin.util.WindowUtil.showMissingModMetadata,
+      message -> funkin.util.WindowUtil.showError('Mod Metadata Creation Failed', message));
+    if (result.created.length > 0)
+    {
+      var enabled = Save.instance.enabledModDirs.value.copy();
+      for (dir in result.created)
+        if (!enabled.contains(dir)) enabled.push(dir);
+      Save.instance.enabledModDirs.value = enabled;
+      cachedModMetadata = null;
+    }
+    return result;
   }
 
   static function buildImports():Void
@@ -571,6 +615,7 @@ class PolymodHandler
 
     trace('Scanning the mods folder...');
     if (modFileSystem == null) modFileSystem = buildFileSystem();
+    prepareModMetadata(modFileSystem);
 
     var modMetadata:Array<ModMetadata> = Polymod.scan({
       modRoot: MOD_FOLDER,

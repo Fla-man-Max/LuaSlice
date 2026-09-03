@@ -177,6 +177,35 @@ class WindowUtil
     #end
   }
 
+  public static function showMissingModMetadata(modName:String, metadataPath:String):Bool
+  {
+    #if (desktop || mobile)
+    var application = lime.app.Application.current;
+    if (application == null || application.window == null)
+    {
+      trace('Cannot show missing mod metadata warning for "$modName": no game window is available.');
+      return false;
+    }
+
+    var message = 'The mod "$modName" is missing the required _polymod_meta.json file.'
+      + '\n\nOnly this mod will be skipped until the file is added.'
+      + '\n\n"Make one for me" creates a starter metadata file here:\n$metadataPath'
+      + '\n\nAdding metadata does not convert incompatible charts or scripts.';
+    try
+    {
+      return application.window.alert(lime.ui.MessageBoxType.WARNING, message, 'Missing Mod Metadata', ['Make one for me', 'Ok']) == 0;
+    }
+    catch (error:Dynamic)
+    {
+      trace('Could not show missing mod metadata warning for "$modName": $error');
+      return false;
+    }
+    #else
+    trace('The mod "$modName" is missing $metadataPath; automatic metadata creation is unavailable on this platform.');
+    return false;
+    #end
+  }
+
   #if windows
   static function showWindowsError(name:String, desc:String, copyText:String):Void
   {

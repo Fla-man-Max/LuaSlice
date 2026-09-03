@@ -159,6 +159,7 @@ class Save implements ConsoleClass
       mods: {
         // No mods enabled.
         enabledMods: [],
+        knownMods: [],
         modOptions: [],
       },
       unlocks: {
@@ -261,6 +262,8 @@ class Save implements ConsoleClass
   ///
   @:saveProperty(data.mods.enabledMods)
   public var enabledModDirs:SaveProperty<Array<String>>;
+  @:saveProperty(data.mods.knownMods, [])
+  public var knownModDirs:SaveProperty<Array<String>>;
   ///
   /// CHART EDITOR OPTIONS
   ///
@@ -1077,6 +1080,7 @@ typedef SaveHighScoresData =
 typedef SaveDataMods =
 {
   var enabledMods:Array<String>;
+  @:optional var knownMods:Array<String>;
   // TODO: Make this not trip up the serializer when debugging.
   @:jignored
   var modOptions:Map<String, Dynamic>;

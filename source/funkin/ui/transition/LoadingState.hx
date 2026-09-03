@@ -139,7 +139,18 @@ class LoadingState extends MusicBeatSubState
       final request:Null<SongAudioLoad> = audioQueue.shift();
       if (request == null) return;
       activeAudioLoads++;
-      Assets.loadSound(request.path).onComplete(function(sound)
+      var soundFuture:Future<openfl.media.Sound>;
+      try
+      {
+        soundFuture = Assets.loadSound(request.path);
+      }
+      catch (error:Dynamic)
+      {
+        activeAudioLoads--;
+        failLoad('Could not load song audio "${request.path}": ${Std.string(error)}');
+        return;
+      }
+      soundFuture.onComplete(function(sound)
       {
         activeAudioLoads--;
         if (cancelled || loadGeneration != ResourceCache.generation)
