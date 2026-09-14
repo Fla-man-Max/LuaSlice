@@ -167,7 +167,7 @@ class FileUtil
    * Note that on HTML5 this will immediately fail.
    */
   public static function browseForFile(dialogTitle:String, ?typeFilter:Array<FileFilter>, onSelect:(SelectedFileData) -> Void, ?onCancel:() -> Void,
-      ?defaultPath:String):Void
+      ?defaultPath:String, ?onError:String->Void):Void
   {
     #if html5
     trace('WARNING: browseForFile not implemented for this platform');
@@ -183,7 +183,19 @@ class FileUtil
       {
         if (onSelect != null)
         {
-          onSelect(SelectedFileData.fromPath(filepaths[0]));
+          var selectedFile:SelectedFileData;
+          try
+          {
+            selectedFile = SelectedFileData.fromPath(filepaths[0]);
+          }
+          catch (error:haxe.Exception)
+          {
+            trace('[FileUtil] Could not read selected file: ${error.message}');
+            if (onError != null) onError(error.message);
+            else if (onCancel != null) onCancel();
+            return;
+          }
+          onSelect(selectedFile);
         }
       }
       else
@@ -1558,9 +1570,11 @@ class SelectedFileData
 {
   public static function fromPath(path:String):SelectedFileData
   {
+    var data:Null<Bytes> = Bytes.fromFile(path);
+    if (data == null) throw 'The selected file could not be read. Try downloading it to this device first.';
     return {
       name: new Path(path).file,
-      bytes: Bytes.fromFile(path),
+      bytes: data,
       fullPath: path
     };
   }

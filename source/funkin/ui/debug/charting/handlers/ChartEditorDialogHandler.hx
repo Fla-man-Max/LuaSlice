@@ -501,11 +501,15 @@ class ChartEditorDialogHandler
     var dialog:Null<Dialog> = openDialog(state, CHART_EDITOR_DIALOG_UPLOAD_INST_LAYOUT, true, closable);
     if (dialog == null) throw 'Could not locate Upload Instrumental dialog';
 
+    var pickingFile:Bool = false;
+    var finished:Bool = false;
+
     var buttonCancel:Null<Button> = dialog.findComponent('dialogCancel', Button);
     if (buttonCancel == null) throw 'Could not locate dialogCancel button in Upload Instrumental dialog';
 
     buttonCancel.onClick = function(_)
     {
+      finished = true;
       dialog.hideDialog(DialogButton.CANCEL);
     }
 
@@ -528,54 +532,68 @@ class ChartEditorDialogHandler
 
     var dropHandler:DialogDropTarget = {component: instrumentalBox, handler: null};
 
+    var importInstrumental = function(bytes:haxe.io.Bytes, name:String):Void
+    {
+      if (finished || !state.exists) return;
+      var trackKey = instId == '' ? 'default' : instId;
+      var previousBytes = state.audioInstTrackData.get(trackKey);
+      var loaded = false;
+      try
+      {
+        if (bytes == null || bytes.length == 0) throw 'The selected file is empty or could not be read.';
+        loaded = state.loadInstFromBytes(bytes, instId) && state.switchToCurrentInstrumental();
+        if (!loaded) throw 'Could not decode this audio file. Please select a valid OGG instrumental stored on this device.';
+      }
+      catch (error:haxe.Exception)
+      {
+        if (previousBytes == null) state.audioInstTrackData.remove(trackKey);
+        else state.audioInstTrackData.set(trackKey, previousBytes);
+        trace('[ChartEditor] Instrumental import failed (${name}): ${error.details()}');
+        state.error('Failed to Load Instrumental', '${name}: ${error.message}');
+        return;
+      }
+      finished = true;
+      state.removeDropHandler(dropHandler);
+      state.success('Loaded Instrumental', 'Loaded instrumental track (${name}) for variation (${state.selectedVariation})');
+      dialog.hideDialog(DialogButton.APPLY);
+    };
+
+    var reportReadError = function(message:String):Void
+    {
+      pickingFile = false;
+      if (!finished && state.exists) state.error('Failed to Read Instrumental', message);
+    };
+
     instrumentalBox.onClick = function(_)
     {
-      FileUtil.browseForFile('Open Instrumental', [FileUtil.FILE_FILTER_OGG], function(selectedFile:SelectedFileData)
+      if (pickingFile || finished) return;
+      pickingFile = true;
+      try
       {
-        if (selectedFile != null && selectedFile.bytes != null)
+        FileUtil.browseForFile('Open Instrumental', [FileUtil.FILE_FILTER_OGG], function(selectedFile:SelectedFileData)
         {
-          if (state.loadInstFromBytes(selectedFile.bytes, instId))
-          {
-            state.success('Loaded Instrumental', 'Loaded instrumental track (${selectedFile.name}) for variation (${state.selectedVariation})');
-
-            state.switchToCurrentInstrumental();
-            dialog.hideDialog(DialogButton.APPLY);
-            state.removeDropHandler(dropHandler);
-          }
-          else
-          {
-            state.error('Failed to Load Instrumental', 'Failed to load instrumental track (${selectedFile.name}) for variation (${state.selectedVariation})');
-          }
-        }
-      });
+          pickingFile = false;
+          if (selectedFile == null) return;
+          importInstrumental(selectedFile.bytes, selectedFile.name);
+        }, function() { pickingFile = false; }, null, reportReadError);
+      }
+      catch (error:haxe.Exception)
+      {
+        reportReadError(error.message);
+      }
     }
 
     var onDropFile:String->Void = function(pathStr:String)
     {
-      var path:Path = new Path(pathStr);
-      trace('Dropped file (${path})');
-      if (state.loadInstFromPath(path, instId))
+      if (finished || pickingFile) return;
+      try
       {
-        // Tell the user the load was successful.
-        state.success('Loaded Instrumental', 'Loaded instrumental track (${path.file}.${path.ext}) for variation (${state.selectedVariation})');
-
-        state.switchToCurrentInstrumental();
-        dialog.hideDialog(DialogButton.APPLY);
-        state.removeDropHandler(dropHandler);
+        var selectedFile = SelectedFileData.fromPath(pathStr);
+        importInstrumental(selectedFile.bytes, selectedFile.name);
       }
-      else
+      catch (error:haxe.Exception)
       {
-        var message:String = if (!ChartEditorState.SUPPORTED_MUSIC_FORMATS.contains(path.ext ?? ''))
-        {
-          'File format (${path.ext}) not supported for instrumental track (${path.file}.${path.ext})';
-        }
-        else
-        {
-          'Failed to load instrumental track (${path.file}.${path.ext}) for variation (${state.selectedVariation})';
-        }
-
-        // Tell the user the load was successful.
-        state.error('Failed to Load Instrumental', message);
+        reportReadError(error.message);
       }
     };
 

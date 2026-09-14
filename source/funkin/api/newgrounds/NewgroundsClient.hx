@@ -19,9 +19,9 @@ import funkin.mobile.util.WebViewUtil;
 @:build(funkin.util.macro.EnvironmentMacro.build()) @:nullSafety
 class NewgroundsClient
 {
-  @:envField
+  @:envField({warnIfMissing: false})
   static final API_NG_APP_ID:Null<String>;
-  @:envField
+  @:envField({warnIfMissing: false})
   static final API_NG_ENC_KEY:Null<String>;
   public static var instance(get, never):NewgroundsClient;
   static var _instance:Null<NewgroundsClient> = null;

@@ -16,10 +16,31 @@ class SoundUtil
    */
   public static function buildSoundFromBytes(input:Null<Bytes>):Null<FunkinSound>
   {
-    if (input == null) return null;
+    if (input == null || input.length == 0) return null;
 
-    var openflSound:OpenFLSound = OpenFLSound.fromAudioBuffer(AudioBuffer.fromBytes(input));
-    if (openflSound == null) return null;
-    return FunkinSound.load(openflSound, 1.0, false);
+    try
+    {
+      var buffer:Null<AudioBuffer> = AudioBuffer.fromBytes(input);
+      if (buffer == null) return null;
+      #if (cpp && !macro)
+      if (buffer.data == null || buffer.data.length == 0 || buffer.channels <= 0 || buffer.sampleRate <= 0)
+      {
+        buffer.dispose();
+        return null;
+      }
+      #end
+      var openflSound:Null<OpenFLSound> = OpenFLSound.fromAudioBuffer(buffer);
+      if (openflSound == null)
+      {
+        buffer.dispose();
+        return null;
+      }
+      return FunkinSound.load(openflSound, 1.0, false, false, false, false, null, null, true);
+    }
+    catch (error:haxe.Exception)
+    {
+      trace('[SoundUtil] Could not decode imported audio: ${error.message}');
+      return null;
+    }
   }
 }

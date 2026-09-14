@@ -42,10 +42,16 @@ class EnvironmentMacro
               {
                 // Retrieve the parameters of the metadata, if any.
                 var mandatoryIfDefined:Null<String> = null;
+                var warnIfMissing:Bool = true;
 
                 if (meta.params != null && meta.params.length >= 1)
                 {
                   var params:Expr = meta.params[0];
+                  var warnIfMissingExpr = MacroUtil.extractObjectField(params, 'warnIfMissing');
+                  if (warnIfMissingExpr != null)
+                  {
+                    warnIfMissing = MacroUtil.extractBooleanConstant(warnIfMissingExpr) != false;
+                  }
 
                   var mandatoryIfDefinedExpr:Null<Expr> = MacroUtil.extractObjectField(params, 'mandatoryIfDefined');
 
@@ -98,7 +104,7 @@ class EnvironmentMacro
 
                     Context.fatalError(errorMessage, field.pos);
                   }
-                  else
+                  else if (warnIfMissing)
                   {
                     warning('Value for '.bright_red() + field.name.bold().bright_red() + ' not found in the environment file.'.bright_red(), field.pos);
                   }

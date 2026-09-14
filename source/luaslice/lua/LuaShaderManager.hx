@@ -616,6 +616,7 @@ class LuaShaderManager
     }
   }
 
+  @:haxe.warning("-WDeprecated")
   static function setDropShadowFloat(shader:DropShadowShader, name:String, value:Float):Bool
   {
     switch (name)
@@ -635,6 +636,7 @@ class LuaShaderManager
     return true;
   }
 
+  @:haxe.warning("-WDeprecated")
   static function cloneDropShadowShader(source:DropShadowShader):DropShadowShader
   {
     final shader = new DropShadowShader();

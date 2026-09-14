@@ -7231,10 +7231,10 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     this.playSound(Paths.sound('chartingSounds/metronome${high ? '1' : '2'}'), metronomeVolume);
   }
 
-  function switchToCurrentInstrumental():Void
+  function switchToCurrentInstrumental():Bool
   {
     // ChartEditorAudioHandler
-    this.switchToInstrumental(currentInstrumentalId, currentSongMetadata.playData.characters.player, currentSongMetadata.playData.characters.opponent);
+    return this.switchToInstrumental(currentInstrumentalId, currentSongMetadata.playData.characters.player, currentSongMetadata.playData.characters.opponent);
   }
 
   public function updateGridHeight():Void
@@ -7948,7 +7948,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
 
   function hardRefreshOffsetsToolbox():Void
   {
-    var offsetsToolbox:ChartEditorOffsetsToolbox = cast this.getToolbox(CHART_EDITOR_TOOLBOX_OFFSETS_LAYOUT);
+    var offsetsToolbox:ChartEditorOffsetsToolbox = cast activeToolboxes.get(CHART_EDITOR_TOOLBOX_OFFSETS_LAYOUT);
     if (offsetsToolbox != null)
     {
       offsetsToolbox.refreshAudioPreview();
@@ -7958,7 +7958,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
 
   function hardRefreshFreeplayToolbox():Void
   {
-    var freeplayToolbox:ChartEditorFreeplayToolbox = cast this.getToolbox(CHART_EDITOR_TOOLBOX_FREEPLAY_LAYOUT);
+    var freeplayToolbox:ChartEditorFreeplayToolbox = cast activeToolboxes.get(CHART_EDITOR_TOOLBOX_FREEPLAY_LAYOUT);
     if (freeplayToolbox != null)
     {
       freeplayToolbox.refreshAudioPreview();
