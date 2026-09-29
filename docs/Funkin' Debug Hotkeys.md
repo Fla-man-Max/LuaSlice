@@ -1,4 +1,4 @@
-# Funkin' Debug Hotkeys
+# Funkin' Debug Hotkeys (From Funkin' Crew)
 
 Most of this functionality is only available on debug builds of the game!
 

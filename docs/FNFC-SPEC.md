@@ -1,4 +1,4 @@
-# .fnfc File Specification
+# .fnfc File Specification (From Funkin' Crew)
 
 *Updated 2024-04-29*
 

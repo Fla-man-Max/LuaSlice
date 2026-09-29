@@ -1,4 +1,4 @@
-# Tracy Performance Profiling
+# Tracy Performance Profiling (From Funkin' Crew)
 
 In v0.5.1, Funkin' gained support for a powerful instrumentation-based profiler known as Tracy. This development tool allows you to see exactly what the game is doing at any given moment, how long each function is taking to call, and even how memory is allocated and deallocated. This is the most powerful tool in your toolbox for diagnosing and resolving performance issues.
 

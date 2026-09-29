@@ -209,11 +209,10 @@ class ChartEditorImportExportHandler
     // Remove instrumental and vocal tracks, they will be loaded next.
     if (state.audioInstTrack != null)
     {
-      state.audioInstTrack.stop();
+      state.audioInstTrack.destroy();
       state.audioInstTrack = null;
     }
-    state.audioVocalTrackGroup.stop();
-    state.audioVocalTrackGroup.clear();
+    ChartEditorAudioHandler.stopExistingVocals(state);
 
     // Clear the undo and redo history
     state.undoHistory = [];

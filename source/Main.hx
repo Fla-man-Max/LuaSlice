@@ -30,6 +30,9 @@ using funkin.util.AnsiUtil;
  */
 class Main extends Sprite
 {
+  #if (desktop && FEATURE_PSYCH_LUA)
+  static var psychLuaTestMode:Bool = false;
+  #end
   var gameWidth:Int = 1280; // Width of the game in pixels (might be less / more in actual pixels depending on your zoom).
   var gameHeight:Int = 720; // Height of the game in pixels (might be less / more in actual pixels depending on your zoom).
   var initialState:Class<FlxState> = funkin.InitState; // The FlxState the game starts with.
@@ -52,6 +55,15 @@ class Main extends Sprite
     // We need to make the crash handler LITERALLY FIRST so nothing EVER gets past it.
     CrashHandler.initialize();
     funkin.util.CLIUtil.resetWorkingDir();
+    #if (desktop && FEATURE_PSYCH_LUA)
+    psychLuaTestMode = Sys.args().indexOf('--lua-test') >= 0 && sys.FileSystem.exists('psych-test.marker');
+    if (psychLuaTestMode)
+    {
+      var saveDirectory = haxe.io.Path.join([Sys.getCwd(), 'psych-test-save']);
+      if (!sys.FileSystem.exists(saveDirectory)) sys.FileSystem.createDirectory(saveDirectory);
+      @:privateAccess lime.system.System.__applicationStorageDirectory = saveDirectory;
+    }
+    #end
     CrashHandler.queryStatus();
 
     Lib.current.addChild(new Main());
@@ -69,7 +81,11 @@ class Main extends Sprite
     // You can remove this line if you want to read debug messages.
     openfl.utils._internal.Log.level = openfl.utils._internal.Log.LogLevel.INFO;
 
-    funkin.modding.PolymodHandler.loadEnabledMods();
+    #if (desktop && FEATURE_PSYCH_LUA)
+    if (psychLuaTestMode) funkin.modding.PolymodHandler.loadModsByDir(['psych-lua-test']);
+    else
+    #end
+      funkin.modding.PolymodHandler.loadEnabledMods();
 
     if (stage != null)
     {

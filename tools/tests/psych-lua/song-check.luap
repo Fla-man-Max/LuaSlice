@@ -1,0 +1,3 @@
+function onCreate()
+    setVar('songLoaded', true)
+end

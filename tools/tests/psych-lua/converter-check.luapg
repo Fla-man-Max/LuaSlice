@@ -1,0 +1,40 @@
+function onCreatePost()
+    addHaxeLibrary('PsychEngineImporter', 'funkin.data.song.importer')
+    addHaxeLibrary('CodenameEngineImporter', 'funkin.data.song.importer')
+    addHaxeLibrary('SoundUtil', 'funkin.util.assets')
+    addHaxeLibrary('Assets', 'funkin')
+    addHaxeLibrary('Json', 'haxe')
+    assert(runHaxeCode([=[
+        var raw = '{"song":"Example","bpm":120,"format":"psych_v1","speed":-2,"notes":[{"mustHitSection":false,"sectionNotes":[[200,0,-1,3],[100,4,0,0]]}]}';
+        var psych = PsychEngineImporter.parseRaw(raw);
+        if (!PsychEngineImporter.isChart(psych)) throw 'Unwrapped Psych chart rejected';
+        if (!PsychEngineImporter.isChart(PsychEngineImporter.parseRaw('{"song":' + raw + '}'))) throw 'Wrapped Psych chart rejected';
+        var result = PsychEngineImporter.migrateChartData(psych, 'normal', {events: [[150, [['Example Event', 'a', 'b']]]]});
+        var notes = result.notes.get('normal');
+        if (notes.length != 2 || notes[0].time != 100 || notes[0].data != 4 || notes[1].data != 0) throw 'Psych note sorting or side mapping failed';
+        if (notes[1].length != 0 || notes[1].kind != 'hurt') throw 'Psych legacy note kind or sustain validation failed';
+        if (result.scrollSpeed.get('normal') <= 0) throw 'Invalid scroll speed';
+        var customEventFound = false;
+        for (event in result.events) if (event.eventKind == 'Example Event') customEventFound = true;
+        if (!customEventFound) throw 'Psych external events missing';
+        var legacy = Json.parse('{"song":"Old","bpm":120,"notes":[{"mustHitSection":false,"sectionNotes":[[0,0,0,1]]}]}');
+        var oldNote = PsychEngineImporter.migrateChartData(legacy).notes.get('normal')[0];
+        if (oldNote.data != 4 || oldNote.kind != 'alt') throw 'Legacy Psych conversion failed';
+        var codename = Json.parse('{"meta":{"displayName":"Embedded","bpm":180},"strumLines":[{"type":0,"characters":["dad"],"notes":[{"time":500,"id":1,"type":1,"sLen":200}]},{"type":1,"characters":["bf"],"notes":[{"time":100,"id":2,"type":0,"sLen":0}]}],"noteTypes":["Hurt Note"],"events":[{"name":"BPM Change","time":1000,"params":[150]}]}');
+        var metadata = CodenameEngineImporter.migrateMetadata(codename, 'hard', {displayName:'External', artist:'Artist', bpm:120}, {events:[{name:'BPM Change', time:1000, params:[150]}]});
+        if (metadata.songName != 'Embedded' || metadata.artist != 'Artist' || metadata.timeChanges[0].bpm != 180) throw 'Codename metadata merge failed';
+        if (metadata.timeChanges.length != 2) throw 'Duplicate Codename BPM changes';
+        var converted = CodenameEngineImporter.migrateChartData(codename, 'hard').notes.get('hard');
+        if (converted.length != 2 || converted[0].data != 2 || converted[1].data != 5 || converted[1].kind != 'hurt') throw 'Codename note mapping failed';
+        var paths = CodenameEngineImporter.sidecarPaths('/mod/song/charts/variant/hard.json', 'meta');
+        if (paths[0] != '/mod/song/meta-variant-hard.json') throw 'Codename variant sidecar path failed';
+        if (CodenameEngineImporter.sidecarPaths('/mod/song/charts/hard.json', 'events')[0] != '/mod/song/events.json') throw 'Codename event sidecar path failed';
+        var bytes = Assets.getBytes(Paths.sound('confirmMenu'));
+        var sound = SoundUtil.buildSoundFromBytes(bytes);
+        if (sound == null) throw 'OGG audio import failed';
+        sound.destroy();
+        if (SoundUtil.buildSoundFromBytes(null) != null) throw 'Missing audio accepted';
+        return true;
+    ]=]))
+    debugPrint('CONVERTER_REGRESSION_OK')
+end

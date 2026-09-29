@@ -1,5 +1,100 @@
 # LuaSlice Lua API
 
+## Native scripting update — 2026-09-28
+
+Windows and Android use LuaJIT through `hxluajit` and `hxluajit-wrapper`. The old/raw API, Psych-style aliases, and LuaSlice helpers remain supported. Helpers do not require a new language or rewritten scripts. `.lua` stays isolated, `.luag` keeps its shared environment, and the separate Psych `.luap`/`.luapg` loader keeps its existing rules. NxScript is unchanged.
+
+### Properties: all three styles work
+
+```lua
+setProperty('boyfriend.x', 700)
+setProperties('boyfriend', {x = 700, alpha = 0.4})
+setProperties({
+    ['boyfriend.x'] = 700,
+    ['boyfriend.alpha'] = 0.4,
+    ['camGame.zoom'] = 1.1
+})
+
+local values = getProperties({'boyfriend.x', 'camGame.zoom'})
+debugPrint(values['boyfriend.x'])
+property.setMany('boyfriend', {alpha = 1})
+property.setMany({['camGame.zoom'] = 1})
+local health = property.ref('health')
+health.set(1)
+debugPrint(health.get())
+```
+
+Bulk setters return false if an assignment fails, report its path, and continue the remaining assignments. Getters omit missing/nil values from Lua tables. Paths are resolved against current objects each time; character replacements do not leave stale cached object references. `property.getMany` is the same bulk getter.
+
+### Sprite, sound, shader, and tween helpers
+
+```lua
+sprite.create('background', {
+    image = 'stage/bg', x = -400, y = -200, scale = 1.2,
+    alpha = 0.8, visible = true, antialiasing = true,
+    camera = 'game', layer = 'background'
+})
+sound.play('confirm', 'confirmMenu', 0.8, false)
+sound.play('confirm', 'confirmMenu', {volume = 0.8, pitch = 1.2, looped = false})
+shader.configure('glitch', {amount = 0.4, enabled = true})
+tween.to('boyfriend', {alpha = 0.5}, 1, {ease = 'quadOut', tag = 'fade'})
+tween('rawFade', 'boyfriend', {alpha = 1}, 1, 'linear')
+```
+
+Shader configuration uses already-created shaders and their actual uniform names. Numbers use float setters, booleans use boolean setters, and numeric tables use float-array setters; use the existing raw integer/color setters where those types are required. Positional sound arguments, raw tween calls, `doTweenX`, timers, sprite aliases, and shader APIs remain available.
+
+### SScript helpers (optional)
+
+The pinned SScript interpreter supports string-keyed Haxe Map literals. `.ss` and `.ssg` retain their existing loading rules; each script still has its own interpreter. Their global suffix controls where they load, not a newly shared variable namespace.
+
+```haxe
+function onCreate():Void
+{
+    playState.camGame.zoom = 1.1;
+    boyfriend.alpha = 1;
+    setProperties([
+        "boyfriend.x" => 700,
+        "boyfriend.alpha" => 0.4,
+        "camGame.zoom" => 0.5
+    ]);
+    setProperties("boyfriend", {alpha: 1});
+    configure(playState.camGame, {zoom: 1.1, alpha: 1.0});
+    tween(playState.camGame, {zoom: 1}, {duration: 0.5, ease: "quadOut"});
+    var values = getProperties(["boyfriend.x"]);
+    trace(values.get("boyfriend.x"));
+}
+```
+
+Direct Haxe-style access and `state`, `game`, `playState`, `FlxG`, `Paths`, `Preferences`, `Conductor`, `Save`, and `Json` remain available. Character/camera aliases are refreshed before hooks. Helper tweens are cancelled when their script is destroyed. A failing hook is reported with its script path and disabled for that script instance; other scripts continue.
+
+### Coroutine tasks
+
+```lua
+local id = task.run(function()
+    task.wait(1)
+    character.playAnim('boyfriend', 'hey', true)
+    task.wait(0.5)
+    property.set('camGame.zoom', 1.1)
+end)
+```
+
+`task.wait` yields a real Lua coroutine; it does not block the game thread. Delays use update time in seconds. `task.wait(0)` resumes on a later update, not recursively in the same tick. `task.cancel(id)` cancels a pending task. Tasks disappear on script-manager reload/destruction; errors stop only the affected task and report its script path. Tasks do not make arbitrary non-yielding Lua code asynchronous.
+
+### Runtime information, profiling, and editor definitions
+
+```lua
+debugPrint(LuaSlice.runtimeInfo().runtime, LuaSlice.runtimeInfo().jit)
+LuaSlice.profiler.start()
+local measurements = LuaSlice.profiler.snapshot()
+LuaSlice.profiler.stop()
+LuaSlice.api.writeDocs('LuaSlice Lua API.md')
+LuaSlice.api.writeLuaLS('LuaSlice API.d.lua')
+```
+
+Profiling is off by default. Snapshots contain cumulative hook timings (`totalMs`, `averageMs`, `calls`, `errors`), LuaSlice bridge-call counts, and property read/write counts. `averageMs` is per hook call, not per rendered frame; counters cover the LuaSlice/SScript services, not the separate Psych bridge. Start resets the counters; stop retains results. SScript can use `ScriptProfiler.start()`, `snapshot()`, and `stop()`. Runtime JIT status is queried from LuaJIT rather than assumed.
+
+LuaLS definitions are generated from the existing helper metadata, including both `setProperties` overloads. They describe the registered helper entries, not an exhaustive typed model of every engine object. No measured performance improvement is implied by switching runtimes.
+
 LuaSlice supports isolated `.lua` scripts and global `.luag` scripts. Lua is enabled by default on native C++ builds. Use `-DNO_LUA` only if you need a build without Lua.
 
 ## Current API Audit
@@ -1299,4 +1394,5 @@ end
 - `-DNO_LUA` disables Lua support. Lua is enabled by default on native C++ builds.
 
 ## Current Limits
-- HTML5 does not use hxlua.
+- Native builds use LuaJIT 2.1 through hxluajit and hxluajit-wrapper. HTML5 does not use this native Lua runtime.
+- Script folders, `.lua`/`.luag` extensions, callbacks and isolated/global behavior are unchanged. Use Lua 5.1-compatible source syntax: Lua 5.4 bytecode, variable attributes, floor-division syntax and native bitwise operators are not supported. `table.pack` and `table.unpack` are supplied for compatibility; use `bit` functions for bitwise operations.

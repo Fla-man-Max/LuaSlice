@@ -3,6 +3,10 @@
 Important LuaSlice engine updates are tracked here.
 I'm making it as simple, professional, FNF style. (non-AI!!)
 
+## [0.1.0] - 2026-09-26
+
+- Psych Engine Lua API is finally added!
+
 ## [0.0.9] - 2026-09-08
 
 - Updated to v0.0.9.

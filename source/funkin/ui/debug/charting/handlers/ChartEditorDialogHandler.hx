@@ -306,8 +306,16 @@ class ChartEditorDialogHandler
             {
               state.isHaxeUIDialogOpen = false;
               state.currentWorkingFilePath = null; // New file, so no path.
-              state.switchToCurrentInstrumental();
-              state.postLoadInstrumental();
+              try
+              {
+                final characters = state.currentSongMetadata.playData.characters;
+                ChartEditorAudioHandler.refreshVocals(state, state.currentInstrumentalId, characters.player, characters.opponent);
+              }
+              catch (error:haxe.Exception)
+              {
+                trace('[ChartEditor] Imported audio setup failed: ${error.details()}');
+                state.error('Audio Import Failed', error.message);
+              }
             }
           }
           else
@@ -1135,6 +1143,20 @@ class ChartEditorDialogHandler
     return dialog;
   }
 
+  static function readImportSidecar(chartPath:String, candidates:Array<String>):Dynamic
+  {
+    #if sys
+    if (!sys.FileSystem.exists(chartPath) || sys.FileSystem.isDirectory(chartPath)) return null;
+    for (candidate in candidates)
+    {
+      if (candidate == chartPath || !sys.FileSystem.exists(candidate) || sys.FileSystem.isDirectory(candidate)) continue;
+      final parsed = CodenameEngineImporter.parseRaw(FileUtil.readStringFromPath(candidate), candidate);
+      if (parsed != null) return parsed;
+    }
+    #end
+    return null;
+  }
+
   /**
    * Builds and opens a dialog where the user can import a chart from an existing file format.
    * @param state The current chart editor state.
@@ -1186,6 +1208,8 @@ class ChartEditorDialogHandler
     }
 
     dialog.title = 'Import Chart - ${prettyFormat}';
+    var finished = false;
+    var pickingFile = false;
 
     var buttonCancel:Null<Button> = dialog.findComponent('dialogCancel', Button);
     if (buttonCancel == null) throw 'Could not locate dialogCancel button in Import Chart dialog';
@@ -1204,6 +1228,7 @@ class ChartEditorDialogHandler
     state.isHaxeUIDialogOpen = true;
     buttonCancel.onClick = function(_)
     {
+      finished = true;
       state.isHaxeUIDialogOpen = false;
       dialog.hideDialog(DialogButton.CANCEL);
     }
@@ -1226,6 +1251,7 @@ class ChartEditorDialogHandler
 
     var onFileSelected:String->String->Void = (pathStr:String, content:String) ->
     {
+      if (finished || !state.exists) return;
       var path:Path = new Path(pathStr ?? "");
       trace('Selected file: ' + path.toString());
 
@@ -1255,17 +1281,26 @@ class ChartEditorDialogHandler
 
           loadedText = 'Loaded chart file';
         case 'psych':
-          final psychData:Dynamic = PsychEngineImporter.parseRaw(content, path.toString());
-          if (!PsychEngineImporter.isChart(psychData))
+          try
           {
-            state.error('Failure', 'Failed to parse Psych Engine chart (${path.file}.${path.ext})');
+            final psychData:Dynamic = PsychEngineImporter.parseRaw(content, path.toString());
+            if (!PsychEngineImporter.isChart(psychData))
+            {
+              state.error('Failure', 'Failed to parse Psych Engine chart (${path.file}.${path.ext})');
+              return;
+            }
+
+            final psychDifficulty = PsychEngineImporter.inferDifficulty(path.file, Std.string(Reflect.field(psychData, 'song')));
+            songMetadata = PsychEngineImporter.migrateMetadata(psychData, psychDifficulty);
+            final psychEvents = readImportSidecar(path.toString(), [Path.join([path.dir ?? '', 'events.json'])]);
+            songChartData = PsychEngineImporter.migrateChartData(psychData, psychDifficulty, psychEvents);
+            loadedText = 'Converted Psych Engine chart';
+          }
+          catch (error)
+          {
+            state.error('Psych Engine Import Failed', 'Could not convert ${path.file}.${path.ext}: ${Std.string(error)}');
             return;
           }
-
-          final psychDifficulty = PsychEngineImporter.inferDifficulty(path.file, Std.string(Reflect.field(psychData, 'song')));
-          songMetadata = PsychEngineImporter.migrateMetadata(psychData, psychDifficulty);
-          songChartData = PsychEngineImporter.migrateChartData(psychData, psychDifficulty);
-          loadedText = 'Converted Psych Engine chart';
 
         case 'codename':
           try
@@ -1277,15 +1312,8 @@ class ChartEditorDialogHandler
               return;
             }
 
-            var codenameMetadata:Dynamic = null;
-            var codenameEvents:Dynamic = null;
-            #if sys
-            final songFolder = haxe.io.Path.normalize(haxe.io.Path.join([path.dir ?? '', '..']));
-            final metadataPath = haxe.io.Path.join([songFolder, 'meta.json']);
-            final eventsPath = haxe.io.Path.join([songFolder, 'events.json']);
-            if (sys.FileSystem.exists(metadataPath)) codenameMetadata = CodenameEngineImporter.parseRaw(FileUtil.readStringFromPath(metadataPath), metadataPath);
-            if (sys.FileSystem.exists(eventsPath)) codenameEvents = CodenameEngineImporter.parseRaw(FileUtil.readStringFromPath(eventsPath), eventsPath);
-            #end
+            final codenameMetadata = readImportSidecar(path.toString(), CodenameEngineImporter.sidecarPaths(path.toString(), 'meta'));
+            final codenameEvents = readImportSidecar(path.toString(), CodenameEngineImporter.sidecarPaths(path.toString(), 'events'));
 
             final codenameDifficulty = CodenameEngineImporter.inferDifficulty(path.file);
             songMetadata = CodenameEngineImporter.migrateMetadata(codenameData, codenameDifficulty, codenameMetadata, codenameEvents);
@@ -1354,27 +1382,50 @@ class ChartEditorDialogHandler
         return;
       }
 
+      state.wipeInstrumentalData();
+      state.wipeVocalData();
+      finished = true;
       dialog.hideDialog(DialogButton.APPLY);
       state.success('Success', '$loadedText (${path.file}.${path.ext})');
     };
 
+    var reportImportError = function(message:String):Void
+    {
+      pickingFile = false;
+      if (!state.exists) return;
+      trace('[ChartEditor] Chart import failed: ${message}');
+      state.error('Chart Import Failed', message);
+    };
+
     importBox.onClick = function(_)
     {
-      // TODO / BUG: File filtering not working on mac finder dialog, so we don't use it for now
-      FileUtil.browseForFile('Import Chart - ${prettyFormat}', fileFilter ?? [], function(selectedFile:SelectedFileData)
+      if (finished || pickingFile || !state.exists) return;
+      pickingFile = true;
+      try
       {
-        if (selectedFile != null && selectedFile.bytes != null)
+        FileUtil.browseForFile('Import Chart - ${prettyFormat}', fileFilter ?? [], function(selectedFile:SelectedFileData)
         {
-          @:nullSafety(Off)
-          onFileSelected(selectedFile.fullPath, selectedFile.bytes.toString());
-        }
-      });
+          pickingFile = false;
+          if (selectedFile == null || selectedFile.bytes == null || finished || !state.exists) return;
+          try
+          {
+            onFileSelected(selectedFile.fullPath, selectedFile.bytes.toString());
+          }
+          catch (error:haxe.Exception) { reportImportError(error.details()); }
+        }, function() { pickingFile = false; }, null, reportImportError);
+      }
+      catch (error:haxe.Exception) { reportImportError(error.details()); }
     }
 
     onDropFile = function(pathStr:String)
     {
-      var selectedFileText:String = FileUtil.readStringFromPath(pathStr);
-      onFileSelected(pathStr, selectedFileText);
+      if (finished || pickingFile || !state.exists) return;
+      try
+      {
+        var selectedFileText:String = FileUtil.readStringFromPath(pathStr);
+        onFileSelected(pathStr, selectedFileText);
+      }
+      catch (error:haxe.Exception) { reportImportError(error.details()); }
     };
 
     state.addDropHandler({component: importBox, handler: onDropFile});

@@ -21,7 +21,7 @@ class Constants
    */
   public static final TITLE:String = 'LuaSlice';
 
-  public static final LUASLICE_VERSION:String = 'v0.0.9';
+  public static final LUASLICE_VERSION:String = 'v0.1.0';
 
   /**
    * The current version number of the game.

@@ -22,7 +22,8 @@ class PsychEngineImporter
       var cleanInput = input.trim();
       if (cleanInput.length > 0 && cleanInput.charCodeAt(0) == 0xFEFF) cleanInput = cleanInput.substr(1);
       var parsed:Dynamic = Json.parse(cleanInput);
-      return Reflect.field(parsed, 'song') ?? parsed;
+      final wrappedSong = field(parsed, 'song');
+      return Type.typeof(wrappedSong) == TObject ? wrappedSong : parsed;
     }
     catch (error)
     {
@@ -105,7 +106,7 @@ class PsychEngineImporter
         noteData %= STRUMLINE_SIZE * 2;
         if (!psychV1 && !mustHit) noteData = noteData >= STRUMLINE_SIZE ? noteData - STRUMLINE_SIZE : noteData + STRUMLINE_SIZE;
 
-        var length = note.length > 2 ? floatValue(note[2], 0) : 0;
+        var length = note.length > 2 ? Math.max(0, floatValue(note[2], 0)) : 0;
         var kind = note.length > 3 ? psychNoteKind(note[3]) : '';
         notes.push(new SongNoteData(time, noteData, length, kind));
       }
@@ -119,7 +120,8 @@ class PsychEngineImporter
     if (externalEvents != null) importEventArray(field(externalEvents, 'events') ?? field(field(externalEvents, 'song'), 'events'), events, baseBpm);
     deduplicateEvents(events);
 
-    var speed = floatValue(field(song, 'speed'), 1);
+    notes.sort((a, b) -> a.time < b.time ? -1 : (a.time > b.time ? 1 : 0));
+    var speed = Math.max(0.01, floatValue(field(song, 'speed'), 1));
     return new SongChartData([difficulty => speed], events, [difficulty => notes]);
   }
 
@@ -290,9 +292,16 @@ class PsychEngineImporter
   {
     if (value == null || value == false || value == '') return '';
     if (value == true) return 'alt';
+    if (Std.isOfType(value, Int) || Std.isOfType(value, Float))
+    {
+      final legacyTypes = ['', 'Alt Animation', 'Hey!', 'Hurt Note', 'GF Sing', 'No Animation'];
+      final index = intValue(value, -1);
+      value = index >= 0 && index < legacyTypes.length ? legacyTypes[index] : '';
+    }
     final kind = stringValue(value, '').trim();
     return switch (kind.toLowerCase())
     {
+      case 'alt animation': 'alt';
       case 'hurt note': 'hurt';
       case 'death note': 'death';
       case 'play animation note': 'play_animation';
@@ -373,7 +382,7 @@ class PsychEngineImporter
   static function floatValue(value:Dynamic, fallback:Float):Float
   {
     var result = Std.parseFloat(Std.string(value));
-    return Math.isNaN(result) ? fallback : result;
+    return Math.isFinite(result) ? result : fallback;
   }
 
   static function intValue(value:Dynamic, fallback:Int):Int

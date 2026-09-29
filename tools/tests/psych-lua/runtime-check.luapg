@@ -1,0 +1,104 @@
+local elapsedTotal = 0
+local phase = 0
+local substateElapsed = 0
+local substateClosed = false
+privateValue = 'root'
+
+function onCreate()
+    setPropertyFromClass('funkin.Preferences', 'autoPause', false)
+    setPropertyFromClass('flixel.FlxG', 'autoPause', false)
+    setProperty('isPracticeMode', true)
+    setVar('rootLoaded', true)
+    setVar('launchCount', (getVar('launchCount') or 0) + 1)
+    assert(unpack({42}) == 42)
+    assert(math.atan2(0, 1) == 0)
+    if luaSliceVersion ~= nil then
+        assert(type(jit) == 'table' and string.find(jit.version, 'LuaJIT'))
+        assert(table.pack(1, nil, 3).n == 3)
+        debugPrint('LUASLICE_PSYCH_LUAJIT_OK')
+    end
+end
+
+function onCreatePost()
+    if songPath ~= 'tutorial' then
+        assert(getVar('songLoaded') == nil)
+        assert(getVar('folderLoaded') == true)
+        debugPrint('PSYCH_TARGET_UNLOADED_OK')
+        return
+    end
+    assert(privateValue == 'root')
+    assert(getVar('folderLoaded') == true)
+    assert(getVar('songLoaded') == true)
+    assert(getVar('unrelatedLoaded') == nil)
+    local originalPlayer = getProperty('boyfriend.curCharacter')
+    assert(addCharacterToList('senpai', 'bf'))
+    assert(triggerEvent('Change Character', 'bf', 'senpai'))
+    assert(getProperty('boyfriend.curCharacter') == 'senpai')
+    local originalColor = getProperty('boyfriend.healthColorArray')
+    setProperty('boyfriend.healthColorArray', {255, 32, 64})
+    assert(getProperty('boyfriend.healthColorArray')[2] == 32)
+    setProperty('boyfriend.healthColorArray', originalColor)
+    makeAnimatedLuaSprite('characterGhostTest', getProperty('boyfriend.imageFile'), 0, 0)
+    addAnimationByPrefix('characterGhostTest', 'snapshot', getProperty('boyfriend.animation.curAnim.name'), 0, false)
+    assert(playAnim('characterGhostTest', 'snapshot', true))
+    removeLuaSprite('characterGhostTest', true)
+    assert(triggerEvent('Change Character', 'bf', originalPlayer))
+    setProperty('isCameraOnForcedPos', true)
+    assert(getProperty('isCameraOnForcedPos') == true)
+    assert(triggerVSliceEvent('FocusCamera', {char = 0}) == false)
+    setProperty('isCameraOnForcedPos', false)
+    debugPrint('PSYCH_CHARACTER_COMPAT_OK')
+    for _, path in ipairs(getRunningScripts()) do
+        assert(isRunning(path))
+    end
+    local ok, message = pcall(function() runTimer('badTimer', -1) end)
+    assert(not ok and string.find(message, 'positive'))
+    setVar('tableValue', {42, true, 'text'})
+    local value = getVar('tableValue')
+    assert(value[1] == 42 and value[2] == true and value[3] == 'text')
+    debugPrint('PSYCH_ROUTING_AND_BRIDGE_OK')
+end
+
+function onUpdate(elapsed)
+    if songPath ~= 'tutorial' then return end
+    elapsedTotal = elapsedTotal + elapsed
+    if phase == 0 and elapsedTotal > 2 then
+        local status = getTextString('luaTestStatus')
+        assert(string.find(status, 'Timer: true'))
+        assert(string.find(status, 'Tween: true'))
+        phase = 1
+        if getVar('launchCount') == 1 then
+            debugPrint('PSYCH_REQUEST_RELOAD')
+            reloadLuaScripts()
+        else
+            assert(getVar('launchCount') == 2)
+            assert(openCustomSubstate('runtime-check', true))
+        end
+    elseif phase == 1 and substateClosed then
+        phase = 2
+        debugPrint('PSYCH_RUNTIME_CHECK_PASS')
+        saveFile('runtime-pass.txt', 'PASS')
+        endSong()
+        addHaxeLibrary('MainMenuState', 'funkin.ui.mainmenu')
+        runHaxeCode('new FlxTimer().start(3, function(timer) { FlxG.switchState(new MainMenuState()); });')
+    end
+end
+
+function onCustomSubstateCreate(name)
+    if name ~= 'runtime-check' then return end
+    makeLuaText('substateText', 'Runtime check', 300, 10, 150)
+    addLuaText('substateText')
+    assert(addToCustomSubstate('substateText'))
+end
+
+function onCustomSubstateUpdate(name, elapsed)
+    substateElapsed = substateElapsed + elapsed
+    if substateElapsed > 0.5 then
+        substateClosed = true
+        closeCustomSubstate()
+    end
+end
+
+function onDestroy()
+    debugPrint('PSYCH_RUNTIME_DESTROY_OK')
+end

@@ -128,14 +128,15 @@ class ChartEditorAudioHandler
   {
     var result:Bool = playInstrumental(state, instId);
     if (!result) return false;
+    refreshVocals(state, instId, playerId, opponentId);
+    return true;
+  }
 
+  public static function refreshVocals(state:ChartEditorState, instId:String, playerId:String, opponentId:String):Void
+  {
     stopExistingVocals(state);
-
-    result = playVocals(state, BF, playerId, instId);
-
-    // if (!result) return false;
-    result = playVocals(state, DAD, opponentId, instId);
-    // if (!result) return false;
+    playVocals(state, BF, playerId, instId);
+    playVocals(state, DAD, opponentId, instId);
 
     state.postLoadVocals();
 
@@ -145,7 +146,6 @@ class ChartEditorAudioHandler
 
     state.loadSubtitles();
 
-    return true;
   }
 
   /**
@@ -160,9 +160,19 @@ class ChartEditorAudioHandler
 
     instTrack.important = true;
 
-    stopExistingInstrumental(state);
+    final previousTrack = state.audioInstTrack;
     state.audioInstTrack = instTrack;
-    state.postLoadInstrumental();
+    try
+    {
+      state.postLoadInstrumental();
+    }
+    catch (error:Dynamic)
+    {
+      state.audioInstTrack = previousTrack;
+      instTrack.destroy();
+      throw error;
+    }
+    if (previousTrack != null && previousTrack != instTrack) previousTrack.destroy();
     // Workaround for a bug where FlxG.sound.music.update() was being called twice.
     FlxG.sound.list.remove(instTrack);
     return true;
@@ -199,7 +209,7 @@ class ChartEditorAudioHandler
       case BF:
         state.audioVocalTrackGroup.addPlayerVoice(vocalTrack);
 
-        var waveformData:Null<WaveformData> = vocalTrack.waveformData;
+        var waveformData:Null<WaveformData> = readImportedWaveform(vocalTrack);
 
         if (waveformData != null)
         {
@@ -216,7 +226,7 @@ class ChartEditorAudioHandler
       case DAD:
         state.audioVocalTrackGroup.addOpponentVoice(vocalTrack);
 
-        var waveformData:Null<WaveformData> = vocalTrack.waveformData;
+        var waveformData:Null<WaveformData> = readImportedWaveform(vocalTrack);
 
         if (waveformData != null)
         {
@@ -242,6 +252,16 @@ class ChartEditorAudioHandler
     return false;
   }
 
+  static function readImportedWaveform(sound:FunkinSound):Null<WaveformData>
+  {
+    try { return sound.waveformData; }
+    catch (error:Dynamic)
+    {
+      trace('[ChartEditor] Audio loaded without a waveform: ${error}');
+      return null;
+    }
+  }
+
   // initializes a waveform sprite with buncho non-charType specific things
 
   static function initWaveformSprite(waveformData:WaveformData, state:ChartEditorState, charType:CharacterType):WaveformSprite
@@ -260,9 +280,13 @@ class ChartEditorAudioHandler
 
   public static function stopExistingVocals(state:ChartEditorState):Void
   {
+    for (voice in state.audioVocalTrackGroup.members)
+      if (voice != null) voice.destroy();
     state.audioVocalTrackGroup.clear();
     if (state.audioWaveforms != null)
     {
+      for (waveform in state.audioWaveforms.members)
+        if (waveform != null) waveform.destroy();
       state.audioWaveforms.clear();
     }
   }

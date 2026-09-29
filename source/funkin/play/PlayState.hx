@@ -224,6 +224,9 @@ class PlayState extends MusicBeatSubState
   public var currentStage:Null<Stage> = null;
   var activeStageId:Null<String> = null;
   public var songEventRuntime:Null<LuaSliceSongEventRuntime> = null;
+  #if FEATURE_PSYCH_LUA
+  public var psychLua:Null<funkin.modding.psychlua.PsychLuaHost>;
+  #end
 
   #if FEATURE_LUA_SCRIPTS
   var luaScriptManager:Null<LuaScriptManager> = null;
@@ -1004,6 +1007,10 @@ class PlayState extends MusicBeatSubState
 
     songEventRuntime = new LuaSliceSongEventRuntime();
     songEventRuntime.preloadChartEvents(songEvents);
+    #if FEATURE_PSYCH_LUA
+    psychLua = new funkin.modding.psychlua.PsychLuaHost(this);
+    psychLua.start();
+    #end
 
     #if FEATURE_LUA_SCRIPTS
     initLuaScripts();
@@ -1111,6 +1118,9 @@ class PlayState extends MusicBeatSubState
     }
 
     updateCameraFollowCharacter();
+    #if FEATURE_PSYCH_LUA
+    psychLua?.update(elapsed);
+    #end
 
     #if FEATURE_LUA_SCRIPTS
     luaScriptManager?.callHook('onUpdate', [elapsed]);
@@ -1230,7 +1240,7 @@ class PlayState extends MusicBeatSubState
     }
 
     // Update the conductor.
-    if (startingSong)
+    if (startingSong && !isSongEnd)
     {
       if (isInCountdown)
       {
@@ -1243,7 +1253,7 @@ class PlayState extends MusicBeatSubState
         }
       }
     }
-    else
+    else if (!isSongEnd)
     {
       if (Constants.EXT_SOUND == 'mp3')
       {
@@ -1260,7 +1270,7 @@ class PlayState extends MusicBeatSubState
       // The previous method where it "guessed" the song position based on the elapsed time had some flaws
       // Sometimes the songPosition would exceed the music length causing issues in other places
       // And it was frame dependent which we don't like!!
-      if (FlxG.sound.music.playing)
+      if (FlxG.sound.music != null && FlxG.sound.music.playing)
       {
         final audioDiff:Float = Math.round(Math.abs(FlxG.sound.music.time - (Conductor.instance.songPosition - Conductor.instance.combinedOffset)));
         if (audioDiff <= CONDUCTOR_DRIFT_THRESHOLD)
@@ -1428,6 +1438,9 @@ class PlayState extends MusicBeatSubState
     #end
 
     justUnpaused = false;
+    #if FEATURE_PSYCH_LUA
+    psychLua?.postUpdate(elapsed);
+    #end
     #if !mobile
     if (Preferences.autoPause) FlxG.autoPause = !mayPauseGame;
     #end
@@ -1611,6 +1624,9 @@ class PlayState extends MusicBeatSubState
 
   override public function dispatchEvent(event:ScriptEvent):Void
   {
+    #if FEATURE_PSYCH_LUA
+    if (psychLua != null && !psychLua.noteOptions.beforeEvent(event)) return;
+    #end
     // ORDER: Module, Song, Events, Notes, Stage, Conversation, Characters
     // Modules should get the first chance to cancel the event.
 
@@ -1633,6 +1649,9 @@ class PlayState extends MusicBeatSubState
 
     // Dispatch event to character script(s).
     if (currentStage != null) currentStage.dispatchToCharacters(event);
+    #if FEATURE_PSYCH_LUA
+    if (event.shouldPropagate) psychLua?.event(event);
+    #end
   }
 
   /**
@@ -2123,7 +2142,10 @@ class PlayState extends MusicBeatSubState
     initLuaScripts();
     luaScriptManager?.callHook('onCreate', []);
     luaScriptManager?.callHook('onReload', []);
-    final loaded:Bool = luaScriptManager != null;
+    var loaded:Bool = luaScriptManager != null;
+    #if FEATURE_PSYCH_LUA
+    if (psychLua != null) loaded = psychLua.reload() || loaded;
+    #end
     #if debug
     trace('Lua scripts reloaded in ${Math.round((haxe.Timer.stamp() - reloadStartedAt) * 1000)} ms');
     #end
@@ -3097,6 +3119,9 @@ class PlayState extends MusicBeatSubState
       var r = GRhythmUtil.processWindow(note, false);
       if (r.botplayHit)
       {
+        #if FEATURE_PSYCH_LUA
+        if (psychLua != null && psychLua.noteOptions.interceptHit(note)) continue;
+        #end
         var event:NoteScriptEvent = new HitNoteScriptEvent(note, 0.0, 0, 'perfect', false, 0);
         dispatchEvent(event);
 
@@ -3397,6 +3422,9 @@ class PlayState extends MusicBeatSubState
 
   function goodNoteHit(note:NoteSprite, input:PreciseInputEvent):Void
   {
+    #if FEATURE_PSYCH_LUA
+    if (psychLua != null && psychLua.noteOptions.interceptHit(note)) return;
+    #end
     // Calculate the input latency (do this as late as possible).
     // trace('Compare: ${PreciseInputManager.getCurrentTimestamp()} - ${input.timestamp}');
     var inputLatencyNs:Int64 = PreciseInputManager.getCurrentTimestamp() - input.timestamp;
@@ -3437,7 +3465,13 @@ class PlayState extends MusicBeatSubState
     if (event.eventCanceled) return;
     // Display the hit on the strums
     playerStrumline.hitNote(note, !event.isComboBreak);
-    if (event.doesNotesplash && !Preferences.isLowQualityMinimal()) playerStrumline.playNoteSplash(note.noteData.getDirection());
+    if (event.doesNotesplash && !Preferences.isLowQualityMinimal())
+    {
+      #if FEATURE_PSYCH_LUA
+      if (psychLua == null || !psychLua.noteOptions.playSplash(note))
+      #end
+        playerStrumline.playNoteSplash(note.noteData.getDirection());
+    }
     if (note.isHoldNote && note.holdNoteSprite != null) playerStrumline.playNoteHoldCover(note.holdNoteSprite);
     if (vocals != null)
     {
@@ -3729,6 +3763,10 @@ class PlayState extends MusicBeatSubState
      */
   public function endSong(rightGoddamnNow:Bool = false):Void
   {
+    var event = new ScriptEvent(SONG_END, true);
+    dispatchEvent(event);
+    if (event.eventCanceled) return;
+    Countdown.stopCountdown();
     if (FlxG.sound.music != null) FlxG.sound.music.volume = 0;
     if (vocals != null) vocals.volume = 0;
     mayPauseGame = false;
@@ -3743,11 +3781,6 @@ class PlayState extends MusicBeatSubState
     pauseButton.visible = false;
     pauseCircle.visible = false;
     #end
-
-    // Check if any events want to prevent the song from ending.
-    var event = new ScriptEvent(SONG_END, true);
-    dispatchEvent(event);
-    if (event.eventCanceled) return;
 
     deathCounter = 0;
 
@@ -4021,6 +4054,10 @@ class PlayState extends MusicBeatSubState
 
     // Dispatch the destroy event.
     dispatchEvent(new ScriptEvent(DESTROY, false));
+    #if FEATURE_PSYCH_LUA
+    psychLua?.destroy();
+    psychLua = null;
+    #end
 
     #if FEATURE_LUA_SCRIPTS
     luaScriptManager?.callHook('onDestroy', []);

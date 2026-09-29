@@ -1,4 +1,4 @@
-# Compiling Friday Night Funkin' for Mobile Devices
+# Compiling Friday Night Funkin' for Mobile Devices (From Funkin' Crew)
 
 Before starting, **make sure your game builds on desktop.**
 Check [COMPILING.md](./COMPILING.md) if you haven’t done that yet.

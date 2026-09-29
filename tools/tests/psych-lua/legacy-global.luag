@@ -1,0 +1,5 @@
+legacyShared = 42
+function onCreate()
+    assert(legacyPrivate == nil)
+    print('LUASLICE_GLOBAL_ISOLATION_OK')
+end

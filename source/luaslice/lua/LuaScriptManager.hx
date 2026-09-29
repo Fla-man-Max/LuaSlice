@@ -31,9 +31,10 @@ import funkin.ui.options.OptionsState;
 import funkin.util.MemoryUtil;
 import funkin.util.WindowUtil;
 import haxe.Json;
-import hxlua.Lua;
-import hxlua.LuaL;
-import hxlua.Types.Lua_State;
+import hxluajit.Lua;
+import hxluajit.LuaL;
+import hxluajit.Types.Lua_State;
+import luaslice.script.ScriptProfiler;
 import sys.FileSystem;
 import sys.io.File;
 #end
@@ -49,7 +50,7 @@ class LuaScriptManager
   var globalScriptHookRefs:Map<String, Map<String, Int>> = [];
   var isolatedScriptHookRefs:Map<String, Map<String, Int>> = [];
   var hookPresence:Map<String, Bool> = [];
-  var pathPartsCache:Map<String, Array<String>> = [];
+  var properties:luaslice.script.ScriptPropertyService;
   var sprites:Map<String, FunkinSprite> = [];
   var texts:Map<String, FlxText> = [];
   var objects:Map<String, Dynamic> = [];
@@ -71,8 +72,10 @@ class LuaScriptManager
 
   public function new()
   {
+    properties = new luaslice.script.ScriptPropertyService(resolveRoot,
+      message -> reportLuaWarning('api-error', 'lua-api', 'property', message));
     state = LuaL.newstate();
-    LuaL.openlibs(state);
+    LuaRuntime.openLibraries(state);
     activeManager = this;
     optionManager = new LuaOptionManager(this);
     menuManager = new LuaMenuManager(this);
@@ -114,7 +117,7 @@ class LuaScriptManager
       if (!isGlobalScript)
       {
         Lua.rawgeti(state, Lua.REGISTRYINDEX, envRef);
-        Lua.setupvalue(state, -2, 1);
+        Lua.setfenv(state, -2);
       }
 
       if (Lua.pcall(state, 0, 0, 0) != Lua.OK)
@@ -177,7 +180,7 @@ class LuaScriptManager
 
     Lua.close(state);
     state = LuaL.newstate();
-    LuaL.openlibs(state);
+    LuaRuntime.openLibraries(state);
     activeManager = this;
     configurePackagePath();
     registerAPI();
@@ -188,7 +191,7 @@ class LuaScriptManager
     globalScriptHookRefs.clear();
     isolatedScriptHookRefs.clear();
     hookPresence.clear();
-    pathPartsCache.clear();
+    properties.clear();
     scriptPriorities.clear();
     scriptPriorityDirty = false;
     var loadedAny = false;
@@ -227,7 +230,18 @@ class LuaScriptManager
     }
 
     activeManager = this;
-    if (name == 'onUpdate') menuManager.update(args.length > 0 ? Std.parseFloat(Std.string(args[0])) : 0);
+    if (name == 'onUpdate')
+    {
+      final elapsed = args.length > 0 ? Std.parseFloat(Std.string(args[0])) : 0;
+      menuManager.update(elapsed);
+      Lua.getglobal(state, '__luaTaskUpdate');
+      if (Lua.type(state, -1) == Lua.TFUNCTION)
+      {
+        Lua.pushnumber(state, elapsed);
+        if (Lua.pcall(state, 1, 0, 0) != Lua.OK) trace('[LuaScriptManager] Task scheduler: ${readError()}');
+      }
+      else Lua.pop(state, 1);
+    }
     if (!hasHook(name)) return;
 
     updateGlobals();
@@ -342,7 +356,7 @@ class LuaScriptManager
 
     var previousLuaFiles = currentLuaFiles;
     currentLuaFiles = ['global'];
-    var callResult = Lua.pcall(state, args.length, 0, 0);
+    var callResult = invokeProfiledHook('global', name, args.length);
     currentLuaFiles = previousLuaFiles;
 
     if (callResult != Lua.OK)
@@ -380,7 +394,7 @@ class LuaScriptManager
 
     var previousLuaFiles = currentLuaFiles;
     currentLuaFiles = [scriptPath];
-    var callResult = Lua.pcall(state, args.length, 0, 0);
+    var callResult = invokeProfiledHook(scriptPath, name, args.length);
     currentLuaFiles = previousLuaFiles;
 
     if (callResult != Lua.OK)
@@ -418,7 +432,7 @@ class LuaScriptManager
 
     var previousLuaFiles = currentLuaFiles;
     currentLuaFiles = [scriptPath];
-    var callResult = Lua.pcall(state, args.length, 0, 0);
+    var callResult = invokeProfiledHook(scriptPath, name, args.length);
     currentLuaFiles = previousLuaFiles;
 
     if (callResult != Lua.OK)
@@ -428,6 +442,15 @@ class LuaScriptManager
       disabledHooks.set(hookKey, true);
       LuaErrorManager.report('hook-error', scriptPath, name, error, [scriptPath]);
     }
+  }
+
+  function invokeProfiledHook(path:String, name:String, count:Int):Int
+  {
+    if (!ScriptProfiler.enabled) return Lua.pcall(state, count, 0, 0);
+    final started = haxe.Timer.stamp();
+    final result = Lua.pcall(state, count, 0, 0);
+    ScriptProfiler.record(path, name, started, result != Lua.OK);
+    return result;
   }
 
   public function callEvent(event:ScriptEvent):Void
@@ -537,7 +560,7 @@ class LuaScriptManager
     globalScriptHookRefs.clear();
     isolatedScriptHookRefs.clear();
     hookPresence.clear();
-    pathPartsCache.clear();
+    properties.clear();
     if (activeManager == this) activeManager = null;
   }
 
@@ -838,7 +861,7 @@ class LuaScriptManager
   {
     Lua.newtable(state);
     Lua.newtable(state);
-    Lua.pushglobaltable(state);
+    Lua.pushvalue(state, Lua.GLOBALSINDEX);
     Lua.setfield(state, -2, '__index');
     Lua.setmetatable(state, -2);
     return LuaL.ref(state, Lua.REGISTRYINDEX);
@@ -1154,6 +1177,8 @@ class LuaScriptManager
     Lua.register(state, 'getProperty', cpp.Callable.fromStaticFunction(lua_getProperty));
     Lua.register(state, 'setProperty', cpp.Callable.fromStaticFunction(lua_setProperty));
     Lua.register(state, 'setProperties', cpp.Callable.fromStaticFunction(lua_setProperties));
+    Lua.register(state, 'getProperties', cpp.Callable.fromStaticFunction(lua_getProperties));
+    Lua.register(state, 'scriptProfiler', cpp.Callable.fromStaticFunction(lua_scriptProfiler));
     Lua.register(state, 'getPropertyRef', cpp.Callable.fromStaticFunction(lua_getPropertyRef));
     Lua.register(state, 'setPropertyRef', cpp.Callable.fromStaticFunction(lua_setPropertyRef));
     Lua.register(state, 'objectExists', cpp.Callable.fromStaticFunction(lua_objectExists));
@@ -1343,6 +1368,7 @@ class LuaScriptManager
     Lua.register(state, 'pauseSound', cpp.Callable.fromStaticFunction(lua_pauseSound));
     Lua.register(state, 'resumeSound', cpp.Callable.fromStaticFunction(lua_resumeSound));
     Lua.register(state, 'setSoundVolume', cpp.Callable.fromStaticFunction(lua_setSoundVolume));
+    Lua.register(state, 'setSoundPitch', cpp.Callable.fromStaticFunction(lua_setSoundPitch));
     Lua.register(state, 'soundExists', cpp.Callable.fromStaticFunction(lua_soundExists));
     Lua.register(state, 'playMusic', cpp.Callable.fromStaticFunction(lua_playMusic));
     Lua.register(state, 'stopMusic', cpp.Callable.fromStaticFunction(lua_stopMusic));
@@ -1380,6 +1406,8 @@ class LuaScriptManager
 
   function installSimpleAPI():Void
   {
+    if (LuaL.dostring(state, LuaTaskPrelude.source()) != Lua.OK)
+      trace('[LuaScriptManager] Task helpers failed: ${readError()}');
     if (LuaL.dostring(state, LuaApiPrelude.source()) != Lua.OK)
     {
       final error = readError();
@@ -1406,52 +1434,53 @@ class LuaScriptManager
     Lua.register(state, 'cancelTimer', cpp.Callable.fromStaticFunction(lua_cancelTimer));
   }
 
-  function pushValue(value:Dynamic):Void
+  function pushValue(value:Dynamic, ?output:cpp.RawPointer<Lua_State>):Void
   {
+    if (output == null) output = state;
     if (value == null)
     {
-      Lua.pushnil(state);
+      Lua.pushnil(output);
     }
     else if (Std.isOfType(value, Bool))
     {
-      Lua.pushboolean(state, value ? 1 : 0);
+      Lua.pushboolean(output, value ? 1 : 0);
     }
     else if (Std.isOfType(value, Int))
     {
-      Lua.pushinteger(state, cast(value, Int));
+      Lua.pushinteger(output, cast(value, Int));
     }
     else if (Std.isOfType(value, Float))
     {
-      Lua.pushnumber(state, cast(value, Float));
+      Lua.pushnumber(output, cast(value, Float));
     }
     else if (Std.isOfType(value, Array))
     {
-      pushArray(cast value);
+      pushArray(cast value, output);
     }
     else if (Reflect.isObject(value) && !Std.isOfType(value, String))
     {
-      pushTable(value);
+      pushTable(value, output);
     }
     else
     {
-      Lua.pushstring(state, Std.string(value));
+      Lua.pushstring(output, Std.string(value));
     }
   }
 
-  function pushArray(values:Array<Dynamic>):Void
+  function pushArray(values:Array<Dynamic>, output:cpp.RawPointer<Lua_State>):Void
   {
-    Lua.createtable(state, values.length, 0);
+    Lua.createtable(output, values.length, 0);
 
     for (i in 0...values.length)
     {
-      pushValue(values[i]);
-      Lua.rawseti(state, -2, i + 1);
+      pushValue(values[i], output);
+      Lua.rawseti(output, -2, i + 1);
     }
   }
 
-  function pushTable(value:Dynamic):Void
+  function pushTable(value:Dynamic, output:cpp.RawPointer<Lua_State>):Void
   {
-    Lua.createtable(state, 0, 0);
+    Lua.createtable(output, 0, 0);
 
     var fields:Array<String> = [];
     try
@@ -1465,14 +1494,14 @@ class LuaScriptManager
 
     for (field in fields)
     {
-      pushValue(safeField(value, field));
-      Lua.setfield(state, -2, field);
+      pushValue(safeField(value, field), output);
+      Lua.setfield(output, -2, field);
     }
   }
 
-  function pushReturn(value:Dynamic):Int
+  function pushReturn(output:cpp.RawPointer<Lua_State>, value:Dynamic):Int
   {
-    pushValue(value);
+    pushValue(value, output);
     return 1;
   }
 
@@ -1536,6 +1565,7 @@ class LuaScriptManager
   }
   static function current():Null<LuaScriptManager>
   {
+    ScriptProfiler.bridge();
     return activeManager;
   }
 
@@ -1572,31 +1602,31 @@ class LuaScriptManager
     if (manager == null) return 0;
 
     var playState = PlayState.instance;
-    if (playState == null) return manager.pushReturn(false);
+    if (playState == null) return manager.pushReturn(L, false);
 
     playState.requestLuaReload();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_noopTrue(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(true) ?? 0;
+    return current()?.pushReturn(L, true) ?? 0;
   }
 
   static function lua_getCurrentEvent(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    if (manager.currentEvent == null) return manager.pushReturn(null);
-    return manager.pushReturn(manager.eventToPayload(manager.currentEvent));
+    if (manager.currentEvent == null) return manager.pushReturn(L, null);
+    return manager.pushReturn(L, manager.eventToPayload(manager.currentEvent));
   }
 
   static function lua_getEventField(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    if (manager.currentEvent == null) return manager.pushReturn(null);
-    return manager.pushReturn(manager.resolveEventPath(readString(L, 1, '')).value);
+    if (manager.currentEvent == null) return manager.pushReturn(L, null);
+    return manager.pushReturn(L, manager.resolveEventPath(readString(L, 1, '')).value);
   }
 
   static function lua_setEventField(L:cpp.RawPointer<Lua_State>):Int
@@ -1605,9 +1635,9 @@ class LuaScriptManager
     if (manager == null || manager.currentEvent == null) return 0;
 
     var resolved = manager.resolveEventParent(readString(L, 1, ''));
-    if (resolved.target == null || resolved.field == '') return manager.pushReturn(false);
+    if (resolved.target == null || resolved.field == '') return manager.pushReturn(L, false);
 
-    return manager.pushReturn(manager.safeSetProperty(resolved.target, resolved.field, manager.readValue(L, 2), false));
+    return manager.pushReturn(L, manager.safeSetProperty(resolved.target, resolved.field, manager.readValue(L, 2), false));
   }
 
   static function lua_cancelEvent(L:cpp.RawPointer<Lua_State>):Int
@@ -1616,7 +1646,7 @@ class LuaScriptManager
     if (manager == null || manager.currentEvent == null) return 0;
 
     manager.currentEvent.cancelEvent();
-    return manager.pushReturn(manager.currentEvent.eventCanceled);
+    return manager.pushReturn(L, manager.currentEvent.eventCanceled);
   }
 
   static function lua_stopEventPropagation(L:cpp.RawPointer<Lua_State>):Int
@@ -1625,14 +1655,14 @@ class LuaScriptManager
     if (manager == null || manager.currentEvent == null) return 0;
 
     manager.currentEvent.stopPropagation();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_getProperty(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.resolvePath(readString(L, 1, '')).value);
+    return manager.pushReturn(L, manager.resolvePath(readString(L, 1, '')).value);
   }
 
   static function lua_setProperty(L:cpp.RawPointer<Lua_State>):Int
@@ -1647,10 +1677,25 @@ class LuaScriptManager
     if (resolved.target == null || resolved.field == '')
     {
       manager.reportLuaWarning('api-error', 'lua-api', 'setProperty', 'setProperty failed. Invalid path: ${path}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
 
-    return manager.pushReturn(manager.safeSetProperty(resolved.target, resolved.field, value));
+    return manager.pushReturn(L, manager.safeSetProperty(resolved.target, resolved.field, value));
+  }
+
+  static function lua_setSoundPitch(L:cpp.RawPointer<Lua_State>):Int
+  {
+    final manager = current();
+    if (manager == null) return 0;
+    final sound = manager.sounds.get(readString(L, 1, ''));
+    final pitch = readFloat(L, 2, 1);
+    if (sound == null || !Math.isFinite(pitch) || pitch <= 0) return manager.pushReturn(L, false);
+    #if FLX_PITCH
+    sound.pitch = pitch;
+    return manager.pushReturn(L, true);
+    #else
+    return manager.pushReturn(L, false);
+    #end
   }
 
   static function lua_setProperties(L:cpp.RawPointer<Lua_State>):Int
@@ -1658,24 +1703,37 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
 
-    var targetPath = readString(L, 1, '');
-    var values = manager.readValue(L, 2);
-    var target = manager.resolvePath(targetPath).value;
-    if (target == null || values == null) return manager.pushReturn(false);
+    return manager.pushReturn(L, manager.properties.setMany(manager.readValue(L, 1), manager.readValue(L, 2)));
+  }
 
-    var ok = true;
-    for (field in Reflect.fields(values))
+  static function lua_scriptProfiler(L:cpp.RawPointer<Lua_State>):Int
+  {
+    final manager = current();
+    if (manager == null) return 0;
+    switch (readString(L, 1, 'snapshot'))
     {
-      ok = manager.safeSetProperty(target, field, Reflect.field(values, field)) && ok;
+      case 'start': ScriptProfiler.start();
+      case 'stop': ScriptProfiler.stop();
+      case 'reset': ScriptProfiler.reset();
+      default:
     }
-    return manager.pushReturn(ok);
+    return manager.pushReturn(L, ScriptProfiler.snapshot());
+  }
+
+  static function lua_getProperties(L:cpp.RawPointer<Lua_State>):Int
+  {
+    final manager = current();
+    if (manager == null) return 0;
+    final paths = manager.readValue(L, 1);
+    if (!Std.isOfType(paths, Array)) return manager.pushReturn(L, {});
+    return manager.pushReturn(L, manager.properties.getMany(cast paths));
   }
 
   static function lua_getPropertyRef(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.resolvePath(readString(L, 1, '')).value);
+    return manager.pushReturn(L, manager.resolvePath(readString(L, 1, '')).value);
   }
 
   static function lua_setPropertyRef(L:cpp.RawPointer<Lua_State>):Int
@@ -1684,8 +1742,8 @@ class LuaScriptManager
     if (manager == null) return 0;
 
     var resolved = manager.resolveParent(readString(L, 1, ''));
-    if (resolved.target == null || resolved.field == '') return manager.pushReturn(false);
-    return manager.pushReturn(manager.safeSetProperty(resolved.target, resolved.field, manager.readValue(L, 2)));
+    if (resolved.target == null || resolved.field == '') return manager.pushReturn(L, false);
+    return manager.pushReturn(L, manager.safeSetProperty(resolved.target, resolved.field, manager.readValue(L, 2)));
   }
 
   static function lua_disableLuaHook(L:cpp.RawPointer<Lua_State>):Int
@@ -1693,9 +1751,9 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var hook = readString(L, 1, '');
-    if (hook == '') return manager.pushReturn(false);
+    if (hook == '') return manager.pushReturn(L, false);
     manager.setCurrentHookDisabled(hook, true);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_enableLuaHook(L:cpp.RawPointer<Lua_State>):Int
@@ -1703,9 +1761,9 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var hook = readString(L, 1, '');
-    if (hook == '') return manager.pushReturn(false);
+    if (hook == '') return manager.pushReturn(L, false);
     manager.setCurrentHookDisabled(hook, false);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_setLuaWindowTitle(L:cpp.RawPointer<Lua_State>):Int
@@ -1718,25 +1776,29 @@ class LuaScriptManager
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.currentLuaFiles.length == 0 ? '' : manager.currentLuaFiles[0]);
+    Lua.getglobal(L, '__luaTaskPath');
+    final taskPath = readString(L, -1, '');
+    Lua.pop(L, 1);
+    if (taskPath != '') return manager.pushReturn(L, taskPath);
+    return manager.pushReturn(L, manager.currentLuaFiles.length == 0 ? '' : manager.currentLuaFiles[0]);
   }
 
   static function lua_stopCurrentLuaScript(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
-    if (manager == null || manager.currentLuaFiles.length == 0) return manager == null ? 0 : manager.pushReturn(false);
+    if (manager == null || manager.currentLuaFiles.length == 0) return manager == null ? 0 : manager.pushReturn(L, false);
     for (hook in LuaHookCatalog.ALL) manager.setCurrentHookDisabled(hook, true);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_setCurrentLuaScriptPriority(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
-    if (manager == null || manager.currentLuaFiles.length == 0) return manager == null ? 0 : manager.pushReturn(false);
+    if (manager == null || manager.currentLuaFiles.length == 0) return manager == null ? 0 : manager.pushReturn(L, false);
     var priority = readInt(L, 1, 0);
     for (path in manager.currentLuaFiles) manager.scriptPriorities.set(path, priority);
     manager.scriptPriorityDirty = true;
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_callMethod(L:cpp.RawPointer<Lua_State>):Int
@@ -1764,12 +1826,12 @@ class LuaScriptManager
     }
 
     var called = manager.safeCallMethod(resolved.target, method, args);
-    return manager.pushReturn(called.value);
+    return manager.pushReturn(L, called.value);
   }
 
   static function lua_classExists(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(Type.resolveClass(readString(L, 1, '')) != null) ?? 0;
+    return current()?.pushReturn(L, Type.resolveClass(readString(L, 1, '')) != null) ?? 0;
   }
 
   static function lua_getStaticProperty(L:cpp.RawPointer<Lua_State>):Int
@@ -1778,9 +1840,9 @@ class LuaScriptManager
     if (manager == null) return 0;
 
     var targetClass = Type.resolveClass(readString(L, 1, ''));
-    if (targetClass == null) return manager.pushReturn(null);
+    if (targetClass == null) return manager.pushReturn(L, null);
 
-    return manager.pushReturn(manager.safeGetProperty(targetClass, readString(L, 2, '')));
+    return manager.pushReturn(L, manager.safeGetProperty(targetClass, readString(L, 2, '')));
   }
 
   static function lua_setStaticProperty(L:cpp.RawPointer<Lua_State>):Int
@@ -1789,9 +1851,9 @@ class LuaScriptManager
     if (manager == null) return 0;
 
     var targetClass = Type.resolveClass(readString(L, 1, ''));
-    if (targetClass == null) return manager.pushReturn(false);
+    if (targetClass == null) return manager.pushReturn(L, false);
 
-    return manager.pushReturn(manager.safeSetProperty(targetClass, readString(L, 2, ''), manager.readValue(L, 3)));
+    return manager.pushReturn(L, manager.safeSetProperty(targetClass, readString(L, 2, ''), manager.readValue(L, 3)));
   }
 
   static function lua_callStatic(L:cpp.RawPointer<Lua_State>):Int
@@ -1800,12 +1862,12 @@ class LuaScriptManager
     if (manager == null) return 0;
 
     var targetClass = Type.resolveClass(readString(L, 1, ''));
-    if (targetClass == null) return manager.pushReturn(null);
+    if (targetClass == null) return manager.pushReturn(L, null);
 
     var method = manager.safeField(targetClass, readString(L, 2, ''));
-    if (method == null) return manager.pushReturn(null);
+    if (method == null) return manager.pushReturn(L, null);
 
-    return manager.pushReturn(manager.safeCallMethod(targetClass, method, manager.readArgs(L, 3)).value);
+    return manager.pushReturn(L, manager.safeCallMethod(targetClass, method, manager.readArgs(L, 3)).value);
   }
 
   static function lua_createInstance(L:cpp.RawPointer<Lua_State>):Int
@@ -1815,17 +1877,17 @@ class LuaScriptManager
 
     var tag = readString(L, 1, '');
     var targetClass = Type.resolveClass(readString(L, 2, ''));
-    if (tag == '' || targetClass == null) return manager.pushReturn(false);
+    if (tag == '' || targetClass == null) return manager.pushReturn(L, false);
 
     try
     {
       manager.objects.set(tag, Type.createInstance(targetClass, manager.readArgs(L, 3)));
-      return manager.pushReturn(true);
+      return manager.pushReturn(L, true);
     }
     catch (e)
     {
       trace('[LuaScriptManager] createInstance failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
   }
 
@@ -1836,17 +1898,17 @@ class LuaScriptManager
 
     var tag = readString(L, 1, '');
     var value = manager.resolvePath(readString(L, 2, '')).value;
-    if (tag == '' || value == null) return manager.pushReturn(false);
+    if (tag == '' || value == null) return manager.pushReturn(L, false);
 
     manager.objects.set(tag, value);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_forgetObject(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.objects.remove(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.objects.remove(readString(L, 1, '')));
   }
 
   static function lua_addObjectToState(L:cpp.RawPointer<Lua_State>):Int
@@ -1856,11 +1918,11 @@ class LuaScriptManager
     if (manager == null || playState == null) return 0;
 
     var object = manager.objects.get(readString(L, 1, ''));
-    if (object == null || !Std.isOfType(object, FlxBasic)) return manager.pushReturn(false);
+    if (object == null || !Std.isOfType(object, FlxBasic)) return manager.pushReturn(L, false);
 
     playState.add(cast object);
     playState.refresh();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_removeObjectFromState(L:cpp.RawPointer<Lua_State>):Int
@@ -1870,10 +1932,10 @@ class LuaScriptManager
     if (manager == null || playState == null) return 0;
 
     var object = manager.objects.get(readString(L, 1, ''));
-    if (object == null || !Std.isOfType(object, FlxBasic)) return manager.pushReturn(false);
+    if (object == null || !Std.isOfType(object, FlxBasic)) return manager.pushReturn(L, false);
 
     playState.remove(cast object, true);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_destroyObject(L:cpp.RawPointer<Lua_State>):Int
@@ -1883,14 +1945,14 @@ class LuaScriptManager
 
     var tag = readString(L, 1, '');
     var object = manager.objects.get(tag);
-    if (object == null) return manager.pushReturn(false);
+    if (object == null) return manager.pushReturn(L, false);
 
     var playState = PlayState.instance;
     if (playState != null && Std.isOfType(object, FlxBasic)) playState.remove(cast object, true);
     var destroy = manager.safeField(object, 'destroy');
     if (destroy != null) manager.safeCallMethod(object, destroy, []);
     manager.objects.remove(tag);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_getArrayLength(L:cpp.RawPointer<Lua_State>):Int
@@ -1898,10 +1960,10 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var value = manager.resolvePath(readString(L, 1, '')).value;
-    if (value == null) return manager.pushReturn(0);
-    if (Std.isOfType(value, Array)) return manager.pushReturn(cast(value, Array<Dynamic>).length);
+    if (value == null) return manager.pushReturn(L, 0);
+    if (Std.isOfType(value, Array)) return manager.pushReturn(L, cast(value, Array<Dynamic>).length);
     var length = manager.safeGetProperty(value, 'length');
-    return manager.pushReturn(length ?? 0);
+    return manager.pushReturn(L, length ?? 0);
   }
 
   static function lua_getArrayItem(L:cpp.RawPointer<Lua_State>):Int
@@ -1910,9 +1972,9 @@ class LuaScriptManager
     if (manager == null) return 0;
     var value = manager.resolvePath(readString(L, 1, '')).value;
     var index = readInt(L, 2, 0);
-    if (value == null) return manager.pushReturn(null);
-    if (Std.isOfType(value, Array)) return manager.pushReturn(cast(value, Array<Dynamic>)[index]);
-    return manager.pushReturn(manager.safeGetProperty(value, Std.string(index)));
+    if (value == null) return manager.pushReturn(L, null);
+    if (Std.isOfType(value, Array)) return manager.pushReturn(L, cast(value, Array<Dynamic>)[index]);
+    return manager.pushReturn(L, manager.safeGetProperty(value, Std.string(index)));
   }
 
   static function lua_setArrayItem(L:cpp.RawPointer<Lua_State>):Int
@@ -1922,13 +1984,13 @@ class LuaScriptManager
     var value = manager.resolvePath(readString(L, 1, '')).value;
     var index = readInt(L, 2, 0);
     var item = manager.readValue(L, 3);
-    if (value == null) return manager.pushReturn(false);
+    if (value == null) return manager.pushReturn(L, false);
     if (Std.isOfType(value, Array))
     {
       cast(value, Array<Dynamic>)[index] = item;
-      return manager.pushReturn(true);
+      return manager.pushReturn(L, true);
     }
-    return manager.pushReturn(manager.safeSetProperty(value, Std.string(index), item));
+    return manager.pushReturn(L, manager.safeSetProperty(value, Std.string(index), item));
   }
 
   static function lua_jsonParse(L:cpp.RawPointer<Lua_State>):Int
@@ -1938,7 +2000,7 @@ class LuaScriptManager
 
     try
     {
-      return manager.pushReturn(Json.parse(readString(L, 1, '{}')));
+      return manager.pushReturn(L, Json.parse(readString(L, 1, '{}')));
     }
     catch (e)
     {
@@ -1955,12 +2017,12 @@ class LuaScriptManager
 
     try
     {
-      return manager.pushReturn(Json.stringify(manager.readValue(L, 1), null, readString(L, 2, '')));
+      return manager.pushReturn(L, Json.stringify(manager.readValue(L, 1), null, readString(L, 2, '')));
     }
     catch (e)
     {
       trace('[LuaScriptManager] jsonStringify failed: ${e}');
-      return manager.pushReturn(null);
+      return manager.pushReturn(L, null);
     }
   }
 
@@ -1970,11 +2032,11 @@ class LuaScriptManager
     if (manager == null) return 0;
     try
     {
-      return manager.pushReturn(FileSystem.exists(readString(L, 1, '')));
+      return manager.pushReturn(L, FileSystem.exists(readString(L, 1, '')));
     }
     catch (e)
     {
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
   }
 
@@ -1985,11 +2047,11 @@ class LuaScriptManager
     var path = readString(L, 1, '');
     try
     {
-      return manager.pushReturn(FileSystem.exists(path) && FileSystem.isDirectory(path));
+      return manager.pushReturn(L, FileSystem.exists(path) && FileSystem.isDirectory(path));
     }
     catch (e)
     {
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
   }
 
@@ -1999,16 +2061,16 @@ class LuaScriptManager
     if (manager == null) return 0;
 
     var path = readString(L, 1, '');
-    if (!FileSystem.exists(path)) return manager.pushReturn(null);
+    if (!FileSystem.exists(path)) return manager.pushReturn(L, null);
 
     try
     {
-      return manager.pushReturn(File.getContent(path));
+      return manager.pushReturn(L, File.getContent(path));
     }
     catch (e)
     {
       trace('[LuaScriptManager] readTextFile failed: ${e}');
-      return manager.pushReturn(null);
+      return manager.pushReturn(L, null);
     }
   }
 
@@ -2020,98 +2082,98 @@ class LuaScriptManager
     try
     {
       File.saveContent(readString(L, 1, ''), readString(L, 2, ''));
-      return manager.pushReturn(true);
+      return manager.pushReturn(L, true);
     }
     catch (e)
     {
       trace('[LuaScriptManager] writeTextFile failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
   }
 
   static function lua_randomFloat(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.random.float(readFloat(L, 1, 0), readFloat(L, 2, 1))) ?? 0;
+    return current()?.pushReturn(L, FlxG.random.float(readFloat(L, 1, 0), readFloat(L, 2, 1))) ?? 0;
   }
 
   static function lua_randomInt(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.random.int(readInt(L, 1, 0), readInt(L, 2, 100))) ?? 0;
+    return current()?.pushReturn(L, FlxG.random.int(readInt(L, 1, 0), readInt(L, 2, 100))) ?? 0;
   }
 
   static function lua_keyPressed(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.keys.checkStatus(readKey(L, 1), FlxInputState.PRESSED)) ?? 0;
+    return current()?.pushReturn(L, FlxG.keys.checkStatus(readKey(L, 1), FlxInputState.PRESSED)) ?? 0;
   }
 
   static function lua_keyJustPressed(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.keys.checkStatus(readKey(L, 1), FlxInputState.JUST_PRESSED)) ?? 0;
+    return current()?.pushReturn(L, FlxG.keys.checkStatus(readKey(L, 1), FlxInputState.JUST_PRESSED)) ?? 0;
   }
 
   static function lua_keyJustReleased(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.keys.checkStatus(readKey(L, 1), FlxInputState.JUST_RELEASED)) ?? 0;
+    return current()?.pushReturn(L, FlxG.keys.checkStatus(readKey(L, 1), FlxInputState.JUST_RELEASED)) ?? 0;
   }
 
   static function lua_mouseX(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.mouse.x) ?? 0;
+    return current()?.pushReturn(L, FlxG.mouse.x) ?? 0;
   }
 
   static function lua_mouseY(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.mouse.y) ?? 0;
+    return current()?.pushReturn(L, FlxG.mouse.y) ?? 0;
   }
 
   static function lua_mousePressed(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.mouse.pressed) ?? 0;
+    return current()?.pushReturn(L, FlxG.mouse.pressed) ?? 0;
   }
 
   static function lua_mouseJustPressed(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.mouse.justPressed) ?? 0;
+    return current()?.pushReturn(L, FlxG.mouse.justPressed) ?? 0;
   }
 
   static function lua_mouseJustReleased(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.mouse.justReleased) ?? 0;
+    return current()?.pushReturn(L, FlxG.mouse.justReleased) ?? 0;
   }
 
   static function lua_getSongPosition(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(Conductor.instance.songPosition) ?? 0;
+    return current()?.pushReturn(L, Conductor.instance.songPosition) ?? 0;
   }
 
   static function lua_getBeat(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(Conductor.instance.currentBeat) ?? 0;
+    return current()?.pushReturn(L, Conductor.instance.currentBeat) ?? 0;
   }
 
   static function lua_getStep(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(Conductor.instance.currentStep) ?? 0;
+    return current()?.pushReturn(L, Conductor.instance.currentStep) ?? 0;
   }
 
   static function lua_getSongName(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(PlayState.instance?.currentSong?.songName ?? '') ?? 0;
+    return current()?.pushReturn(L, PlayState.instance?.currentSong?.songName ?? '') ?? 0;
   }
 
   static function lua_getDifficulty(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(PlayState.instance?.currentDifficulty ?? '') ?? 0;
+    return current()?.pushReturn(L, PlayState.instance?.currentDifficulty ?? '') ?? 0;
   }
 
   static function lua_getVariation(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(PlayState.instance?.currentVariation ?? '') ?? 0;
+    return current()?.pushReturn(L, PlayState.instance?.currentVariation ?? '') ?? 0;
   }
 
   static function lua_getStageId(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(PlayState.instance?.currentStageId ?? '') ?? 0;
+    return current()?.pushReturn(L, PlayState.instance?.currentStageId ?? '') ?? 0;
   }
 
   static function lua_changeStage(L:cpp.RawPointer<Lua_State>):Int
@@ -2123,7 +2185,7 @@ class LuaScriptManager
     final stageId:String = readString(L, 1, '');
     final accepted:Bool = playState.requestLuaStageChange(stageId);
     if (!accepted) manager.reportLuaWarning('api-warning', 'lua-api', 'changeStage', 'changeStage failed: Unknown stage "$stageId".');
-    return manager.pushReturn(accepted);
+    return manager.pushReturn(L, accepted);
   }
 
   static function lua_changeCharacter(L:cpp.RawPointer<Lua_State>):Int
@@ -2147,12 +2209,12 @@ class LuaScriptManager
       manager.reportLuaWarning('api-warning', 'lua-api', 'changeCharacter',
         'changeCharacter failed: Use "player", "opponent", or "girlfriend" and a valid character ID. Received "$targetName", "$characterId".');
     }
-    return manager.pushReturn(accepted);
+    return manager.pushReturn(L, accepted);
   }
 
   static function lua_getPlaybackRate(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(PlayState.instance?.playbackRate ?? 1.0) ?? 0;
+    return current()?.pushReturn(L, PlayState.instance?.playbackRate ?? 1.0) ?? 0;
   }
 
   static function lua_setPlaybackRate(L:cpp.RawPointer<Lua_State>):Int
@@ -2165,12 +2227,12 @@ class LuaScriptManager
   static function lua_getScrollSpeed(L:cpp.RawPointer<Lua_State>):Int
   {
     var playState = PlayState.instance;
-    if (playState == null) return current()?.pushReturn(0.0) ?? 0;
+    if (playState == null) return current()?.pushReturn(L, 0.0) ?? 0;
 
     return switch (readString(L, 1, 'player'))
     {
-      case 'opponent' | 'dad': current()?.pushReturn(playState.opponentStrumline?.scrollSpeed ?? 0.0) ?? 0;
-      default: current()?.pushReturn(playState.playerStrumline?.scrollSpeed ?? 0.0) ?? 0;
+      case 'opponent' | 'dad': current()?.pushReturn(L, playState.opponentStrumline?.scrollSpeed ?? 0.0) ?? 0;
+      default: current()?.pushReturn(L, playState.playerStrumline?.scrollSpeed ?? 0.0) ?? 0;
     }
   }
 
@@ -2188,12 +2250,12 @@ class LuaScriptManager
 
   static function lua_getChartNotes(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(PlayState.instance?.currentChart?.notes ?? []) ?? 0;
+    return current()?.pushReturn(L, PlayState.instance?.currentChart?.notes ?? []) ?? 0;
   }
 
   static function lua_getChartEvents(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(PlayState.instance?.currentChart?.getEvents() ?? []) ?? 0;
+    return current()?.pushReturn(L, PlayState.instance?.currentChart?.getEvents() ?? []) ?? 0;
   }
 
   static function lua_setStrumlinePosition(L:cpp.RawPointer<Lua_State>):Int
@@ -2201,11 +2263,11 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var strumline = manager.resolveStrumline(readString(L, 1, 'player'));
-    if (strumline == null) return manager.pushReturn(false);
+    if (strumline == null) return manager.pushReturn(L, false);
 
     strumline.setPosition(readFloat(L, 2, strumline.x), readFloat(L, 3, strumline.y));
     strumline.refresh();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_setStrumlineAlpha(L:cpp.RawPointer<Lua_State>):Int
@@ -2213,10 +2275,10 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var strumline = manager.resolveStrumline(readString(L, 1, 'player'));
-    if (strumline == null) return manager.pushReturn(false);
+    if (strumline == null) return manager.pushReturn(L, false);
 
     strumline.alpha = readFloat(L, 2, strumline.alpha);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_setStrumlineVisible(L:cpp.RawPointer<Lua_State>):Int
@@ -2224,10 +2286,10 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var strumline = manager.resolveStrumline(readString(L, 1, 'player'));
-    if (strumline == null) return manager.pushReturn(false);
+    if (strumline == null) return manager.pushReturn(L, false);
 
     strumline.visible = readBool(L, 2, strumline.visible);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_setStrumlineNotePosition(L:cpp.RawPointer<Lua_State>):Int
@@ -2235,13 +2297,13 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var strumline = manager.resolveStrumline(readString(L, 1, 'player'));
-    if (strumline == null) return manager.pushReturn(false);
+    if (strumline == null) return manager.pushReturn(L, false);
 
     var note = strumline.getByIndex(readInt(L, 2, 0));
-    if (note == null) return manager.pushReturn(false);
+    if (note == null) return manager.pushReturn(L, false);
 
     note.setPosition(readFloat(L, 3, note.x), readFloat(L, 4, note.y));
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_playStrumlineAnimation(L:cpp.RawPointer<Lua_State>):Int
@@ -2249,7 +2311,7 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var strumline = manager.resolveStrumline(readString(L, 1, 'player'));
-    if (strumline == null) return manager.pushReturn(false);
+    if (strumline == null) return manager.pushReturn(L, false);
 
     var direction:funkin.play.notes.NoteDirection = readInt(L, 2, 0);
     switch (readString(L, 3, 'static'))
@@ -2260,7 +2322,7 @@ class LuaScriptManager
       case 'splash': strumline.playNoteSplash(direction);
       default: strumline.playStatic(direction);
     }
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_setBotplay(L:cpp.RawPointer<Lua_State>):Int
@@ -2284,12 +2346,12 @@ class LuaScriptManager
 
     try
     {
-      return manager.pushReturn(Reflect.getProperty(Preferences, readString(L, 1, '')));
+      return manager.pushReturn(L, Reflect.getProperty(Preferences, readString(L, 1, '')));
     }
     catch (e)
     {
       trace('[LuaScriptManager] getPreference failed: ${e}');
-      return manager.pushReturn(null);
+      return manager.pushReturn(L, null);
     }
   }
 
@@ -2301,12 +2363,12 @@ class LuaScriptManager
     try
     {
       Reflect.setProperty(Preferences, readString(L, 1, ''), manager.readValue(L, 2));
-      return manager.pushReturn(true);
+      return manager.pushReturn(L, true);
     }
     catch (e)
     {
       trace('[LuaScriptManager] setPreference failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
   }
 
@@ -2316,73 +2378,73 @@ class LuaScriptManager
     if (manager == null) return 0;
 
     var camera = manager.resolveCamera(readString(L, 2, 'game'));
-    if (camera == null) return manager.pushReturn(false);
+    if (camera == null) return manager.pushReturn(L, false);
 
     camera.zoom = readFloat(L, 1, camera.zoom);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_defineLuaOption(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.optionManager.defineOption(readString(L, 1, ''), manager.readValue(L, 2)));
+    return manager.pushReturn(L, manager.optionManager.defineOption(readString(L, 1, ''), manager.readValue(L, 2)));
   }
 
   static function lua_getLuaOption(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.optionManager.getOption(readString(L, 1, ''), manager.readValue(L, 2)));
+    return manager.pushReturn(L, manager.optionManager.getOption(readString(L, 1, ''), manager.readValue(L, 2)));
   }
 
   static function lua_setLuaOption(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.optionManager.setOption(readString(L, 1, ''), manager.readValue(L, 2), readBool(L, 3, true)));
+    return manager.pushReturn(L, manager.optionManager.setOption(readString(L, 1, ''), manager.readValue(L, 2), readBool(L, 3, true)));
   }
 
   static function lua_hasLuaOption(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.optionManager.hasOption(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.optionManager.hasOption(readString(L, 1, '')));
   }
 
   static function lua_stageExists(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(StageRegistry.instance.hasEntry(readString(L, 1, '')));
+    return manager.pushReturn(L, StageRegistry.instance.hasEntry(readString(L, 1, '')));
   }
 
   static function lua_removeLuaOption(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.optionManager.removeOption(readString(L, 1, ''), readBool(L, 2, true)));
+    return manager.pushReturn(L, manager.optionManager.removeOption(readString(L, 1, ''), readBool(L, 2, true)));
   }
 
   static function lua_getLuaOptions(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.optionManager.getOptions());
+    return manager.pushReturn(L, manager.optionManager.getOptions());
   }
 
   static function lua_createLuaOptionPage(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.optionManager.createPage(readString(L, 1, ''), readString(L, 2, ''), readInt(L, 3, -1)));
+    return manager.pushReturn(L, manager.optionManager.createPage(readString(L, 1, ''), readString(L, 2, ''), readInt(L, 3, -1)));
   }
 
   static function lua_addLuaCheckbox(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.optionManager.addCheckbox(readString(L, 1, ''), readString(L, 2, ''), readString(L, 3, ''),
+    return manager.pushReturn(L, manager.optionManager.addCheckbox(readString(L, 1, ''), readString(L, 2, ''), readString(L, 3, ''),
       readString(L, 4, ''), readBool(L, 5, false)));
   }
 
@@ -2390,7 +2452,7 @@ class LuaScriptManager
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.optionManager.addNumber(readString(L, 1, ''), readString(L, 2, ''), readString(L, 3, ''),
+    return manager.pushReturn(L, manager.optionManager.addNumber(readString(L, 1, ''), readString(L, 2, ''), readString(L, 3, ''),
       readString(L, 4, ''), readFloat(L, 5, 0), readFloat(L, 6, 0), readFloat(L, 7, 1), readFloat(L, 8, 0.1), readInt(L, 9, 1)));
   }
 
@@ -2398,7 +2460,7 @@ class LuaScriptManager
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.optionManager.addEnum(readString(L, 1, ''), readString(L, 2, ''), readString(L, 3, ''),
+    return manager.pushReturn(L, manager.optionManager.addEnum(readString(L, 1, ''), readString(L, 2, ''), readString(L, 3, ''),
       readString(L, 4, ''), manager.readValue(L, 5), readString(L, 6, '')));
   }
 
@@ -2415,11 +2477,11 @@ class LuaScriptManager
 
     var key = readString(L, 1, '');
     var fallback = manager.readValue(L, 2);
-    if (key == '') return manager.pushReturn(fallback);
+    if (key == '') return manager.pushReturn(L, fallback);
 
     var data = ensureLuaSaveData();
-    if (!Reflect.hasField(data, key)) return manager.pushReturn(fallback);
-    return manager.pushReturn(Reflect.field(data, key));
+    if (!Reflect.hasField(data, key)) return manager.pushReturn(L, fallback);
+    return manager.pushReturn(L, Reflect.field(data, key));
   }
 
   static function lua_setLuaSave(L:cpp.RawPointer<Lua_State>):Int
@@ -2428,12 +2490,12 @@ class LuaScriptManager
     if (manager == null) return 0;
 
     var key = readString(L, 1, '');
-    if (key == '') return manager.pushReturn(false);
+    if (key == '') return manager.pushReturn(L, false);
 
     var data = ensureLuaSaveData();
     Reflect.setField(data, key, manager.readValue(L, 2));
     Save.system.flush();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function ensureLuaSaveData():Dynamic
@@ -2453,12 +2515,12 @@ class LuaScriptManager
 
   static function lua_getScreenWidth(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.width) ?? 0;
+    return current()?.pushReturn(L, FlxG.width) ?? 0;
   }
 
   static function lua_getScreenHeight(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(FlxG.height) ?? 0;
+    return current()?.pushReturn(L, FlxG.height) ?? 0;
   }
 
   static function lua_setFullscreen(L:cpp.RawPointer<Lua_State>):Int
@@ -2469,26 +2531,26 @@ class LuaScriptManager
 
   static function lua_getMemoryUsageMB(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(MemoryUtil.getGCMemory() / 1024 / 1024) ?? 0;
+    return current()?.pushReturn(L, MemoryUtil.getGCMemory() / 1024 / 1024) ?? 0;
   }
 
   static function lua_getDebugDisplayVisible(L:cpp.RawPointer<Lua_State>):Int
   {
     final display = Main.debugDisplay;
     final parent = FlxG.game?.parent;
-    return current()?.pushReturn(display != null && parent != null && parent.contains(display) && display.visible) ?? 0;
+    return current()?.pushReturn(L, display != null && parent != null && parent.contains(display) && display.visible) ?? 0;
   }
 
   static function lua_setDebugDisplayVisible(L:cpp.RawPointer<Lua_State>):Int
   {
-    if (Main.debugDisplay == null) return current()?.pushReturn(false) ?? 0;
+    if (Main.debugDisplay == null) return current()?.pushReturn(L, false) ?? 0;
     Main.debugDisplay.visible = readBool(L, 1, true);
-    return current()?.pushReturn(true) ?? 0;
+    return current()?.pushReturn(L, true) ?? 0;
   }
 
   static function lua_getHealth(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(PlayState.instance?.health ?? 0.0) ?? 0;
+    return current()?.pushReturn(L, PlayState.instance?.health ?? 0.0) ?? 0;
   }
 
   static function lua_setHealth(L:cpp.RawPointer<Lua_State>):Int
@@ -2507,7 +2569,7 @@ class LuaScriptManager
 
   static function lua_getScore(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(PlayState.instance?.songScore ?? 0) ?? 0;
+    return current()?.pushReturn(L, PlayState.instance?.songScore ?? 0) ?? 0;
   }
 
   static function lua_setScore(L:cpp.RawPointer<Lua_State>):Int
@@ -2526,7 +2588,7 @@ class LuaScriptManager
 
   static function lua_getCombo(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(Highscore.tallies.combo) ?? 0;
+    return current()?.pushReturn(L, Highscore.tallies.combo) ?? 0;
   }
 
   static function lua_setCombo(L:cpp.RawPointer<Lua_State>):Int
@@ -2538,13 +2600,13 @@ class LuaScriptManager
 
   static function lua_getAccuracy(L:cpp.RawPointer<Lua_State>):Int
   {
-    if (Highscore.tallies.totalNotes <= 0) return current()?.pushReturn(0) ?? 0;
-    return current()?.pushReturn((Highscore.tallies.totalNotesHit / Highscore.tallies.totalNotes) * 100) ?? 0;
+    if (Highscore.tallies.totalNotes <= 0) return current()?.pushReturn(L, 0) ?? 0;
+    return current()?.pushReturn(L, (Highscore.tallies.totalNotesHit / Highscore.tallies.totalNotes) * 100) ?? 0;
   }
 
   static function lua_getTallies(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn({
+    return current()?.pushReturn(L, {
       sick: Highscore.tallies.sick,
       good: Highscore.tallies.good,
       bad: Highscore.tallies.bad,
@@ -2583,10 +2645,10 @@ class LuaScriptManager
   static function lua_startConversation(L:cpp.RawPointer<Lua_State>):Int
   {
     var playState = PlayState.instance;
-    if (playState == null) return current()?.pushReturn(false) ?? 0;
+    if (playState == null) return current()?.pushReturn(L, false) ?? 0;
 
     playState.startConversation(readString(L, 1, ''));
-    return current()?.pushReturn(playState.currentConversation != null) ?? 0;
+    return current()?.pushReturn(L, playState.currentConversation != null) ?? 0;
   }
 
   static function lua_playVideo(L:cpp.RawPointer<Lua_State>):Int
@@ -2596,12 +2658,12 @@ class LuaScriptManager
     try
     {
       VideoCutscene.play(Paths.file(readString(L, 1, '')));
-      return manager.pushReturn(true);
+      return manager.pushReturn(L, true);
     }
     catch (e)
     {
       trace('[LuaScriptManager] playVideo failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
   }
 
@@ -2625,7 +2687,7 @@ class LuaScriptManager
 
   static function lua_isVideoPlaying(L:cpp.RawPointer<Lua_State>):Int
   {
-    return current()?.pushReturn(VideoCutscene.isPlaying()) ?? 0;
+    return current()?.pushReturn(L, VideoCutscene.isPlaying()) ?? 0;
   }
 
   static function lua_endSong(L:cpp.RawPointer<Lua_State>):Int
@@ -2650,12 +2712,12 @@ class LuaScriptManager
     {
       final success = target != '' && LuaStateManager.openState(target, manager.readArgs(L, 2));
       if (!success) manager.reportLuaWarning('api-error', 'lua-api', 'openLuaState', 'State not found or invalid: ${target}');
-      return manager.pushReturn(success);
+      return manager.pushReturn(L, success);
     }
     catch (error)
     {
       manager.reportLuaWarning('api-error', 'lua-api', 'openLuaState', 'Could not open state ${target}: ${error}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
   }
 
@@ -2668,12 +2730,12 @@ class LuaScriptManager
     {
       final success = target != '' && LuaStateManager.openSubState(target, manager.readArgs(L, 2));
       if (!success) manager.reportLuaWarning('api-error', 'lua-api', 'openLuaSubState', 'Substate not found or invalid: ${target}');
-      return manager.pushReturn(success);
+      return manager.pushReturn(L, success);
     }
     catch (error)
     {
       manager.reportLuaWarning('api-error', 'lua-api', 'openLuaSubState', 'Could not open substate ${target}: ${error}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
   }
 
@@ -2691,7 +2753,7 @@ class LuaScriptManager
     var zIndex = readInt(L, 6, 0);
     var animated = readBool(L, 7, false);
 
-    if (tag == '' || asset == '') return manager.pushReturn(false);
+    if (tag == '' || asset == '') return manager.pushReturn(L, false);
 
     manager.removeSprite(tag);
 
@@ -2703,16 +2765,16 @@ class LuaScriptManager
     catch (e)
     {
       trace('[LuaScriptManager] addSprite failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
-    if (sprite == null) return manager.pushReturn(false);
+    if (sprite == null) return manager.pushReturn(L, false);
     sprite.zIndex = zIndex;
     manager.applyCamera(sprite, camera);
     manager.sprites.set(tag, sprite);
     playState.add(sprite);
     playState.refresh();
 
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_addAnimatedSpriteAlias(L:cpp.RawPointer<Lua_State>):Int
@@ -2723,7 +2785,7 @@ class LuaScriptManager
 
     var tag = readString(L, 1, '');
     var asset = readString(L, 2, '');
-    if (tag == '' || asset == '') return manager.pushReturn(false);
+    if (tag == '' || asset == '') return manager.pushReturn(L, false);
 
     manager.removeSprite(tag);
 
@@ -2735,15 +2797,15 @@ class LuaScriptManager
     catch (e)
     {
       trace('[LuaScriptManager] addAnimatedSprite failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
-    if (sprite == null) return manager.pushReturn(false);
+    if (sprite == null) return manager.pushReturn(L, false);
     sprite.zIndex = readInt(L, 6, 0);
     manager.applyCamera(sprite, readString(L, 5, 'game'));
     manager.sprites.set(tag, sprite);
     playState.add(sprite);
     playState.refresh();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_loadGraphic(L:cpp.RawPointer<Lua_State>):Int
@@ -2764,7 +2826,7 @@ class LuaScriptManager
 
     var tag = readString(L, 1, '');
     var asset = readString(L, 2, '');
-    if (tag == '' || asset == '') return manager.pushReturn(false);
+    if (tag == '' || asset == '') return manager.pushReturn(L, false);
 
     manager.removeSprite(tag);
     var sprite:Null<FunkinSprite> = null;
@@ -2776,15 +2838,15 @@ class LuaScriptManager
     catch (e)
     {
       trace('[LuaScriptManager] createSprite failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
-    if (sprite == null) return manager.pushReturn(false);
+    if (sprite == null) return manager.pushReturn(L, false);
     sprite.zIndex = readInt(L, 6, 0);
     manager.applyCamera(sprite, readString(L, 5, 'game'));
     manager.sprites.set(tag, sprite);
     playState.add(sprite);
     playState.refresh();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_makeSolidSprite(L:cpp.RawPointer<Lua_State>):Int
@@ -2802,7 +2864,7 @@ class LuaScriptManager
     var camera = readString(L, 7, 'game');
     var zIndex = readInt(L, 8, 0);
 
-    if (tag == '') return manager.pushReturn(false);
+    if (tag == '') return manager.pushReturn(L, false);
 
     manager.removeSprite(tag);
 
@@ -2814,7 +2876,7 @@ class LuaScriptManager
     catch (e)
     {
       trace('[LuaScriptManager] makeSolidSprite failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
     sprite.zIndex = zIndex;
     manager.applyCamera(sprite, camera);
@@ -2822,7 +2884,7 @@ class LuaScriptManager
     playState.add(sprite);
     playState.refresh();
 
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_makeGraphicAlias(L:cpp.RawPointer<Lua_State>):Int
@@ -2832,7 +2894,7 @@ class LuaScriptManager
     if (manager == null || playState == null) return 0;
 
     var tag = readString(L, 1, '');
-    if (tag == '') return manager.pushReturn(false);
+    if (tag == '') return manager.pushReturn(L, false);
 
     var sprite = manager.sprites.get(tag);
     if (sprite == null)
@@ -2849,17 +2911,17 @@ class LuaScriptManager
     catch (e)
     {
       trace('[LuaScriptManager] makeGraphic failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
     playState.refresh();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_removeSprite(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.removeSprite(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.removeSprite(readString(L, 1, '')));
   }
 
   static function lua_setSpriteCamera(L:cpp.RawPointer<Lua_State>):Int
@@ -2868,10 +2930,10 @@ class LuaScriptManager
     if (manager == null) return 0;
 
     var sprite = manager.sprites.get(readString(L, 1, ''));
-    if (sprite == null) return manager.pushReturn(false);
+    if (sprite == null) return manager.pushReturn(L, false);
 
     manager.applyCamera(sprite, readString(L, 2, 'game'));
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_addText(L:cpp.RawPointer<Lua_State>):Int
@@ -2881,7 +2943,7 @@ class LuaScriptManager
     if (manager == null || playState == null) return 0;
 
     var tag = readString(L, 1, '');
-    if (tag == '') return manager.pushReturn(false);
+    if (tag == '') return manager.pushReturn(L, false);
 
     manager.removeText(tag);
     var text = new FlxText(readFloat(L, 2, 0), readFloat(L, 3, 0), readFloat(L, 4, 0), readString(L, 5, ''), readInt(L, 6, 16));
@@ -2893,7 +2955,7 @@ class LuaScriptManager
     manager.texts.set(tag, text);
     playState.add(text);
     playState.refresh();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_makeLuaTextAlias(L:cpp.RawPointer<Lua_State>):Int
@@ -2903,7 +2965,7 @@ class LuaScriptManager
     if (manager == null || playState == null) return 0;
 
     var tag = readString(L, 1, '');
-    if (tag == '') return manager.pushReturn(false);
+    if (tag == '') return manager.pushReturn(L, false);
 
     manager.removeText(tag);
     var text = new FlxText(readFloat(L, 4, 0), readFloat(L, 5, 0), readFloat(L, 3, 0), readString(L, 2, ''), readInt(L, 6, 16));
@@ -2914,7 +2976,7 @@ class LuaScriptManager
     manager.texts.set(tag, text);
     playState.add(text);
     playState.refresh();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_setText(L:cpp.RawPointer<Lua_State>):Int
@@ -2922,9 +2984,9 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var text = manager.texts.get(readString(L, 1, ''));
-    if (text == null) return manager.pushReturn(false);
+    if (text == null) return manager.pushReturn(L, false);
     text.text = readString(L, 2, text.text);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_setTextFormat(L:cpp.RawPointer<Lua_State>):Int
@@ -2932,20 +2994,20 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var text = manager.texts.get(readString(L, 1, ''));
-    if (text == null) return manager.pushReturn(false);
+    if (text == null) return manager.pushReturn(L, false);
     text.size = readInt(L, 2, text.size);
     text.color = readColor(L, 3, text.color);
     text.alignment = readTextAlign(L, 4, text.alignment);
     text.borderStyle = readBool(L, 5, false) ? FlxTextBorderStyle.OUTLINE : FlxTextBorderStyle.NONE;
     text.borderColor = readColor(L, 6, FlxColor.BLACK);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_removeText(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.removeText(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.removeText(readString(L, 1, '')));
   }
 
   static function lua_setObjectCamera(L:cpp.RawPointer<Lua_State>):Int
@@ -2955,9 +3017,9 @@ class LuaScriptManager
 
     var target = manager.resolvePath(readString(L, 1, '')).value;
     var camera = manager.resolveCamera(readString(L, 2, 'game'));
-    if (target == null || camera == null) return manager.pushReturn(false);
+    if (target == null || camera == null) return manager.pushReturn(L, false);
 
-    return manager.pushReturn(manager.safeSetProperty(target, 'cameras', [camera]));
+    return manager.pushReturn(L, manager.safeSetProperty(target, 'cameras', [camera]));
   }
 
   static function lua_setObjectPosition(L:cpp.RawPointer<Lua_State>):Int
@@ -2965,10 +3027,10 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
-    if (target == null) return manager.pushReturn(false);
+    if (target == null) return manager.pushReturn(L, false);
     var xOk = manager.safeSetProperty(target, 'x', readFloat(L, 2, manager.safeGetProperty(target, 'x') ?? 0));
     var yOk = manager.safeSetProperty(target, 'y', readFloat(L, 3, manager.safeGetProperty(target, 'y') ?? 0));
-    return manager.pushReturn(xOk && yOk);
+    return manager.pushReturn(L, xOk && yOk);
   }
 
   static function lua_getObjectX(L:cpp.RawPointer<Lua_State>):Int
@@ -3001,8 +3063,8 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
-    if (target == null) return manager.pushReturn(false);
-    return manager.pushReturn(manager.safeGetProperty(target, 'visible') ?? false);
+    if (target == null) return manager.pushReturn(L, false);
+    return manager.pushReturn(L, manager.safeGetProperty(target, 'visible') ?? false);
   }
 
   static function lua_getObjectAngle(L:cpp.RawPointer<Lua_State>):Int
@@ -3016,13 +3078,13 @@ class LuaScriptManager
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
     var scale = target == null ? null : manager.safeField(target, 'scale');
-    if (scale == null) return manager.pushReturn(false);
+    if (scale == null) return manager.pushReturn(L, false);
     var set = manager.safeField(scale, 'set');
-    if (set == null) return manager.pushReturn(false);
+    if (set == null) return manager.pushReturn(L, false);
     manager.safeCallMethod(scale, set, [readFloat(L, 2, manager.safeGetProperty(scale, 'x') ?? 0), readFloat(L, 3, manager.safeGetProperty(scale, 'y') ?? 0)]);
     var updateHitbox = manager.safeField(target, 'updateHitbox');
     if (updateHitbox != null) manager.safeCallMethod(target, updateHitbox, []);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_setObjectSize(L:cpp.RawPointer<Lua_State>):Int
@@ -3031,18 +3093,18 @@ class LuaScriptManager
     if (manager == null) return 0;
 
     var target = manager.resolvePath(readString(L, 1, '')).value;
-    if (target == null || !Std.isOfType(target, FlxSprite)) return manager.pushReturn(false);
+    if (target == null || !Std.isOfType(target, FlxSprite)) return manager.pushReturn(L, false);
 
     try
     {
       cast(target, FlxSprite).setGraphicSize(readInt(L, 2, Std.int(target.width)), readInt(L, 3, Std.int(target.height)));
       target.updateHitbox();
-      return manager.pushReturn(true);
+      return manager.pushReturn(L, true);
     }
     catch (e)
     {
       trace('[LuaScriptManager] setObjectSize failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
   }
 
@@ -3056,8 +3118,8 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
-    if (target == null) return manager.pushReturn(false);
-    return manager.pushReturn(manager.safeSetProperty(target, 'visible', readBool(L, 2, true)));
+    if (target == null) return manager.pushReturn(L, false);
+    return manager.pushReturn(L, manager.safeSetProperty(target, 'visible', readBool(L, 2, true)));
   }
 
   static function lua_setObjectAngle(L:cpp.RawPointer<Lua_State>):Int
@@ -3070,8 +3132,8 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
-    if (target == null) return manager.pushReturn(false);
-    return manager.pushReturn(manager.safeSetProperty(target, 'color', readColor(L, 2, FlxColor.WHITE)));
+    if (target == null) return manager.pushReturn(L, false);
+    return manager.pushReturn(L, manager.safeSetProperty(target, 'color', readColor(L, 2, FlxColor.WHITE)));
   }
 
   static function lua_setObjectVelocity(L:cpp.RawPointer<Lua_State>):Int
@@ -3094,10 +3156,10 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
-    if (target == null) return manager.pushReturn(false);
-    if (!manager.safeSetProperty(target, 'zIndex', readInt(L, 2, manager.safeGetProperty(target, 'zIndex') ?? 0))) return manager.pushReturn(false);
+    if (target == null) return manager.pushReturn(L, false);
+    if (!manager.safeSetProperty(target, 'zIndex', readInt(L, 2, manager.safeGetProperty(target, 'zIndex') ?? 0))) return manager.pushReturn(L, false);
     PlayState.instance?.refresh();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_screenCenter(L:cpp.RawPointer<Lua_State>):Int
@@ -3105,16 +3167,16 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
-    if (target == null || !Std.isOfType(target, FlxSprite)) return manager.pushReturn(false);
+    if (target == null || !Std.isOfType(target, FlxSprite)) return manager.pushReturn(L, false);
     cast(target, FlxSprite).screenCenter(readAxes(L, 2, FlxAxes.XY));
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_objectExists(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.resolvePath(readString(L, 1, '')).value != null);
+    return manager.pushReturn(L, manager.resolvePath(readString(L, 1, '')).value != null);
   }
 
   static function lua_killObject(L:cpp.RawPointer<Lua_State>):Int
@@ -3123,8 +3185,8 @@ class LuaScriptManager
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
     var method = target == null ? null : manager.safeField(target, 'kill');
-    if (method == null) return manager.pushReturn(false);
-    return manager.pushReturn(manager.safeCallMethod(target, method, []).ok);
+    if (method == null) return manager.pushReturn(L, false);
+    return manager.pushReturn(L, manager.safeCallMethod(target, method, []).ok);
   }
 
   static function lua_reviveObject(L:cpp.RawPointer<Lua_State>):Int
@@ -3133,8 +3195,8 @@ class LuaScriptManager
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
     var method = target == null ? null : manager.safeField(target, 'revive');
-    if (method == null) return manager.pushReturn(false);
-    return manager.pushReturn(manager.safeCallMethod(target, method, []).ok);
+    if (method == null) return manager.pushReturn(L, false);
+    return manager.pushReturn(L, manager.safeCallMethod(target, method, []).ok);
   }
 
   static function lua_addAnimByPrefix(L:cpp.RawPointer<Lua_State>):Int
@@ -3144,8 +3206,8 @@ class LuaScriptManager
     var target = manager.resolvePath(readString(L, 1, '')).value;
     var animation = target == null ? null : manager.safeField(target, 'animation');
     var addByPrefix = animation == null ? null : manager.safeField(animation, 'addByPrefix');
-    if (addByPrefix == null) return manager.pushReturn(false);
-    return manager.pushReturn(manager.safeCallMethod(animation, addByPrefix,
+    if (addByPrefix == null) return manager.pushReturn(L, false);
+    return manager.pushReturn(L, manager.safeCallMethod(animation, addByPrefix,
       [readString(L, 2, ''), readString(L, 3, ''), readInt(L, 4, 24), readBool(L, 5, false)]).ok);
   }
 
@@ -3158,21 +3220,21 @@ class LuaScriptManager
     var anim = readString(L, 2, '');
     var force = readBool(L, 3, false);
 
-    if (target == null || anim == '') return manager.pushReturn(false);
+    if (target == null || anim == '') return manager.pushReturn(L, false);
 
     if (Std.isOfType(target, FunkinSprite))
     {
       cast(target, FunkinSprite).animation.play(anim, force);
-      return manager.pushReturn(true);
+      return manager.pushReturn(L, true);
     }
 
     var method = manager.safeField(target, 'playAnimation') ?? manager.safeField(target, 'playAnim');
     if (method != null)
     {
-      return manager.pushReturn(manager.safeCallMethod(target, method, [anim, force]).ok);
+      return manager.pushReturn(L, manager.safeCallMethod(target, method, [anim, force]).ok);
     }
 
-    return manager.pushReturn(false);
+    return manager.pushReturn(L, false);
   }
 
   static function lua_hasAnim(L:cpp.RawPointer<Lua_State>):Int
@@ -3182,19 +3244,19 @@ class LuaScriptManager
 
     var target = manager.resolvePath(readString(L, 1, '')).value;
     var anim = readString(L, 2, '');
-    if (target == null || anim == '') return manager.pushReturn(false);
+    if (target == null || anim == '') return manager.pushReturn(L, false);
 
-    if (Std.isOfType(target, FunkinSprite)) return manager.pushReturn(cast(target, FunkinSprite).hasAnimation(anim));
+    if (Std.isOfType(target, FunkinSprite)) return manager.pushReturn(L, cast(target, FunkinSprite).hasAnimation(anim));
 
     var method = manager.safeField(target, 'hasAnimation');
-    return manager.pushReturn(method != null && manager.safeCallMethod(target, method, [anim]).value == true);
+    return manager.pushReturn(L, method != null && manager.safeCallMethod(target, method, [anim]).value == true);
   }
 
   static function lua_createLuaMenu(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.menuManager.createMenu(readString(L, 1, ''), readStringArray(L, 2), readFloat(L, 3, 80), readFloat(L, 4, 120),
+    return manager.pushReturn(L, manager.menuManager.createMenu(readString(L, 1, ''), readStringArray(L, 2), readFloat(L, 3, 80), readFloat(L, 4, 120),
       readFloat(L, 5, 600), readString(L, 6, 'hud'), readColor(L, 7, FlxColor.WHITE), readColor(L, 8, FlxColor.YELLOW)));
   }
 
@@ -3202,14 +3264,14 @@ class LuaScriptManager
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.menuManager.createImageMenu(readString(L, 1, ''), readStringArray(L, 2), readFloat(L, 3, 80),
+    return manager.pushReturn(L, manager.menuManager.createImageMenu(readString(L, 1, ''), readStringArray(L, 2), readFloat(L, 3, 80),
       readFloat(L, 4, 120), readFloat(L, 5, 95), readString(L, 6, 'hud'), manager.readValue(L, 7)));
   }
 
   static function lua_addLuaMainMenuItem(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
-    if (manager == null || manager.mainMenuState == null) return manager?.pushReturn(false) ?? 0;
+    if (manager == null || manager.mainMenuState == null) return manager?.pushReturn(L, false) ?? 0;
 
     var id = readString(L, 1, '');
     var assetPath = readString(L, 2, 'images:mainmenu/storymode');
@@ -3217,8 +3279,8 @@ class LuaScriptManager
     var animName = readString(L, 4, id);
     var target = readString(L, 5, '');
     final addMethod = Reflect.field(manager.mainMenuState, 'addLuaMenuItem');
-    if (addMethod == null) return manager.pushReturn(false);
-    return manager.pushReturn(Reflect.callMethod(manager.mainMenuState, addMethod, [id, assetPath, position, animName, target, function()
+    if (addMethod == null) return manager.pushReturn(L, false);
+    return manager.pushReturn(L, Reflect.callMethod(manager.mainMenuState, addMethod, [id, assetPath, position, animName, target, function()
     {
       manager.callHook('onLuaMainMenuAccept', [id]);
     }]));
@@ -3228,7 +3290,7 @@ class LuaScriptManager
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.configureLuaPauseMenu(manager.readValue(L, 1)));
+    return manager.pushReturn(L, manager.configureLuaPauseMenu(manager.readValue(L, 1)));
   }
 
   static function lua_setLuaPauseOptionsBehavior(L:cpp.RawPointer<Lua_State>):Int
@@ -3242,71 +3304,71 @@ class LuaScriptManager
     if (manager == null) return 0;
     final optionsClass = funkin.ui.options.OptionsState;
     final prepareMethod = Reflect.field(optionsClass, 'prepareLuaPauseReturn');
-    if (prepareMethod == null) return manager.pushReturn(false);
+    if (prepareMethod == null) return manager.pushReturn(L, false);
     Reflect.callMethod(optionsClass, prepareMethod, [{howExit: readString(L, 1, 'resume'), hideExit: true}]);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
   static function lua_setLuaPauseMenuItem(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.setLuaPauseMenuItem(readString(L, 1, ''), readString(L, 2, ''), readInt(L, 3, 999), readString(L, 4, ''), readBool(L, 5, false)));
+    return manager.pushReturn(L, manager.setLuaPauseMenuItem(readString(L, 1, ''), readString(L, 2, ''), readInt(L, 3, 999), readString(L, 4, ''), readBool(L, 5, false)));
   }
 
   static function lua_setLuaMenuItems(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.menuManager.setItems(readString(L, 1, ''), readStringArray(L, 2)));
+    return manager.pushReturn(L, manager.menuManager.setItems(readString(L, 1, ''), readStringArray(L, 2)));
   }
 
   static function lua_setLuaMenuPosition(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.menuManager.setPosition(readString(L, 1, ''), readFloat(L, 2, 80), readFloat(L, 3, 120), readFloat(L, 4, 34)));
+    return manager.pushReturn(L, manager.menuManager.setPosition(readString(L, 1, ''), readFloat(L, 2, 80), readFloat(L, 3, 120), readFloat(L, 4, 34)));
   }
 
   static function lua_showLuaMenu(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.menuManager.showMenu(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.menuManager.showMenu(readString(L, 1, '')));
   }
 
   static function lua_hideLuaMenu(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.menuManager.hideMenu(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.menuManager.hideMenu(readString(L, 1, '')));
   }
 
   static function lua_removeLuaMenu(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.menuManager.removeMenu(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.menuManager.removeMenu(readString(L, 1, '')));
   }
 
   static function lua_getLuaMenuSelected(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.menuManager.getSelected(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.menuManager.getSelected(readString(L, 1, '')));
   }
 
   static function lua_createShader(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.createShader(readString(L, 1, ''), readString(L, 2, ''), readString(L, 3, '')));
+    return manager.pushReturn(L, manager.shaderManager.createShader(readString(L, 1, ''), readString(L, 2, ''), readString(L, 3, '')));
   }
 
   static function lua_initLuaShader(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.initShader(readString(L, 1, ''), readString(L, 2, '')));
+    return manager.pushReturn(L, manager.shaderManager.initShader(readString(L, 1, ''), readString(L, 2, '')));
   }
 
   static function lua_makeLuaShader(L:cpp.RawPointer<Lua_State>):Int
@@ -3316,71 +3378,71 @@ class LuaScriptManager
 
     var tag = readString(L, 1, '');
     var path = readString(L, 2, '');
-    if (path == '') return manager.pushReturn(manager.shaderManager.initShader(tag));
-    return manager.pushReturn(manager.shaderManager.createShader(tag, path, readString(L, 3, '')));
+    if (path == '') return manager.pushReturn(L, manager.shaderManager.initShader(tag));
+    return manager.pushReturn(L, manager.shaderManager.createShader(tag, path, readString(L, 3, '')));
   }
 
   static function lua_setLuaShader(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.applyToTarget(readString(L, 1, ''), manager.resolveShaderTarget(readString(L, 2, ''))));
+    return manager.pushReturn(L, manager.shaderManager.applyToTarget(readString(L, 1, ''), manager.resolveShaderTarget(readString(L, 2, ''))));
   }
 
   static function lua_setShaderOnSprite(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.applyToTarget(readString(L, 2, ''), manager.resolveShaderTarget(readString(L, 1, ''))));
+    return manager.pushReturn(L, manager.shaderManager.applyToTarget(readString(L, 2, ''), manager.resolveShaderTarget(readString(L, 1, ''))));
   }
 
   static function lua_destroyShader(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.destroyShader(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.shaderManager.destroyShader(readString(L, 1, '')));
   }
 
   static function lua_shaderExists(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.hasShader(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.shaderManager.hasShader(readString(L, 1, '')));
   }
 
   static function lua_setShaderFloat(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.setFloat(readString(L, 1, ''), readString(L, 2, ''), readFloat(L, 3, 0)));
+    return manager.pushReturn(L, manager.shaderManager.setFloat(readString(L, 1, ''), readString(L, 2, ''), readFloat(L, 3, 0)));
   }
 
   static function lua_setShaderFloatArray(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.setFloatArray(readString(L, 1, ''), readString(L, 2, ''), readFloatArray(L, 3)));
+    return manager.pushReturn(L, manager.shaderManager.setFloatArray(readString(L, 1, ''), readString(L, 2, ''), readFloatArray(L, 3)));
   }
 
   static function lua_setShaderInt(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.setInt(readString(L, 1, ''), readString(L, 2, ''), readInt(L, 3, 0)));
+    return manager.pushReturn(L, manager.shaderManager.setInt(readString(L, 1, ''), readString(L, 2, ''), readInt(L, 3, 0)));
   }
 
   static function lua_setShaderBool(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.setBool(readString(L, 1, ''), readString(L, 2, ''), readBool(L, 3, false)));
+    return manager.pushReturn(L, manager.shaderManager.setBool(readString(L, 1, ''), readString(L, 2, ''), readBool(L, 3, false)));
   }
 
   static function lua_setShaderColor(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.setColor(readString(L, 1, ''), readString(L, 2, ''), readColor(L, 3, FlxColor.WHITE)));
+    return manager.pushReturn(L, manager.shaderManager.setColor(readString(L, 1, ''), readString(L, 2, ''), readColor(L, 3, FlxColor.WHITE)));
   }
 
   static function lua_tweenShaderFloat(L:cpp.RawPointer<Lua_State>):Int
@@ -3394,7 +3456,7 @@ class LuaScriptManager
     final duration = Math.max(0, readFloat(L, 5, 1));
     final easeName = readString(L, 6, 'linear');
     final tweenTag = readString(L, 7, 'shader:${shaderTag}:${property}');
-    if (shaderTag == '' || property == '' || !manager.shaderManager.hasShader(shaderTag)) return manager.pushReturn(false);
+    if (shaderTag == '' || property == '' || !manager.shaderManager.hasShader(shaderTag)) return manager.pushReturn(L, false);
 
     manager.cancelTween(tweenTag);
     final holder:Dynamic = {value: from};
@@ -3410,35 +3472,35 @@ class LuaScriptManager
       }
     });
     manager.tweens.set(tweenTag, shaderTween);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_applyShader(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.applyToTarget(readString(L, 1, ''), manager.resolveShaderTarget(readString(L, 2, ''))));
+    return manager.pushReturn(L, manager.shaderManager.applyToTarget(readString(L, 1, ''), manager.resolveShaderTarget(readString(L, 2, ''))));
   }
 
   static function lua_clearShader(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.clearTarget(manager.resolveShaderTarget(readString(L, 1, ''))));
+    return manager.pushReturn(L, manager.shaderManager.clearTarget(manager.resolveShaderTarget(readString(L, 1, ''))));
   }
 
   static function lua_applyCameraShader(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.applyToCamera(readString(L, 1, ''), manager.resolveCamera(readString(L, 2, 'game'))));
+    return manager.pushReturn(L, manager.shaderManager.applyToCamera(readString(L, 1, ''), manager.resolveCamera(readString(L, 2, 'game'))));
   }
 
   static function lua_clearCameraShader(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.shaderManager.clearCamera(manager.resolveCamera(readString(L, 1, 'game'))));
+    return manager.pushReturn(L, manager.shaderManager.clearCamera(manager.resolveCamera(readString(L, 1, 'game'))));
   }
 
   static function lua_tween(L:cpp.RawPointer<Lua_State>):Int
@@ -3452,29 +3514,26 @@ class LuaScriptManager
     var duration = readFloat(L, 4, 1);
     var easeName = readString(L, 5, 'linear');
 
-    if (tag == '' || target == null || values == null) return manager.pushReturn(false);
+    if (tag == '' || target == null || values == null) return manager.pushReturn(L, false);
 
     manager.cancelTween(tag);
     try
     {
-      var tween = FlxTween.tween(target, values, duration,
-        {
-          ease: resolveEase(easeName),
-          onComplete: function(_)
+      var tween = luaslice.script.ScriptTweenService.create(target, values, duration, easeName,
+          function(_)
           {
             manager.tweens.remove(tag);
             manager.callHook('onTweenCompleted', [tag]);
-          }
-        });
+          });
       manager.tweens.set(tag, tween);
     }
     catch (e)
     {
       trace('[LuaScriptManager] tween failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
 
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_tweenObjectX(L:cpp.RawPointer<Lua_State>):Int
@@ -3509,7 +3568,7 @@ class LuaScriptManager
     var duration = readFloat(L, 4, 1);
     var easeName = readString(L, 5, 'linear');
 
-    if (tag == '' || target == null) return manager.pushReturn(false);
+    if (tag == '' || target == null) return manager.pushReturn(L, false);
 
     manager.cancelTween(tag);
     try
@@ -3528,17 +3587,17 @@ class LuaScriptManager
     catch (e)
     {
       trace('[LuaScriptManager] tweenObject failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
 
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_cancelTween(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.cancelTween(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.cancelTween(readString(L, 1, '')));
   }
 
   static function lua_pauseTween(L:cpp.RawPointer<Lua_State>):Int
@@ -3546,9 +3605,9 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var tween = manager.tweens.get(readString(L, 1, ''));
-    if (tween == null) return manager.pushReturn(false);
+    if (tween == null) return manager.pushReturn(L, false);
     tween.active = false;
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_resumeTween(L:cpp.RawPointer<Lua_State>):Int
@@ -3556,9 +3615,9 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var tween = manager.tweens.get(readString(L, 1, ''));
-    if (tween == null) return manager.pushReturn(false);
+    if (tween == null) return manager.pushReturn(L, false);
     tween.active = true;
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_runTimer(L:cpp.RawPointer<Lua_State>):Int
@@ -3569,7 +3628,7 @@ class LuaScriptManager
     var tag = readString(L, 1, '');
     var delay = readFloat(L, 2, 1);
     var loops = readInt(L, 3, 1);
-    if (tag == '') return manager.pushReturn(false);
+    if (tag == '') return manager.pushReturn(L, false);
 
     manager.cancelTimer(tag);
     var timer = new FlxTimer().start(delay, function(tmr)
@@ -3578,14 +3637,14 @@ class LuaScriptManager
       if (tmr.loopsLeft <= 0) manager.timers.remove(tag);
     }, loops);
     manager.timers.set(tag, timer);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_cancelTimer(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.cancelTimer(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.cancelTimer(readString(L, 1, '')));
   }
 
   static function lua_playSound(L:cpp.RawPointer<Lua_State>):Int
@@ -3597,7 +3656,7 @@ class LuaScriptManager
     var key = readString(L, 2, '');
     var volume = readFloat(L, 3, 1);
     var looped = readBool(L, 4, false);
-    if (tag == '' || key == '') return manager.pushReturn(false);
+    if (tag == '' || key == '') return manager.pushReturn(L, false);
 
     manager.stopSound(tag);
     try
@@ -3608,16 +3667,16 @@ class LuaScriptManager
     catch (e)
     {
       trace('[LuaScriptManager] playSound failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_stopSound(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.stopSound(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.stopSound(readString(L, 1, '')));
   }
 
   static function lua_pauseSound(L:cpp.RawPointer<Lua_State>):Int
@@ -3625,9 +3684,9 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var sound = manager.sounds.get(readString(L, 1, ''));
-    if (sound == null) return manager.pushReturn(false);
+    if (sound == null) return manager.pushReturn(L, false);
     sound.pause();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_resumeSound(L:cpp.RawPointer<Lua_State>):Int
@@ -3635,9 +3694,9 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var sound = manager.sounds.get(readString(L, 1, ''));
-    if (sound == null) return manager.pushReturn(false);
+    if (sound == null) return manager.pushReturn(L, false);
     sound.resume();
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_setSoundVolume(L:cpp.RawPointer<Lua_State>):Int
@@ -3645,16 +3704,16 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var sound = manager.sounds.get(readString(L, 1, ''));
-    if (sound == null) return manager.pushReturn(false);
+    if (sound == null) return manager.pushReturn(L, false);
     sound.volume = readFloat(L, 2, sound.volume);
-    return manager.pushReturn(true);
+    return manager.pushReturn(L, true);
   }
 
   static function lua_soundExists(L:cpp.RawPointer<Lua_State>):Int
   {
     var manager = current();
     if (manager == null) return 0;
-    return manager.pushReturn(manager.sounds.exists(readString(L, 1, '')));
+    return manager.pushReturn(L, manager.sounds.exists(readString(L, 1, '')));
   }
 
   static function lua_playMusic(L:cpp.RawPointer<Lua_State>):Int
@@ -3664,12 +3723,12 @@ class LuaScriptManager
     try
     {
       FlxG.sound.playMusic(Paths.music(readString(L, 1, '')), readFloat(L, 2, 1), readBool(L, 3, true));
-      return manager.pushReturn(true);
+      return manager.pushReturn(L, true);
     }
     catch (e)
     {
       trace('[LuaScriptManager] playMusic failed: ${e}');
-      return manager.pushReturn(false);
+      return manager.pushReturn(L, false);
     }
   }
 
@@ -3841,11 +3900,11 @@ class LuaScriptManager
     if (manager == null) return 0;
     try
     {
-      return manager.pushReturn(Paths.image(readString(L, 1, ''), readString(L, 2, null)));
+      return manager.pushReturn(L, Paths.image(readString(L, 1, ''), readString(L, 2, null)));
     }
     catch (e)
     {
-      return manager.pushReturn(null);
+      return manager.pushReturn(L, null);
     }
   }
 
@@ -3855,11 +3914,11 @@ class LuaScriptManager
     if (manager == null) return 0;
     try
     {
-      return manager.pushReturn(Paths.sound(readString(L, 1, ''), readString(L, 2, null)));
+      return manager.pushReturn(L, Paths.sound(readString(L, 1, ''), readString(L, 2, null)));
     }
     catch (e)
     {
-      return manager.pushReturn(null);
+      return manager.pushReturn(L, null);
     }
   }
 
@@ -3869,11 +3928,11 @@ class LuaScriptManager
     if (manager == null) return 0;
     try
     {
-      return manager.pushReturn(Paths.music(readString(L, 1, ''), readString(L, 2, null)));
+      return manager.pushReturn(L, Paths.music(readString(L, 1, ''), readString(L, 2, null)));
     }
     catch (e)
     {
-      return manager.pushReturn(null);
+      return manager.pushReturn(L, null);
     }
   }
 
@@ -3883,11 +3942,11 @@ class LuaScriptManager
     if (manager == null) return 0;
     try
     {
-      return manager.pushReturn(Paths.font(readString(L, 1, '')));
+      return manager.pushReturn(L, Paths.font(readString(L, 1, '')));
     }
     catch (e)
     {
-      return manager.pushReturn(null);
+      return manager.pushReturn(L, null);
     }
   }
 
@@ -3897,11 +3956,11 @@ class LuaScriptManager
     if (manager == null) return 0;
     try
     {
-      return manager.pushReturn(Paths.file(readString(L, 1, '')));
+      return manager.pushReturn(L, Paths.file(readString(L, 1, '')));
     }
     catch (e)
     {
-      return manager.pushReturn(null);
+      return manager.pushReturn(L, null);
     }
   }
 
@@ -3911,11 +3970,11 @@ class LuaScriptManager
     if (manager == null) return 0;
     try
     {
-      return manager.pushReturn(Paths.json(readString(L, 1, ''), readString(L, 2, null)));
+      return manager.pushReturn(L, Paths.json(readString(L, 1, ''), readString(L, 2, null)));
     }
     catch (e)
     {
-      return manager.pushReturn(null);
+      return manager.pushReturn(L, null);
     }
   }
 
@@ -3924,8 +3983,8 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
-    if (target == null) return manager.pushReturn(false);
-    return manager.pushReturn(manager.safeSetProperty(target, field, readFloat(L, valueIndex, fallback)));
+    if (target == null) return manager.pushReturn(L, false);
+    return manager.pushReturn(L, manager.safeSetProperty(target, field, readFloat(L, valueIndex, fallback)));
   }
 
   static function getSimpleObjectField(L:cpp.RawPointer<Lua_State>, field:String, fallback:Float):Int
@@ -3933,8 +3992,8 @@ class LuaScriptManager
     var manager = current();
     if (manager == null) return 0;
     var target = manager.resolvePath(readString(L, 1, '')).value;
-    if (target == null) return manager.pushReturn(fallback);
-    return manager.pushReturn(manager.safeGetProperty(target, field) ?? fallback);
+    if (target == null) return manager.pushReturn(L, fallback);
+    return manager.pushReturn(L, manager.safeGetProperty(target, field) ?? fallback);
   }
 
   static function setPointObjectField(L:cpp.RawPointer<Lua_State>, field:String, xIndex:Int, yIndex:Int):Int
@@ -3945,9 +4004,9 @@ class LuaScriptManager
     var target = manager.resolvePath(readString(L, 1, '')).value;
     var point = target == null ? null : manager.safeGetProperty(target, field);
     var set = point == null ? null : manager.safeField(point, 'set');
-    if (set == null) return manager.pushReturn(false);
+    if (set == null) return manager.pushReturn(L, false);
 
-    return manager.pushReturn(manager.safeCallMethod(point, set,
+    return manager.pushReturn(L, manager.safeCallMethod(point, set,
       [readFloat(L, xIndex, manager.safeGetProperty(point, 'x') ?? 0), readFloat(L, yIndex, manager.safeGetProperty(point, 'y') ?? 0)]).ok);
   }
 
@@ -4047,28 +4106,12 @@ class LuaScriptManager
 
   function safeGetProperty(target:Dynamic, field:String):Dynamic
   {
-    try
-    {
-      return Reflect.getProperty(target, field);
-    }
-    catch (e)
-    {
-      return null;
-    }
+    return luaslice.script.ScriptPropertyService.read(target, field);
   }
 
   function safeSetProperty(target:Dynamic, field:String, value:Dynamic, report:Bool = true):Bool
   {
-    try
-    {
-      Reflect.setProperty(target, field, value);
-      return true;
-    }
-    catch (e)
-    {
-      if (report) reportLuaWarning('api-error', 'lua-api', 'setProperty', 'setProperty failed for ${field}: ${e}');
-      return false;
-    }
+    return properties.write(target, field, value, report);
   }
 
   function safeCallMethod(target:Dynamic, method:Dynamic, args:Array<Dynamic>):{ok:Bool, value:Dynamic}
@@ -4086,18 +4129,7 @@ class LuaScriptManager
 
   function resolvePath(path:String):{target:Dynamic, field:String, value:Dynamic}
   {
-    if (path == '') return {target: null, field: '', value: null};
-
-    var parts = cachedPathParts(path);
-    var value:Dynamic = resolveRoot(parts.shift());
-
-    for (part in parts)
-    {
-      if (value == null) return {target: null, field: part, value: null};
-      value = resolvePart(value, part);
-    }
-
-    return {target: null, field: '', value: value};
+    return {target: null, field: '', value: properties.get(path)};
   }
 
   function resolveShaderTarget(path:String):Dynamic
@@ -4134,19 +4166,7 @@ class LuaScriptManager
 
   function resolveParent(path:String):{target:Dynamic, field:String}
   {
-    var parts = cachedPathParts(path);
-    if (parts.length == 0) return {target: null, field: ''};
-
-    var field = parts.pop();
-    var target:Dynamic = resolveRoot(parts.shift());
-
-    for (part in parts)
-    {
-      if (target == null) return {target: null, field: field};
-      target = resolvePart(target, part);
-    }
-
-    return {target: target, field: field};
+    return properties.parent(path);
   }
 
   function resolveEventParent(path:String):{target:Dynamic, field:String}
@@ -4170,13 +4190,7 @@ class LuaScriptManager
 
   function cachedPathParts(path:String):Array<String>
   {
-    var cached = pathPartsCache.get(path);
-    if (cached == null)
-    {
-      cached = path == '' ? [] : path.split('.');
-      pathPartsCache.set(path, cached);
-    }
-    return cached.copy();
+    return properties.parts(path);
   }
 
   function resolveRoot(root:Null<String>):Dynamic
@@ -4217,33 +4231,14 @@ class LuaScriptManager
         else
         {
           var text = texts.get(root);
-          if (text != null) text else objects.get(root);
+          if (text != null) text else objects.get(root) ?? safeGetProperty(playState, root);
         }
     }
   }
 
   function resolvePart(target:Dynamic, part:String):Dynamic
   {
-    if (target == null) return null;
-
-    var bracketIndex = part.indexOf('[');
-    if (bracketIndex > -1 && StringTools.endsWith(part, ']'))
-    {
-      var field = part.substr(0, bracketIndex);
-      var index = Std.parseInt(part.substring(bracketIndex + 1, part.length - 1));
-      var value:Dynamic = field == '' ? target : safeGetProperty(target, field);
-      if (index == null || value == null) return null;
-
-      if (Std.isOfType(value, Array))
-      {
-        var array:Array<Dynamic> = cast value;
-        return array[index];
-      }
-
-      return safeGetProperty(value, Std.string(index));
-    }
-
-    return safeGetProperty(target, part);
+    return luaslice.script.ScriptPropertyService.part(target, part);
   }
 
   function readValue(L:cpp.RawPointer<Lua_State>, index:Int):Dynamic
@@ -4251,9 +4246,8 @@ class LuaScriptManager
     var luaType = Lua.type(L, index);
 
     if (luaType == Lua.TNIL || luaType == Lua.TNONE) return null;
-    if (luaType == Lua.TBOOLEAN) return Lua.toboolean(L, index) != 0;
-    if (luaType == Lua.TNUMBER) return Lua.tonumber(L, index);
-    if (luaType == Lua.TSTRING) return Std.string(Lua.tostring(L, index));
+    if (luaType == Lua.TBOOLEAN || luaType == Lua.TNUMBER || luaType == Lua.TSTRING)
+      return hxluajit.wrapper.LuaConverter.fromLua(L, index);
     if (luaType == Lua.TTABLE) return readTable(L, index);
 
     return Std.string(Lua.tostring(L, index));
@@ -4269,7 +4263,7 @@ class LuaScriptManager
 
   function readTable(L:cpp.RawPointer<Lua_State>, index:Int):Dynamic
   {
-    var absoluteIndex = Lua.absindex(L, index);
+    var absoluteIndex = LuaRuntime.absoluteIndex(L, index);
     var result:Dynamic = {};
     var arrayValues:Map<Int, Dynamic> = new Map<Int, Dynamic>();
     var hasArrayValues = false;
@@ -4352,7 +4346,7 @@ class LuaScriptManager
       return raw == '' ? values : raw.split('|');
     }
 
-    var absoluteIndex = Lua.absindex(L, index);
+    var absoluteIndex = LuaRuntime.absoluteIndex(L, index);
     var i = 1;
     while (true)
     {
@@ -4379,7 +4373,7 @@ class LuaScriptManager
       return values;
     }
 
-    var absoluteIndex = Lua.absindex(L, index);
+    var absoluteIndex = LuaRuntime.absoluteIndex(L, index);
     var i = 1;
     while (true)
     {
@@ -4455,28 +4449,7 @@ class LuaScriptManager
 
   static function resolveEase(name:String):EaseFunction
   {
-    return switch (name)
-    {
-      case 'quadIn': FlxEase.quadIn;
-      case 'quadOut': FlxEase.quadOut;
-      case 'quadInOut': FlxEase.quadInOut;
-      case 'cubeIn': FlxEase.cubeIn;
-      case 'cubeOut': FlxEase.cubeOut;
-      case 'cubeInOut': FlxEase.cubeInOut;
-      case 'sineIn': FlxEase.sineIn;
-      case 'sineOut': FlxEase.sineOut;
-      case 'sineInOut': FlxEase.sineInOut;
-      case 'elasticIn': FlxEase.elasticIn;
-      case 'elasticOut': FlxEase.elasticOut;
-      case 'elasticInOut': FlxEase.elasticInOut;
-      case 'bounceIn': FlxEase.bounceIn;
-      case 'bounceOut': FlxEase.bounceOut;
-      case 'bounceInOut': FlxEase.bounceInOut;
-      case 'backIn': FlxEase.backIn;
-      case 'backOut': FlxEase.backOut;
-      case 'backInOut': FlxEase.backInOut;
-      default: FlxEase.linear;
-    }
+    return luaslice.script.ScriptTweenService.resolveEase(name);
   }
   #end
 }

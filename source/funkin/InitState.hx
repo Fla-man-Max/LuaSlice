@@ -367,6 +367,16 @@ class InitState extends FlxState
    */
   function startGame():Void
   {
+    #if (sys && FEATURE_PSYCH_LUA)
+    for (argument in Sys.args())
+    {
+      if (StringTools.startsWith(argument, '--lua-song='))
+      {
+        startSong(argument.substr('--lua-song='.length), 'normal');
+        return;
+      }
+    }
+    #end
     // Don't play transition in when entering the title state.
     FlxTransitionableState.skipNextTransIn = true;
 

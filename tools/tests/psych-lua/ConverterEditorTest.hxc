@@ -1,0 +1,65 @@
+import funkin.modding.module.Module;
+import funkin.ui.debug.charting.ChartEditorState;
+import funkin.ui.debug.charting.handlers.ChartEditorImportExportHandler;
+import funkin.ui.debug.charting.handlers.ChartEditorAudioHandler;
+import funkin.data.song.importer.PsychEngineImporter;
+import funkin.data.song.importer.CodenameEngineImporter;
+import funkin.play.PlayState;
+import funkin.Paths;
+import funkin.Assets;
+import funkin.Preferences;
+import flixel.FlxG;
+import haxe.Json;
+import haxe.io.Bytes;
+
+class ConverterEditorTest extends Module
+{
+    var phase = 0;
+
+    public function new()
+    {
+        super("converter-editor-test");
+    }
+
+    override function onUpdate(event)
+    {
+        if (phase == 0 && Std.isOfType(FlxG.state, PlayState))
+        {
+            phase = 1;
+            Preferences.autoPause = false;
+            FlxG.autoPause = false;
+            FlxG.switchState(() -> new ChartEditorState({targetSongId: "tutorial"}));
+        }
+        else if (phase == 1 && Std.isOfType(FlxG.state, ChartEditorState))
+        {
+            phase = 2;
+            try
+            {
+                var editor = FlxG.state;
+                var bytes = Assets.getBytes(Paths.inst("tutorial"));
+                if (bytes == null || bytes.length == 0) throw "Test OGG missing";
+                var psych = PsychEngineImporter.parseRaw('{"song":"Converted","bpm":120,"format":"psych_v1","notes":[{"sectionNotes":[[100,0,0],[300,4,150]]}]}');
+                var codename = CodenameEngineImporter.parseRaw('{"meta":{"displayName":"Converted","bpm":160},"strumLines":[{"type":0,"characters":["dad"],"notes":[{"time":100,"id":0,"type":0,"sLen":0}]},{"type":1,"characters":["bf"],"notes":[]}]}');
+                for (index in 0...4)
+                {
+                    var metadata = index % 2 == 0 ? PsychEngineImporter.migrateMetadata(psych) : CodenameEngineImporter.migrateMetadata(codename);
+                    var chart = index % 2 == 0 ? PsychEngineImporter.migrateChartData(psych) : CodenameEngineImporter.migrateChartData(codename);
+                    ChartEditorImportExportHandler.loadSong(editor, ["default" => metadata], ["default" => chart]);
+                    ChartEditorAudioHandler.wipeInstrumentalData(editor);
+                    ChartEditorAudioHandler.wipeVocalData(editor);
+                    ChartEditorAudioHandler.loadInstFromBytes(editor, bytes);
+                    if (!ChartEditorAudioHandler.switchToInstrumental(editor, "", "bf", "dad")) throw "OGG instrumental activation failed";
+                    ChartEditorAudioHandler.loadVocalsFromBytes(editor, bytes, "bf");
+                    ChartEditorAudioHandler.refreshVocals(editor, "", "bf", "dad");
+                }
+                ChartEditorAudioHandler.loadInstFromBytes(editor, Bytes.ofString("not audio"), "invalid");
+                if (ChartEditorAudioHandler.playInstrumental(editor, "invalid")) throw "Corrupt audio accepted";
+                trace("CONVERTER_EDITOR_OGG_OK");
+            }
+            catch (error:Dynamic)
+            {
+                trace("CONVERTER_EDITOR_FAILED: " + error);
+            }
+        }
+    }
+}

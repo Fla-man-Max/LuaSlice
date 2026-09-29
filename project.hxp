@@ -38,7 +38,7 @@ class Project extends HXProject
    * The build's number and version code.
    * Used when publishing the game to mobile app stores. Should increment with each patch.
    */
-  static final BUILD_NUMBER:Int = 101;
+  static final BUILD_NUMBER:Int = 102;
 
   /**
    * The game's name. Used as the default window title.
@@ -1270,10 +1270,10 @@ class Project extends HXProject
   function configureIOS()
   {
     // launchStoryboard = new LaunchStoryboard();
-    // launchStoryboard.path = "other/LaunchScreen.storyboard";
+    // launchStoryboard.path = "./LaunchScreen.storyboard";
 
     // Grab the stuff from a fake plist and then embbed it into the original to maintain a clear format!
-    final documentTypes:String = File.getContent("other/documentTypes.plist");
+    final documentTypes:String = File.getContent("documentTypes.plist");
 
     @:nullSafety(Off)
     {
@@ -1380,7 +1380,10 @@ class Project extends HXProject
 
     if (FEATURE_LUA_SCRIPTS.isEnabled(this))
     {
-      addHaxelib('hxlua');
+      addHaxelib('hxluajit');
+      addHaxelib('hxluajit-wrapper');
+      addHaxelib('hscript-iris');
+      setHaxedef('FEATURE_PSYCH_LUA');
     }
 
     if (FEATURE_SSCRIPT_SCRIPTS.isEnabled(this))
@@ -1526,6 +1529,7 @@ class Project extends HXProject
     addAsset("changelogs/CHANGELOG - ENGINE.md", "CHANGELOG - ENGINE.md", "art", shouldEmbedArt);
     addAsset("changelogs/CHANGELOG - FNF.md", "CHANGELOG - FNF.md", "art", shouldEmbedArt);
     addAsset("changelogs/LuaSlice Lua API.md", "LuaSlice Lua API.md", "art", shouldEmbedArt);
+    addAsset("changelogs/CHANGELOG - PSYCH API.MD", "CHANGELOG - PSYCH API.MD", "art", shouldEmbedArt);
 
     if (shouldEmbed)
     {
@@ -2086,7 +2090,7 @@ class Project extends HXProject
   {
     var differentLibraries:Map<String, Array<String>> = new Map<String, Array<String>>();
 
-    var hmmData:Dynamic = haxe.Json.parse(sys.io.File.getContent(#if ios '../../../../../' + #end 'other/hmm.json'));
+    var hmmData:Dynamic = haxe.Json.parse(sys.io.File.getContent(#if ios '../../../../../' + #end 'hmm.json'));
 
     var dependencies:Array<Dynamic> = cast hmmData.dependencies;
 
@@ -2133,7 +2137,7 @@ class Project extends HXProject
 
     if (Lambda.count(differentLibraries) > 0)
     {
-      warn("Some libraries differ from the versions defined in other/hmm.json.".bold().yellow());
+      warn("Some libraries differ from the versions defined in hmm.json.".bold().yellow());
       warn("To ensure consistency, it's recommended to stop the build and run `hmm reinstall [library]`.".bold().yellow());
       warn("If you're intentionally using development builds or newer versions, you can ignore this warning.".bold().yellow());
 
@@ -2438,7 +2442,7 @@ class Project extends HXProject
   public function readASTCExclusion():Void
   {
     @:nullSafety(Off)
-    astcExcludes = haxe.Json.parse(File.getContent('other/astc-compression-data.json')).excludes;
+    astcExcludes = haxe.Json.parse(File.getContent('./astc-compression-data.json')).excludes;
 
     for (i in 0...astcExcludes.length)
       astcExcludes[i] = astcExcludes[i].trim();
@@ -2477,7 +2481,7 @@ class Project extends HXProject
 
     var args:Array<String> = ['run', 'astc-compressor', 'compress-from-json'];
 
-    args = args.concat(['-json', 'other/astc-compression-data.json']);
+    args = args.concat(['-json', './astc-compression-data.json']);
 
     if (isCleanFlag())
     {

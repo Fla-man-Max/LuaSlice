@@ -22,7 +22,9 @@ class LuaErrorManager
     final key = makeKey(kind, scriptPath, hookName, message, fromFiles);
     if (reportPaths.exists(key)) return reportPaths.get(key);
 
-    var reportPath = writeReport(kind, scriptPath, hookName, buildReport(kind, scriptPath, hookName, message, fromFiles));
+    var reportPath = '';
+    try { reportPath = writeReport(kind, scriptPath, hookName, buildReport(kind, scriptPath, hookName, message, fromFiles)); }
+    catch (error:Dynamic) { trace('[LuaSlice] Cannot save script error report: ${error}'); }
     reportPaths.set(key, reportPath);
     LuaLogger.error(kind, scriptPath, hookName, message, reportPath);
     showPopup(kind, scriptPath, hookName, message, reportPath, fromFiles);
@@ -52,6 +54,7 @@ class LuaErrorManager
     final key = makeKey(kind, scriptPath, hookName, message, fromFiles);
     if (shownKeys.exists(key)) return;
     shownKeys.set(key, true);
+    if (popupCount >= MAX_POPUPS_PER_SESSION) return;
 
     final lineNumber = extractLineNumber(message);
     popupCount++;

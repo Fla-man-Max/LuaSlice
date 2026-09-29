@@ -1,0 +1,4 @@
+privateValue = 'folder'
+function onCreate()
+    setVar('folderLoaded', true)
+end

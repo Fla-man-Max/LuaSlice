@@ -1,4 +1,4 @@
-# Troubleshooting Common Compilation Issues
+# Troubleshooting Common Compilation Issues (From Funkin' Crew)
 
 - Any output containing `WARNING` or `(WDeprecated)`
   - Will not disrupt compilation and can be safely ignored.

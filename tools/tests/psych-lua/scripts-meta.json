@@ -1,0 +1,7 @@
+{
+  "title": "Legacy script test directory",
+  "description": "Legacy root-script fixtures for isolated automated tests.",
+  "api_version": "0.8.6",
+  "mod_version": "1.0.0",
+  "license": "Apache-2.0"
+}

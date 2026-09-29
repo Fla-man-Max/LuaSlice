@@ -1,4 +1,4 @@
-# Mac Compiling Guide + Considerations
+# Mac Compiling Guide + Considerations (From Funkin' Crew)
 
 There's a few extra considerations when compiling FNF for Mac that *we* have to handle when creating a wider release.
 - [Creating a Universal Binary](#creating-a-universal-binary)

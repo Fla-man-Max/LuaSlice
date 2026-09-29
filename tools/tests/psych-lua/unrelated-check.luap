@@ -1,0 +1,2 @@
+setVar('unrelatedLoaded', true)
+error('Unrelated song script was loaded')

@@ -1,2 +1,2 @@
 Hi! Please don't delete this file. LuaSlice needs it to know which version is installed. Please don't edit or delete anything in this file.
-v0.0.9
+v0.1.0

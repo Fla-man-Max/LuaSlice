@@ -43,10 +43,47 @@ class CodenameEngineImporter
     return cleanName == '' ? 'normal' : cleanName;
   }
 
+  public static function sidecarPaths(chartPath:String, kind:String):Array<String>
+  {
+    final path = new haxe.io.Path(chartPath.replace('\\', '/'));
+    var folder = path.dir ?? '';
+    var variant = '';
+    final parent = haxe.io.Path.directory(folder);
+    if (haxe.io.Path.withoutDirectory(folder).toLowerCase() == 'charts') folder = parent;
+    else if (haxe.io.Path.withoutDirectory(parent).toLowerCase() == 'charts')
+    {
+      variant = haxe.io.Path.withoutDirectory(folder);
+      folder = haxe.io.Path.directory(parent);
+    }
+    final names:Array<String> = [];
+    if (kind == 'meta')
+    {
+      if (variant != '') names.push('meta-${variant}-${path.file}.json');
+      if (variant != '') names.push('meta-${variant}.json');
+      names.push('meta-${path.file}.json');
+      names.push('meta.json');
+    }
+    else
+    {
+      if (variant != '') names.push('events-${variant}.json');
+      names.push('events.json');
+    }
+    return [for (name in names) haxe.io.Path.join([folder, name])];
+  }
+
   public static function migrateMetadata(chart:Dynamic, difficulty:String = 'normal', ?externalMetadata:Dynamic, ?externalEvents:Dynamic):SongMetadata
   {
     final embeddedMetadata = field(chart, 'meta');
-    final sourceMetadata = externalMetadata ?? embeddedMetadata;
+    final sourceMetadata:Dynamic = {};
+    for (source in [externalMetadata, embeddedMetadata])
+    {
+      if (source == null || Type.typeof(source) != TObject) continue;
+      for (name in Reflect.fields(source))
+      {
+        final value = field(source, name);
+        if (value != null) Reflect.setField(sourceMetadata, name, value);
+      }
+    }
     final name = nonEmptyString(field(sourceMetadata, 'displayName') ?? field(sourceMetadata, 'name'), 'Imported Song');
     final metadata = new SongMetadata(name, nonEmptyString(field(sourceMetadata, 'artist'), Constants.DEFAULT_ARTIST),
       nonEmptyString(field(sourceMetadata, 'charter'), Constants.DEFAULT_CHARTER), Constants.DEFAULT_VARIATION);
@@ -122,7 +159,7 @@ class CodenameEngineImporter
 
   static function migrateTimeChanges(chart:Dynamic, baseBpm:Float, ?externalEvents:Dynamic):Array<SongTimeChange>
   {
-    final result = [new SongTimeChange(0, baseBpm)];
+    final changes:Map<String, SongTimeChange> = ['0' => new SongTimeChange(0, baseBpm)];
     final sources = [arrayValue(field(chart, 'events'))];
     if (externalEvents != null) sources.push(arrayValue(field(externalEvents, 'events')));
 
@@ -135,10 +172,10 @@ class CodenameEngineImporter
         if (params.length == 0) continue;
         final bpm = validBpm(params[0], baseBpm);
         final time = Math.max(0, floatValue(field(event, 'time'), 0));
-        if (time == 0) result[0] = new SongTimeChange(0, bpm);
-        else result.push(new SongTimeChange(time, bpm));
+        changes.set(Std.string(time), new SongTimeChange(time, bpm));
       }
     }
+    final result = [for (change in changes) change];
     result.sort((a, b) -> a.timeStamp < b.timeStamp ? -1 : (a.timeStamp > b.timeStamp ? 1 : 0));
     return result;
   }
@@ -292,7 +329,7 @@ class CodenameEngineImporter
   static function floatValue(value:Dynamic, fallback:Float):Float
   {
     final result = Std.parseFloat(Std.string(value));
-    return Math.isNaN(result) ? fallback : result;
+    return Math.isFinite(result) ? result : fallback;
   }
 
   static function intValue(value:Dynamic, fallback:Int):Int
