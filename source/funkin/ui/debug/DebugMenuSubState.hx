@@ -11,17 +11,13 @@ import funkin.ui.debug.charting.ChartEditorState;
 import funkin.util.logging.CrashHandler;
 import flixel.addons.transition.FlxTransitionableState;
 import funkin.util.FileUtil;
-#if FEATURE_TOUCH_CONTROLS
+#if (mobile && FEATURE_TOUCH_CONTROLS)
 import flixel.util.FlxColor;
-import funkin.mobile.ui.FunkinBackButton;
 #end
 
 class DebugMenuSubState extends MusicBeatSubState
 {
   var items:TextMenuList;
-  #if FEATURE_TOUCH_CONTROLS
-  var backButton:Null<FunkinBackButton>;
-  #end
   final exitCallback:Null<Void->Void>;
 
   /**
@@ -92,13 +88,11 @@ class DebugMenuSubState extends MusicBeatSubState
     #end
     if (items.length == 0) createItem('BACK', exitDebugMenu);
 
-    #if FEATURE_TOUCH_CONTROLS
-    // Menu entries already use TextMenuList touch selection, but the
-    // debug menu also needs a visible way back without a keyboard.
-    backButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, exitDebugMenu, 1.0);
-    backButton.scrollFactor.set();
-    backButton.onConfirmStart.add(() -> items.busy = true);
-    add(backButton);
+    #if (mobile && FEATURE_TOUCH_CONTROLS)
+    // Reuse MusicBeatSubState's mobile controls camera, so the back
+    // button stays visible and tappable while the menu scrolls.
+    addBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, exitDebugMenu, 1.0);
+    backButton?.onConfirmStart.add(function() { items.busy = true; });
     #end
 
     onMenuChange(items.members[0]);
