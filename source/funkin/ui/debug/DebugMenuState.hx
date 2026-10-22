@@ -8,6 +8,13 @@ import funkin.ui.FullScreenScaleMode;
 class DebugMenuState extends MusicBeatState
 {
   var leaving:Bool = false;
+  final returnToOptions:Bool;
+
+  public function new(returnToOptions:Bool = false)
+  {
+    super();
+    this.returnToOptions = returnToOptions;
+  }
 
   override function create():Void
   {
@@ -30,6 +37,13 @@ class DebugMenuState extends MusicBeatState
   {
     if (leaving) return;
     leaving = true;
-    FlxG.switchState(() -> new MainMenuState());
+    if (returnToOptions)
+    {
+      FlxG.switchState(() -> new funkin.ui.options.OptionsState());
+    }
+    else
+    {
+      FlxG.switchState(() -> new MainMenuState());
+    }
   }
 }
