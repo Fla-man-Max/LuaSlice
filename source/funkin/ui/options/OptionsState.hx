@@ -234,12 +234,14 @@ class OptionsMenu extends Page<OptionsMenuPageName>
       InAppPurchasesUtil.restorePurchases();
     });
     #end
-    #if (mobile && FEATURE_DEBUG_MENU)
+    // Keep the mobile mod manager accessible from Options in release builds
+    // even if developer-only debug hotkeys are disabled.
+    #if (mobile && (FEATURE_DEBUG_MENU || FEATURE_POLYMOD_MODS))
     createItem('DEBUG MENU', function()
     {
       FlxTransitionableState.skipNextTransIn = true;
       FlxTransitionableState.skipNextTransOut = true;
-      FlxG.switchState(() -> new funkin.ui.debug.DebugMenuState());
+      FlxG.switchState(() -> new funkin.ui.debug.DebugMenuState(true));
     });
     #end
     // Create an object for the camera to track.
@@ -283,7 +285,7 @@ class OptionsMenu extends Page<OptionsMenuPageName>
     #if NO_FEATURE_TOUCH_CONTROLS
     createItem('EXIT', exit);
     #else
-    backButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, exit, 1.0);
+    backButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, exit, 1.0);
     backButton.onConfirmStart.add(function()
     {
       items.busy = true;
