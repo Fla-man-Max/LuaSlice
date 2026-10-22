@@ -11,10 +11,17 @@ import funkin.ui.debug.charting.ChartEditorState;
 import funkin.util.logging.CrashHandler;
 import flixel.addons.transition.FlxTransitionableState;
 import funkin.util.FileUtil;
+#if FEATURE_TOUCH_CONTROLS
+import flixel.util.FlxColor;
+import funkin.mobile.ui.FunkinBackButton;
+#end
 
 class DebugMenuSubState extends MusicBeatSubState
 {
   var items:TextMenuList;
+  #if FEATURE_TOUCH_CONTROLS
+  var backButton:Null<FunkinBackButton>;
+  #end
   final exitCallback:Null<Void->Void>;
 
   /**
@@ -83,6 +90,17 @@ class DebugMenuSubState extends MusicBeatSubState
     #if sys
     createItem("OPEN CRASH LOG FOLDER", openLogFolder);
     #end
+    if (items.length == 0) createItem('BACK', exitDebugMenu);
+
+    #if FEATURE_TOUCH_CONTROLS
+    // Menu entries already use TextMenuList touch selection, but the
+    // debug menu also needs a visible way back without a keyboard.
+    backButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, exitDebugMenu, 1.0);
+    backButton.scrollFactor.set();
+    backButton.onConfirmStart.add(() -> items.busy = true);
+    add(backButton);
+    #end
+
     onMenuChange(items.members[0]);
     FlxG.camera.focusOn(new FlxPoint(camFocusPoint.x, camFocusPoint.y + 500));
 
