@@ -155,6 +155,10 @@ jobs:
           restore-keys: |
             hxcpp-${{ runner.os }}-${{ github.job }}-${{ env.TOOLCHAIN_ID }}-
 
+      - &drop-precompiled-headers
+        name: Drop cached precompiled headers
+        run: find "$HXCPP_COMPILE_CACHE" -type d -name 'pch*' -prune -exec rm -rf {} +
+
       - name: Set up Java 17
         uses: actions/setup-java@v5
         with:
@@ -182,7 +186,7 @@ jobs:
             echo "ANDROID_NDK_HOME=$sdk/ndk/$ANDROID_NDK_VERSION"
           } >> "$GITHUB_ENV"
 
-      - name: Build Lime native libraries
+      - name: Build Lime host library
         if: steps.libraries.outputs.cache-hit != 'true'
         run: |
           sudo apt-get install -y -qq --no-install-recommends \
@@ -192,6 +196,17 @@ jobs:
             libdecor-0-dev libdbus-1-dev libudev-dev libdrm-dev libgbm-dev \
             libpipewire-0.3-dev libspa-0.2-dev libxfixes-dev libxtst-dev libegl-dev libgles-dev > /dev/null
           haxelib run lime rebuild linux -release -64 2>&1 | tee "$LOGS/lime-host.log"
+
+      - name: Configure Lime
+        run: |
+          haxelib run lime config ANDROID_SETUP true
+          haxelib run lime config ANDROID_SDK "$ANDROID_HOME"
+          haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_ROOT"
+          haxelib run lime config JAVA_HOME "$JAVA_HOME"
+
+      - name: Build Lime Android library
+        if: steps.libraries.outputs.cache-hit != 'true'
+        run: |
           haxelib run lime rebuild android -release -arm64 2>&1 | tee "$LOGS/lime-android.log"
           rm -rf .haxelib/lime/git/project/obj
 
@@ -202,12 +217,6 @@ jobs:
         with:
           path: .haxelib
           key: ${{ steps.libraries.outputs.cache-primary-key }}
-
-      - name: Configure Lime
-        run: |
-          haxelib run lime config ANDROID_SDK "$ANDROID_HOME"
-          haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_ROOT"
-          haxelib run lime config JAVA_HOME "$JAVA_HOME"
 
       - &restore-astc
         name: Restore ASTC textures
@@ -324,6 +333,7 @@ jobs:
       - *restore-libraries
       - *install-libraries
       - *restore-compile-cache
+      - *drop-precompiled-headers
 
       - name: Build Lime native libraries
         if: steps.libraries.outputs.cache-hit != 'true'
@@ -386,6 +396,7 @@ jobs:
       - *restore-libraries
       - *install-libraries
       - *restore-compile-cache
+      - *drop-precompiled-headers
 
       - name: Build Lime native libraries
         if: steps.libraries.outputs.cache-hit != 'true'
