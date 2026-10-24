@@ -12,6 +12,7 @@ class PsychLuaScript
   public static inline var STOP = '##PSYCHLUA_FUNCTIONSTOP';
   public static inline var STOP_LUA = '##PSYCHLUA_FUNCTIONSTOPLUA';
   public static inline var STOP_ALL = '##PSYCHLUA_FUNCTIONSTOPALL';
+  public static inline var STOP_HSCRIPT = '##PSYCHLUA_FUNCTIONSTOPHSCRIPT';
   static var nextId:Int = 0;
   static final instances:Map<Int, PsychLuaScript> = [];
   final callbacks:Map<String, Dynamic> = [];
@@ -42,7 +43,7 @@ class PsychLuaScript
     set('Function_Stop', STOP);
     set('Function_StopLua', STOP_LUA);
     set('Function_StopAll', STOP_ALL);
-    set('Function_StopHScript', '##PSYCHLUA_FUNCTIONSTOPHSCRIPT');
+    set('Function_StopHScript', STOP_HSCRIPT);
     set('version', '1.0.4');
     set('vSliceVersion', '0.8.6');
     set('luaSliceVersion', funkin.util.Constants.LUASLICE_VERSION);

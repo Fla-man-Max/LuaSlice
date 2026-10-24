@@ -28,10 +28,14 @@ import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
 import openfl.display.BitmapData;
+import flixel.addons.transition.FlxTransitionableState;
+import funkin.graphics.FunkinSprite;
+import funkin.modding.PolymodHandler;
 using StringTools;
 
 @:access(funkin.play.PlayState)
 @:access(funkin.play.character.BaseCharacter)
+@:access(funkin.modding.PolymodHandler)
 class PsychLuaAPI
 {
   public static final names:Map<String, Bool> = [];
@@ -169,6 +173,7 @@ class PsychLuaAPI
     installFiles();
     installShaders();
     installScripts();
+    installCompat();
     add('getHealth', () -> host.game.health);
     add('openCustomSubstate', (name:String, pauseGame:Bool = false) -> {
       if (host.game.subState != null) return false;
@@ -269,7 +274,8 @@ class PsychLuaAPI
       'objectPlayAnimation' => 'playAnim', 'luaSpritePlayAnimation' => 'playAnim',
       'luaSpriteMakeGraphic' => 'makeGraphic', 'setLuaSpriteCamera' => 'setObjectCamera',
       'setLuaSpriteScrollFactor' => 'setScrollFactor', 'scaleLuaSprite' => 'scaleObject',
-      'luaSpriteAddAnimationByPrefix' => 'addAnimationByPrefix', 'luaSpriteAddAnimationByIndices' => 'addAnimationByIndices'])
+      'luaSpriteAddAnimationByPrefix' => 'addAnimationByPrefix', 'luaSpriteAddAnimationByIndices' => 'addAnimationByIndices',
+      'insertToCustomSubstate' => 'addToCustomSubstate'])
     {
       script.execute(alias + ' = ' + target, 'compatibility-alias'); names.set(alias, true);
     }
@@ -453,24 +459,223 @@ class PsychLuaAPI
     add('addLuaScript', (name:String, allowDuplicate:Bool = false) -> { var path = scriptPath(name); return host.load(path, script.root); });
     add('removeLuaScript', (name:String) -> { var entry = findScript(name); if (entry == null) return false; entry.closed = true; return true; });
     add('callScript', (name:String, hook:String, args:Array<Dynamic> = null) -> { var entry = findScript(name); if (entry == null) throw 'Script is not loaded: $name'; return entry.call(hook, args ?? []); });
-    for (name in ['callOnLuas', 'callOnScripts']) add(name, (hook:String, args:Array<Dynamic> = null, ignoreStops:Bool = false, ignoreSelf:Bool = true, exclusions:Array<String> = null, excludeValues:Array<Dynamic> = null) -> {
-      var result:Dynamic = PsychLuaScript.CONTINUE;
-      for (entry in host.scripts.copy())
-      {
-        if (entry.closed || (ignoreSelf && entry == script) || (exclusions != null && exclusions.contains(entry.path))) continue;
-        var value = entry.call(hook, args ?? []);
-        if (excludeValues != null && excludeValues.contains(value)) continue;
-        if (value != PsychLuaScript.CONTINUE) result = value;
-        if (!ignoreStops && (value == PsychLuaScript.STOP_LUA || value == PsychLuaScript.STOP_ALL)) break;
-      }
-      return result;
-    });
-    for (name in ['setOnLuas', 'setOnScripts']) add(name, (field:String, value:Dynamic, ignoreSelf:Bool = false, exclusions:Array<String> = null) -> {
-      for (entry in host.scripts) if ((!ignoreSelf || entry != script) && (exclusions == null || !exclusions.contains(entry.path))) entry.set(field, value);
-    });
+    for (name in ['callOnLuas', 'callOnScripts'])
+    {
+      final includeHScripts = name == 'callOnScripts';
+      add(name, (hook:String, args:Array<Dynamic> = null, ignoreStops:Bool = false, ignoreSelf:Bool = true, exclusions:Array<String> = null, excludeValues:Array<Dynamic> = null) -> {
+        var result:Dynamic = PsychLuaScript.CONTINUE;
+        for (entry in host.scripts.copy())
+        {
+          if (entry.closed || (ignoreSelf && entry == script) || (exclusions != null && exclusions.contains(entry.path))) continue;
+          var value = entry.call(hook, args ?? []);
+          if (excludeValues != null && excludeValues.contains(value)) continue;
+          if (value != PsychLuaScript.CONTINUE) result = value;
+          if (!ignoreStops && value == PsychLuaScript.STOP_ALL) return result;
+          if (!ignoreStops && value == PsychLuaScript.STOP_LUA) break;
+        }
+        if (includeHScripts)
+        {
+          var value = host.callHScripts(hook, args ?? [], ignoreStops, exclusions, excludeValues);
+          if (value != PsychLuaScript.CONTINUE) result = value;
+        }
+        return result;
+      });
+    }
+    for (name in ['setOnLuas', 'setOnScripts'])
+    {
+      final includeHScripts = name == 'setOnScripts';
+      add(name, (field:String, value:Dynamic, ignoreSelf:Bool = false, exclusions:Array<String> = null) -> {
+        for (entry in host.scripts) if ((!ignoreSelf || entry != script) && (exclusions == null || !exclusions.contains(entry.path))) entry.set(field, value);
+        if (includeHScripts) host.setOnHScripts(field, value, exclusions);
+      });
+    }
     add('reloadLuaScripts', () -> { host.reloadRequested = true; return true; });
     add('setLuaAutoReload', (enabled:Bool) -> host.autoReload = enabled);
     add('isLuaFunctionSupported', (name:String) -> names.exists(name));
+  }
+
+  function installCompat():Void
+  {
+    add('addToGroup', (group:String, tag:String, index:Int = -1) -> {
+      var object = get(tag);
+      if (!Std.isOfType(object, FlxBasic)) throw 'Object is not a Flixel object: $tag';
+      var target:Dynamic = get(group);
+      if (target == null) throw 'Group not found: $group';
+      if (Std.isOfType(target, Array))
+      {
+        var array:Array<Dynamic> = cast target;
+        if (index < 0 || index >= array.length) array.push(object);
+        else array.insert(index, object);
+      }
+      else if (index < 0) target.add(object);
+      else target.insert(index, object);
+      return true;
+    });
+    add('removeFromGroup', (group:String, index:Int = -1, tag:String = null, destroy:Bool = true) -> {
+      var target:Dynamic = get(group);
+      if (target == null) throw 'Group not found: $group';
+      var object:Dynamic = tag == null || tag == '' ? null : get(tag);
+      var members = groupMembers(target);
+      if (object == null && index >= 0 && index < members.length) object = members[index];
+      if (object == null) return false;
+      if (Std.isOfType(target, Array)) cast(target, Array<Dynamic>).remove(object);
+      else target.remove(object, true);
+      if (destroy)
+      {
+        var owned = [for (key => value in host.objects) if (value == object) key];
+        if (owned.length > 0) for (key in owned) host.removeObject(key, true);
+        else if (Std.isOfType(object, FlxBasic)) cast(object, FlxBasic).destroy();
+      }
+      return true;
+    });
+    add('makeFlxAnimateSprite', (tag:String, x:Float = 0, y:Float = 0, folder:String = null) -> {
+      var object = new FunkinSprite(x, y);
+      host.own(tag.replace('.', ''), object, script);
+      if (folder != null && folder != '') object.loadTextureAtlas(folder);
+      return true;
+    });
+    add('loadAnimateAtlas', (tag:String, folder:String, spriteJson:String = null, animationJson:String = null) -> {
+      atlasSprite(tag).loadTextureAtlas(folder);
+      return true;
+    });
+    add('addAnimationBySymbol', (tag:String, name:String, symbol:String, fps:Float = 24, loop:Bool = false, x:Float = 0, y:Float = 0) -> {
+      var object = atlasSprite(tag);
+      object.anim.addBySymbol(name, symbol, fps, loop);
+      if (object.animation.curAnim == null) object.animation.play(name, true);
+      return true;
+    });
+    add('addAnimationBySymbolIndices', (tag:String, name:String, symbol:String, indices:Dynamic = null, fps:Float = 24, loop:Bool = false, x:Float = 0, y:Float = 0) -> {
+      var object = atlasSprite(tag);
+      object.anim.addBySymbolIndices(name, symbol, parseIndices(indices), fps, loop);
+      if (object.animation.curAnim == null) object.animation.play(name, true);
+      return true;
+    });
+    add('loadMultipleFrames', (tag:String, images:Array<String>) -> {
+      if (images == null || images.length == 0) return false;
+      var frames:FlxAtlasFrames = null;
+      for (image in images)
+      {
+        var atlas = atlasFor(image, 'auto');
+        if (frames == null) frames = atlas;
+        else frames.addAtlas(atlas, true);
+      }
+      sprite(tag).frames = frames;
+      return true;
+    });
+    add('exitSong', (skipTransition:Bool = false) -> {
+      if (skipTransition)
+      {
+        FlxTransitionableState.skipNextTransIn = true;
+        FlxTransitionableState.skipNextTransOut = true;
+      }
+      var story = funkin.play.PlayStatePlaylist.isStoryMode;
+      if (story) funkin.play.PlayStatePlaylist.reset();
+      host.game.deathCounter = 0;
+      if (story) FlxG.switchState(() -> new funkin.ui.story.StoryMenuState());
+      else FlxG.switchState(() -> funkin.ui.freeplay.FreeplayState.build());
+      return true;
+    });
+    add('loadSong', (name:String = null, difficultyNum:Int = -1) -> {
+      var song = name == null || name == '' ? host.game.currentSong : funkin.data.song.SongRegistry.instance.fetchEntry(songId(name));
+      if (song == null) throw 'Song not found: $name';
+      var variation = host.game.currentVariation;
+      var difficulties = song.listDifficulties(variation);
+      var difficulty = difficultyNum >= 0 && difficultyNum < difficulties.length ? difficulties[difficultyNum] : host.game.currentDifficulty;
+      if (!difficulties.contains(difficulty) && difficulties.length > 0) difficulty = difficulties[0];
+      FlxG.sound.music?.stop();
+      funkin.ui.transition.LoadingState.loadPlayState({
+        targetSong: song,
+        targetDifficulty: difficulty,
+        targetVariation: variation,
+        practiceMode: host.game.isPracticeMode,
+        botPlayMode: host.game.isBotPlayMode
+      }, true);
+      return true;
+    });
+    add('getModSetting', (tag:String, modName:String = null) -> modSetting(script.root, tag, modName));
+    add('setRatingPercent', (value:Float) -> { host.setRating(value, null, null); return true; });
+    add('setRatingName', (value:String) -> { host.setRating(null, value, null); return true; });
+    add('setRatingFC', (value:String) -> { host.setRating(null, null, value); return true; });
+    add('updateScoreText', () -> { host.game.updateScoreText(); return true; });
+    add('setTimeBarColors', (left:String = null, right:String = null) -> false);
+    add('startDialogue', (file:String, music:String = null) -> {
+      var id = Path.withoutExtension(Path.withoutDirectory(file ?? ''));
+      if (id == '' || !funkin.data.dialogue.ConversationRegistry.instance.hasEntry(id)) throw 'Conversation not found: $file';
+      host.game.startConversation(id);
+      return true;
+    });
+    add('startVideo', (file:String, canSkip:Bool = true, forMidSong:Bool = false, loop:Bool = false, playOnLoad:Bool = true) -> {
+      #if FEATURE_VIDEO_PLAYBACK
+      var path = Paths.videos(file);
+      if (!openfl.Assets.exists(path)) throw 'Video not found: $file';
+      funkin.play.cutscene.VideoCutscene.play(path, forMidSong ? funkin.play.cutscene.VideoCutscene.CutsceneType.MIDSONG : funkin.play.cutscene.VideoCutscene.CutsceneType.STARTING);
+      return true;
+      #else
+      if (!forMidSong) host.game.startCountdown();
+      return false;
+      #end
+    });
+    add('addHScript', (name:String, ignoreAlreadyRunning:Bool = false) -> {
+      var path = hscriptPath(name);
+      if (!FileSystem.exists(path)) throw 'HScript not found: $name';
+      if (!ignoreAlreadyRunning && host.findHScript(path) != null) return false;
+      return host.loadHScript(path, script);
+    });
+    add('removeHScript', (name:String) -> host.unloadHScript(hscriptPath(name)));
+    add('callOnHScript', (hook:String, args:Array<Dynamic> = null, ignoreStops:Bool = false, ignoreSelf:Bool = true, exclusions:Array<String> = null, excludeValues:Array<Dynamic> = null) ->
+      host.callHScripts(hook, args ?? [], ignoreStops, exclusions, excludeValues));
+    add('setOnHScript', (field:String, value:Dynamic, exclusions:Array<String> = null) -> { host.setOnHScripts(field, value, exclusions); return true; });
+  }
+
+  public static function modSetting(root:String, tag:String, modName:String = null):Dynamic
+  {
+    var folder = modName == null || modName == '' ? root : Path.normalize(PolymodHandler.MOD_FOLDER + '/' + modName);
+    var file = folder + '/data/settings.json';
+    if (!FileSystem.exists(file)) throw 'Mod settings not found: $file';
+    var stored:Dynamic = funkin.save.Save.instance.getModOptions('PsychLuaModSettings');
+    var modValues:Dynamic = stored == null ? null : Reflect.field(stored, Path.withoutDirectory(Path.removeTrailingSlashes(folder)));
+    if (modValues != null && Reflect.hasField(modValues, tag)) return Reflect.field(modValues, tag);
+    var entries:Array<Dynamic> = haxe.Json.parse(File.getContent(file));
+    for (entry in entries)
+    {
+      if (entry == null || Reflect.field(entry, 'save') != tag) continue;
+      if (Reflect.field(entry, 'type') == 'keybind')
+        return {keyboard: Reflect.field(entry, 'keyboard') ?? 'NONE', gamepad: Reflect.field(entry, 'gamepad') ?? 'NONE'};
+      return Reflect.field(entry, 'value');
+    }
+    return null;
+  }
+
+  function atlasSprite(tag:String):FunkinSprite
+  {
+    var object = get(tag);
+    if (!Std.isOfType(object, FunkinSprite)) throw 'Animate sprite not found: $tag';
+    return cast object;
+  }
+
+  static function parseIndices(indices:Dynamic):Array<Int>
+  {
+    if (indices == null) return [0];
+    if (Std.isOfType(indices, Array)) return [for (value in cast(indices, Array<Dynamic>)) Std.int(value)];
+    var result:Array<Int> = [];
+    for (part in Std.string(indices).split(','))
+    {
+      var value = Std.parseInt(part.trim());
+      if (value == null) throw 'Invalid animation index: $part';
+      result.push(value);
+    }
+    return result;
+  }
+
+  static function songId(name:String):String
+  {
+    return ~/[^a-z0-9-]+/g.replace(name.trim().toLowerCase().replace(' ', '-'), '');
+  }
+
+  function hscriptPath(name:String):String
+  {
+    if (!name.toLowerCase().endsWith('.hx')) name += '.hx';
+    return localPath(name);
   }
 
   function localPath(relative:String):String
@@ -536,10 +741,15 @@ class PsychLuaAPI
 
   function loadFrames(obj:FlxSprite, image:String, type:String):Void
   {
+    obj.frames = atlasFor(image, type);
+  }
+
+  function atlasFor(image:String, type:String):FlxAtlasFrames
+  {
     var xml = assetPath('images/' + image + '.xml');
     var txt = assetPath('images/' + image + '.txt');
-    if (type == 'packer' || (type == 'auto' && FileSystem.exists(txt))) obj.frames = FlxAtlasFrames.fromSpriteSheetPacker(imageAsset(image), File.getContent(txt));
-    else obj.frames = FileSystem.exists(xml) ? FlxAtlasFrames.fromSparrow(imageAsset(image), File.getContent(xml)) : Paths.getSparrowAtlas(image);
+    if (type == 'packer' || (type == 'auto' && FileSystem.exists(txt))) return FlxAtlasFrames.fromSpriteSheetPacker(imageAsset(image), File.getContent(txt));
+    return FileSystem.exists(xml) ? FlxAtlasFrames.fromSparrow(imageAsset(image), File.getContent(xml)) : Paths.getSparrowAtlas(image);
   }
 
   function makeSprite(tag:String, image:String, x:Float, y:Float, animated:Bool, type:String = 'sparrow'):Void

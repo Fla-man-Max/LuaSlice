@@ -2,6 +2,24 @@
 
 Changes to LuaSlice's Psych Lua API. The script folders, examples, and compatibility notes are below the changelog.
 
+## [0.2.0] - 2026-10-24
+
+### Added
+
+- Added `addHScript`, `removeHScript`, `callOnHScript`, and `setOnHScript`. HScript files loaded this way receive the same hooks as Lua scripts.
+- `callOnScripts` and `setOnScripts` now also reach running HScript files.
+- Added `addToGroup` and `removeFromGroup`.
+- Added `makeFlxAnimateSprite`, `loadAnimateAtlas`, `addAnimationBySymbol`, and `addAnimationBySymbolIndices` for Adobe Animate texture atlases.
+- Added `loadMultipleFrames`, `insertToCustomSubstate`, `exitSong`, `loadSong`, `getModSetting`, `startVideo`, `startDialogue`, and `updateScoreText`.
+- Added `setRatingPercent`, `setRatingName`, `setRatingFC`, the `onRecalculateRating` hook, and the `rating`, `ratingName`, `ratingFC`, `misses`, `songMisses`, `hits`, `combo`, `botPlay`, and `practice` globals.
+- Added `setTimeBarColors` as a no-op so scripts that call it keep running. V-Slice has no time bar.
+
+### Notes
+
+- `startDialogue` takes a V-Slice conversation id. A path such as `dialogue.json` uses its file name as the id.
+- `getModSetting` reads the defaults from the mod's `data/settings.json`.
+- `loadSong` takes a V-Slice song id. Spaces become dashes and the name is lowercased.
+
 ## [0.1.0] - 2026-09-28
 
 ### Added

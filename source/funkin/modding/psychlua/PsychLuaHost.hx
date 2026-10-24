@@ -28,6 +28,10 @@ class PsychLuaHost
   public final game:PlayState;
   public final noteOptions:PsychLuaNotes;
   public var scripts(default, null):Array<PsychLuaScript> = [];
+  public var hscripts(default, null):Array<PsychLuaHScript> = [];
+  public var ratingPercent:Float = 0;
+  public var ratingName:String = '?';
+  public var ratingFC:String = '';
   public final objects:Map<String, Dynamic> = [];
   public final variables:Map<String, Dynamic> = [];
   public final owners:Map<String, PsychLuaScript> = [];
@@ -52,6 +56,7 @@ class PsychLuaHost
   var lastSection:Int = -1;
   var holdSteps:Map<SustainTrail, Int> = [];
   var errorText:FlxText;
+  var ratingSignature:String = '';
 
   public function new(game:PlayState) { this.game = game; noteOptions = new PsychLuaNotes(this); }
 
@@ -237,6 +242,7 @@ class PsychLuaHost
     unloading = true;
     for (script in scripts.copy()) script.destroy();
     scripts.resize(0);
+    unloadHScripts();
     unloading = false;
     holdSteps.clear();
     signatures.clear();
@@ -266,6 +272,7 @@ class PsychLuaHost
       reloadRequested = false;
       try reload() catch (error:haxe.Exception) report('Reload: ' + error.message);
     }
+    refreshRating();
     for (script in scripts) updateGlobals(script);
     call('onUpdate', [elapsed]);
   }
@@ -278,10 +285,117 @@ class PsychLuaHost
       if (script == exclude || script.closed) continue;
       var value = script.call(name, args);
       if (value != PsychLuaScript.CONTINUE) result = value;
-      if (!ignoreStops && (value == PsychLuaScript.STOP_LUA || value == PsychLuaScript.STOP_ALL)) break;
+      if (!ignoreStops && value == PsychLuaScript.STOP_ALL) return result;
+      if (!ignoreStops && value == PsychLuaScript.STOP_LUA) break;
+    }
+    var value = callHScripts(name, args, ignoreStops);
+    if (value != PsychLuaScript.CONTINUE) result = value;
+    return result;
+  }
+
+  public function callHScripts(name:String, args:Array<Dynamic>, ignoreStops:Bool = false, ?exclusions:Array<String>, ?excludeValues:Array<Dynamic>):Dynamic
+  {
+    var result:Dynamic = PsychLuaScript.CONTINUE;
+    for (hscript in hscripts.copy())
+    {
+      if (hscript.origin == null || (exclusions != null && exclusions.contains(hscript.origin)) || !hscript.exists(name)) continue;
+      var value:Dynamic = hscript.call(name, args ?? [])?.returnValue;
+      if (value == null || (excludeValues != null && excludeValues.contains(value))) continue;
+      if (value != PsychLuaScript.CONTINUE) result = value;
+      if (!ignoreStops && (value == PsychLuaScript.STOP_HSCRIPT || value == PsychLuaScript.STOP_ALL)) break;
     }
     return result;
   }
+
+  public function setOnHScripts(field:String, value:Dynamic, ?exclusions:Array<String>):Void
+  {
+    for (hscript in hscripts) if (exclusions == null || !exclusions.contains(hscript.origin)) hscript.set(field, value);
+  }
+
+  public function findHScript(path:String):PsychLuaHScript
+  {
+    for (hscript in hscripts) if (hscript.origin == path) return hscript;
+    return null;
+  }
+
+  public function loadHScript(path:String, owner:PsychLuaScript):Bool
+  {
+    if (disposed || unloading || !FileSystem.exists(path)) return false;
+    var hscript = new PsychLuaHScript(owner, path);
+    try
+    {
+      hscripts.push(hscript);
+      hscript.run(File.getContent(path), null);
+      if (hscript.exists('onCreate')) hscript.call('onCreate', []);
+      return true;
+    }
+    catch (error:haxe.Exception)
+    {
+      hscripts.remove(hscript);
+      hscript.destroy();
+      report('[$path] ' + error.message);
+      return false;
+    }
+  }
+
+  public function unloadHScript(path:String):Bool
+  {
+    var hscript = findHScript(path);
+    if (hscript == null) return false;
+    if (hscript.exists('onDestroy')) hscript.call('onDestroy', []);
+    hscripts.remove(hscript);
+    hscript.destroy();
+    return true;
+  }
+
+  function unloadHScripts():Void
+  {
+    for (hscript in hscripts.copy()) unloadHScript(hscript.origin);
+    hscripts.resize(0);
+  }
+
+  public function setRating(percent:Null<Float>, name:Null<String>, fc:Null<String>):Void
+  {
+    if (percent != null) ratingPercent = percent;
+    if (name != null) ratingName = name;
+    if (fc != null) ratingFC = fc;
+    for (script in scripts) applyRating(script);
+  }
+
+  function refreshRating():Void
+  {
+    var tallies = funkin.Highscore.tallies;
+    var signature = [tallies.sick, tallies.good, tallies.bad, tallies.shit, tallies.missed].join(':');
+    if (signature == ratingSignature) return;
+    ratingSignature = signature;
+    var played = tallies.sick + tallies.good + tallies.bad + tallies.shit + tallies.missed;
+    if (call('onRecalculateRating', []) == PsychLuaScript.STOP) return;
+    if (played <= 0)
+    {
+      ratingPercent = 0;
+      ratingName = '?';
+      ratingFC = '';
+      return;
+    }
+    ratingPercent = Math.min(1, Math.max(0, (tallies.sick + tallies.good * 0.67 + tallies.bad * 0.34) / played));
+    ratingName = RATING_NAMES[RATING_NAMES.length - 1].name;
+    if (ratingPercent < 1) for (entry in RATING_NAMES) if (ratingPercent < entry.limit) { ratingName = entry.name; break; }
+    ratingFC = tallies.missed == 0
+      ? (tallies.bad > 0 || tallies.shit > 0 ? 'FC' : tallies.good > 0 ? 'GFC' : tallies.sick > 0 ? 'SFC' : '')
+      : (tallies.missed < 10 ? 'SDCB' : 'Clear');
+  }
+
+  function applyRating(script:PsychLuaScript):Void
+  {
+    script.set('rating', ratingPercent);
+    script.set('ratingName', ratingName);
+    script.set('ratingFC', ratingFC);
+  }
+
+  static final RATING_NAMES:Array<{name:String, limit:Float}> = [
+    {name: 'You Suck!', limit: 0.2}, {name: 'Shit', limit: 0.4}, {name: 'Bad', limit: 0.5}, {name: 'Bruh', limit: 0.6},
+    {name: 'Meh', limit: 0.69}, {name: 'Nice', limit: 0.7}, {name: 'Good', limit: 0.8}, {name: 'Great', limit: 0.9},
+    {name: 'Sick!', limit: 1}, {name: 'Perfect!!', limit: 1}];
 
   public function event(event:ScriptEvent):Void
   {
@@ -368,6 +482,14 @@ class PsychLuaHost
     script.set('difficultyName', game.currentDifficulty);
     script.set('inGameOver', game.isPlayerDying);
     script.set('mustHitSection', cameraTarget == 'boyfriend');
+    var tallies = funkin.Highscore.tallies;
+    script.set('misses', tallies.missed);
+    script.set('songMisses', tallies.missed);
+    script.set('hits', tallies.totalNotesHit);
+    script.set('combo', tallies.combo);
+    script.set('botPlay', game.isBotPlayMode);
+    script.set('practice', game.isPracticeMode);
+    applyRating(script);
   }
 
   public function receptors():Array<Dynamic>
@@ -506,6 +628,7 @@ class PsychLuaHost
     disposed = true;
     for (script in scripts.copy()) script.destroy();
     scripts.resize(0);
+    unloadHScripts();
     noteOptions.clear();
     for (character in characterCache)
     {
