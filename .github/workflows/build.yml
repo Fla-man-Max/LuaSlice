@@ -1,0 +1,460 @@
+name: Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: Platform to build
+        type: choice
+        default: all
+        options:
+          - all
+          - android
+          - ios
+      simulator_check:
+        description: Run the iOS simulator startup check
+        type: boolean
+        default: true
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/build.yml
+      - project.hxp
+      - hmm.json
+      - astc-compression-data.json
+      - source/**
+      - assets
+      - assets/**
+      - art
+      - templates/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  HAXE_VERSION: 4.3.7
+  NEKO_TAG: v2-4-1
+  NEKO_VERSION: 2.4.1
+  HMM_VERSION: 3.1.0
+  CACHE_REVISION: v1
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  android:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform != 'ios'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+
+    env:
+      HAXE_ASSET: linux64
+      NEKO_ASSET: linux64
+      ANDROID_PLATFORM: android-35
+      ANDROID_BUILD_TOOLS: 35.0.0
+      ANDROID_NDK_VERSION: 27.2.12479018
+      TOOLCHAIN_ID: ndk-27.2.12479018
+      LOGS: .work/logs
+
+    steps:
+      - &checkout
+        name: Checkout repository
+        uses: actions/checkout@v5
+        with:
+          submodules: recursive
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Install runtime packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libgc-dev libpcre2-dev > /dev/null
+
+      - &install-haxe
+        name: Install Haxe and Neko
+        run: |
+          tools="$RUNNER_TEMP/luaslice-tools"
+          mkdir -p "$tools/haxe" "$tools/neko" "$tools/haxelib" "$LOGS"
+          curl -fsSL --retry 3 "https://github.com/HaxeFoundation/haxe/releases/download/$HAXE_VERSION/haxe-$HAXE_VERSION-$HAXE_ASSET.tar.gz" | tar -xz --strip-components=1 -C "$tools/haxe"
+          curl -fsSL --retry 3 "https://github.com/HaxeFoundation/neko/releases/download/$NEKO_TAG/neko-$NEKO_VERSION-$NEKO_ASSET.tar.gz" | tar -xz --strip-components=1 -C "$tools/neko"
+          {
+            echo "$tools/haxe"
+            echo "$tools/neko"
+          } >> "$GITHUB_PATH"
+          {
+            echo "HAXEPATH=$tools/haxe"
+            echo "HAXE_STD_PATH=$tools/haxe/std"
+            echo "NEKOPATH=$tools/neko"
+            echo "HXCPP_COMPILE_CACHE=$RUNNER_TEMP/hxcpp-cache"
+            if [[ "$RUNNER_OS" == macOS ]]; then
+              echo "DYLD_LIBRARY_PATH=$tools/neko:$(brew --prefix)/lib"
+              echo "HXCPP_COMPILE_THREADS=$(sysctl -n hw.ncpu)"
+            else
+              echo "LD_LIBRARY_PATH=$tools/neko"
+              echo "HXCPP_COMPILE_THREADS=$(nproc)"
+            fi
+          } >> "$GITHUB_ENV"
+          mkdir -p "$RUNNER_TEMP/hxcpp-cache"
+          export LD_LIBRARY_PATH="$tools/neko:${LD_LIBRARY_PATH:-}"
+          export DYLD_LIBRARY_PATH="$tools/neko:${DYLD_LIBRARY_PATH:-}"
+          "$tools/haxe/haxelib" setup "$tools/haxelib" > /dev/null
+          "$tools/haxe/haxe" --version
+          "$tools/neko/neko" -version
+
+      - &restore-libraries
+        name: Restore project libraries
+        id: libraries
+        uses: actions/cache/restore@v4
+        with:
+          path: .haxelib
+          key: haxelib-${{ runner.os }}-${{ github.job }}-${{ env.TOOLCHAIN_ID }}-${{ env.CACHE_REVISION }}-${{ hashFiles('hmm.json') }}
+
+      - &install-libraries
+        name: Install project libraries
+        if: steps.libraries.outputs.cache-hit != 'true'
+        run: |
+          haxelib --global install hmm "$HMM_VERSION" --always --quiet
+          haxelib --global run hmm install 2>&1 | tee "$LOGS/libraries.log"
+          python3 - <<'PY'
+          import json
+          import pathlib
+          import subprocess
+          from concurrent.futures import ThreadPoolExecutor
+
+          dependencies = json.loads(pathlib.Path("hmm.json").read_text())["dependencies"]
+          paths = [
+              pathlib.Path(".haxelib") / item["name"].replace(".", ",") / "git"
+              for item in dependencies
+              if item["type"] == "git"
+          ]
+
+          def update(path):
+              if (path / ".gitmodules").is_file():
+                  subprocess.run(
+                      ["git", "-C", str(path), "submodule", "update", "--init", "--recursive", "--recommend-shallow", "--jobs", "8"],
+                      check=True,
+                  )
+
+          with ThreadPoolExecutor(max_workers=6) as pool:
+              list(pool.map(update, [path for path in paths if path.is_dir()]))
+          PY
+          (cd .haxelib/hxcpp/git/tools/hxcpp && haxe compile.hxml)
+
+      - &restore-compile-cache
+        name: Restore C++ compile cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ runner.temp }}/hxcpp-cache
+          key: hxcpp-${{ runner.os }}-${{ github.job }}-${{ env.TOOLCHAIN_ID }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            hxcpp-${{ runner.os }}-${{ github.job }}-${{ env.TOOLCHAIN_ID }}-
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK and NDK
+        run: |
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-/usr/local/lib/android/sdk}}"
+          sdkmanager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          [[ -x "$sdkmanager" ]] || sdkmanager=$(find "$sdk/cmdline-tools" -type f -name sdkmanager | sort -V | tail -n 1)
+          packages=()
+          [[ -d "$sdk/platforms/$ANDROID_PLATFORM" ]] || packages+=("platforms;$ANDROID_PLATFORM")
+          [[ -d "$sdk/build-tools/$ANDROID_BUILD_TOOLS" ]] || packages+=("build-tools;$ANDROID_BUILD_TOOLS")
+          [[ -d "$sdk/ndk/$ANDROID_NDK_VERSION" ]] || packages+=("ndk;$ANDROID_NDK_VERSION")
+          [[ -d "$sdk/platform-tools" ]] || packages+=("platform-tools")
+          if (( ${#packages[@]} )); then
+            yes | "$sdkmanager" --sdk_root="$sdk" --licenses > /dev/null || true
+            "$sdkmanager" --sdk_root="$sdk" --install "${packages[@]}" > /dev/null
+          fi
+          {
+            echo "ANDROID_HOME=$sdk"
+            echo "ANDROID_SDK_ROOT=$sdk"
+            echo "ANDROID_NDK_ROOT=$sdk/ndk/$ANDROID_NDK_VERSION"
+            echo "ANDROID_NDK_HOME=$sdk/ndk/$ANDROID_NDK_VERSION"
+          } >> "$GITHUB_ENV"
+
+      - name: Build Lime native libraries
+        if: steps.libraries.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends \
+            libgl1-mesa-dev libglu1-mesa-dev libasound2-dev libpulse-dev \
+            libx11-dev libxext-dev libxi-dev libxrandr-dev libxinerama-dev libxcursor-dev \
+            libxss-dev libxxf86vm-dev libxkbcommon-dev libwayland-dev wayland-protocols \
+            libdecor-0-dev libdbus-1-dev libudev-dev libdrm-dev libgbm-dev \
+            libpipewire-0.3-dev libspa-0.2-dev libxfixes-dev libxtst-dev libegl-dev libgles-dev > /dev/null
+          haxelib run lime rebuild linux -release -64 2>&1 | tee "$LOGS/lime-host.log"
+          haxelib run lime rebuild android -release -arm64 2>&1 | tee "$LOGS/lime-android.log"
+          rm -rf .haxelib/lime/git/project/obj
+
+      - &save-libraries
+        name: Save project libraries
+        if: steps.libraries.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: .haxelib
+          key: ${{ steps.libraries.outputs.cache-primary-key }}
+
+      - name: Configure Lime
+        run: |
+          haxelib run lime config ANDROID_SDK "$ANDROID_HOME"
+          haxelib run lime config ANDROID_NDK_ROOT "$ANDROID_NDK_ROOT"
+          haxelib run lime config JAVA_HOME "$JAVA_HOME"
+
+      - &restore-astc
+        name: Restore ASTC textures
+        uses: actions/cache/restore@v4
+        with:
+          path: astc-textures
+          key: astc-${{ runner.os }}-${{ hashFiles('astc-compression-data.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: |
+            astc-${{ runner.os }}-${{ hashFiles('astc-compression-data.json') }}-
+
+      - name: Restore Gradle cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('hmm.json') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Build Android APK
+        id: build
+        run: haxelib run lime build android -release -arm64 -DEXCLUDE_ARMV7 2>&1 | tee "$LOGS/build.log"
+
+      - name: Collect Android APK
+        run: |
+          mkdir -p export/artifacts
+          mapfile -t apks < <(find export/release/android -type f -name '*.apk' -path '*release*')
+          (( ${#apks[@]} )) || mapfile -t apks < <(find export -type f -name '*.apk' -not -path 'export/artifacts/*')
+          (( ${#apks[@]} )) || { echo "No APK was generated"; exit 1; }
+          cp "${apks[@]}" export/artifacts/
+          ls -lh export/artifacts
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaSlice-Android-${{ github.sha }}
+          path: export/artifacts/*.apk
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - &save-astc
+        name: Save ASTC textures
+        if: always() && steps.build.outcome != 'skipped' && hashFiles('astc-textures/**') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: astc-textures
+          key: astc-${{ runner.os }}-${{ hashFiles('astc-compression-data.json') }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - &save-compile-cache
+        name: Save C++ compile cache
+        if: always() && steps.build.outcome != 'skipped'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ runner.temp }}/hxcpp-cache
+          key: hxcpp-${{ runner.os }}-${{ github.job }}-${{ env.TOOLCHAIN_ID }}-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - &upload-logs
+        name: Upload build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaSlice-${{ github.job }}-logs-${{ github.sha }}
+          path: .work/logs
+          if-no-files-found: ignore
+          retention-days: 7
+
+  ios:
+    if: github.event_name != 'workflow_dispatch' || inputs.platform != 'android'
+    runs-on: macos-15
+    timeout-minutes: 150
+
+    env:
+      HAXE_ASSET: osx
+      NEKO_ASSET: osx-arm64
+      LOGS: .work/logs
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
+
+    steps:
+      - *checkout
+
+      - &select-xcode
+        name: Select Xcode
+        run: |
+          xcode=$(python3 - <<'PY'
+          import pathlib
+          import re
+
+          candidates = []
+          for path in pathlib.Path("/Applications").glob("Xcode_*.app"):
+              if "beta" in path.name.lower():
+                  continue
+              version = tuple(map(int, re.findall(r"\d+", path.stem)))
+              if version and version[0] >= 26:
+                  candidates.append((version, path))
+          if not candidates:
+              raise SystemExit("Xcode 26 or newer is required for DeclaredAgeRange.framework")
+          print(max(candidates)[1] / "Contents/Developer")
+          PY
+          )
+          sudo xcode-select --switch "$xcode"
+          version=$(xcodebuild -version | awk 'NR==1 {print $2}')
+          {
+            echo "DEVELOPER_DIR=$xcode"
+            echo "TOOLCHAIN_ID=xcode-$version"
+          } >> "$GITHUB_ENV"
+          xcodebuild -version
+          brew install --quiet pcre2 bdw-gc
+
+      - *install-haxe
+      - *restore-libraries
+      - *install-libraries
+      - *restore-compile-cache
+
+      - name: Build Lime native libraries
+        if: steps.libraries.outputs.cache-hit != 'true'
+        run: |
+          haxelib run lime rebuild mac -release -arm64 2>&1 | tee "$LOGS/lime-host.log"
+          haxelib run lime rebuild ios -release 2>&1 | tee "$LOGS/lime-ios.log"
+          rm -rf .haxelib/lime/git/project/obj
+
+      - *save-libraries
+      - *restore-astc
+
+      - name: Build unsigned IPA
+        id: build
+        run: |
+          haxelib run lime update ios -release 2>&1 | tee "$LOGS/project.log"
+          xcodebuild -project export/release/ios/LuaSlice.xcodeproj -scheme LuaSlice \
+            -configuration Release -sdk iphoneos -jobs "$HXCPP_COMPILE_THREADS" \
+            SYMROOT="$PWD/export/release/ios/build" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build > "$LOGS/xcodebuild.log" 2>&1 || { grep -E 'error:' "$LOGS/xcodebuild.log" | head -n 50; tail -n 200 "$LOGS/xcodebuild.log"; exit 1; }
+          app=export/release/ios/build/Release-iphoneos/LuaSlice.app
+          test -d "$app"
+          stage=$(mktemp -d "$RUNNER_TEMP/luaslice-ios.XXXXXX")
+          mkdir "$stage/Payload"
+          ditto "$app" "$stage/Payload/LuaSlice.app"
+          mkdir -p export/artifacts
+          ditto -c -k --keepParent "$stage/Payload" export/artifacts/LuaSlice-ios-unsigned.ipa
+
+      - name: Upload unsigned IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaSlice-iOS-${{ github.sha }}
+          path: export/artifacts/LuaSlice-ios-unsigned.ipa
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - *save-astc
+      - *save-compile-cache
+      - *upload-logs
+
+  ios-simulator:
+    if: github.event_name != 'workflow_dispatch' || (inputs.platform != 'android' && inputs.simulator_check)
+    runs-on: macos-15
+    timeout-minutes: 120
+
+    env:
+      HAXE_ASSET: osx
+      NEKO_ASSET: osx-arm64
+      LOGS: .work/logs
+      HOMEBREW_NO_AUTO_UPDATE: '1'
+      HOMEBREW_NO_INSTALL_CLEANUP: '1'
+      HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
+
+    steps:
+      - *checkout
+      - *select-xcode
+      - *install-haxe
+      - *restore-libraries
+      - *install-libraries
+      - *restore-compile-cache
+
+      - name: Build Lime native libraries
+        if: steps.libraries.outputs.cache-hit != 'true'
+        run: |
+          haxelib run lime rebuild mac -release -arm64 2>&1 | tee "$LOGS/lime-host.log"
+          haxelib run lime rebuild ios -release -simulator -arm64 2>&1 | tee "$LOGS/lime-simulator.log"
+          rm -rf .haxelib/lime/git/project/obj
+
+      - *save-libraries
+
+      - name: Boot simulator
+        run: |
+          device=$(xcrun simctl list devices available --json | python3 -c '
+          import json, sys
+          devices = json.load(sys.stdin)["devices"]
+          phones = [d for runtime, entries in devices.items() if ".iOS-" in runtime for d in entries if d["name"].startswith("iPhone")]
+          if not phones:
+              raise SystemExit("No available iPhone simulator")
+          booted = [d for d in phones if d["state"] == "Booted"]
+          print((booted or phones)[0]["udid"])
+          ')
+          echo "SIMULATOR_UDID=$device" >> "$GITHUB_ENV"
+          xcrun simctl boot "$device" 2>/dev/null || true
+
+      - name: Build simulator app
+        id: build
+        run: |
+          haxelib run lime update ios -release -simulator -arm64 2>&1 | tee "$LOGS/project.log"
+          xcodebuild -project export/release/ios/LuaSlice.xcodeproj -scheme LuaSlice \
+            -configuration Release -sdk iphonesimulator -arch arm64 -jobs "$HXCPP_COMPILE_THREADS" \
+            SYMROOT="$PWD/export/release/ios/build" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="" \
+            COMPILER_INDEX_STORE_ENABLE=NO \
+            build > "$LOGS/xcodebuild.log" 2>&1 || { grep -E 'error:' "$LOGS/xcodebuild.log" | head -n 50; tail -n 200 "$LOGS/xcodebuild.log"; exit 1; }
+          test -d export/release/ios/build/Release-iphonesimulator/LuaSlice.app
+
+      - name: Check simulator startup
+        run: |
+          app="$PWD/export/release/ios/build/Release-iphonesimulator/LuaSlice.app"
+          log="$LOGS/startup.log"
+          xcrun simctl bootstatus "$SIMULATOR_UDID" -b
+          xcrun simctl install "$SIMULATOR_UDID" "$app"
+          xcrun simctl launch --console-pty "$SIMULATOR_UDID" me.luaslice > "$log" 2>&1 &
+          process=$!
+          trap 'kill "$process" 2>/dev/null || true' EXIT
+          failure='Fatal Uncaught|Null Object Reference|Loading failed:'
+          ready=false
+          for _ in $(seq 180); do
+            kill -0 "$process" 2>/dev/null || { cat "$log"; exit 1; }
+            if grep -Eq "$failure" "$log"; then cat "$log"; exit 1; fi
+            if grep -q 'Opening Attract state in' "$log"; then ready=true; break; fi
+            sleep 1
+          done
+          [[ "$ready" == true ]] || { cat "$log"; exit 1; }
+          sleep 15
+          kill -0 "$process" 2>/dev/null || { cat "$log"; exit 1; }
+          if grep -Eq "$failure" "$log"; then cat "$log"; exit 1; fi
+          xcrun simctl io "$SIMULATOR_UDID" screenshot "$LOGS/title.png"
+          mkdir -p export/artifacts
+          ditto -c -k --keepParent "$app" export/artifacts/LuaSlice-ios-simulator.zip
+
+      - name: Upload simulator app
+        uses: actions/upload-artifact@v4
+        with:
+          name: LuaSlice-iOS-Simulator-${{ github.sha }}
+          path: export/artifacts/LuaSlice-ios-simulator.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - *save-compile-cache
+      - *upload-logs
