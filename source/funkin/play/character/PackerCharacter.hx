@@ -33,10 +33,10 @@ class PackerCharacter extends BaseCharacter
   {
     trace('Loading assets for Packer character "${characterId}"', flixel.util.FlxColor.fromString("#89CFF0"));
 
-    var tex:FlxFramesCollection = Paths.getPackerAtlas(_data.assetPath);
+    var tex:FlxFramesCollection = Paths.getPackerAtlas(getAssetPath());
     if (tex == null)
     {
-      trace('Could not load Packer sprite: ${_data.assetPath}');
+      trace('Could not load Packer sprite: ${getAssetPath()}');
       return;
     }
 
@@ -55,16 +55,16 @@ class PackerCharacter extends BaseCharacter
       this.antialiasing = true;
     }
 
-    this.setScale(_data.scale);
+    this.setScale(getBaseScale());
   }
 
   function loadAnimations():Void
   {
-    trace('[PACKERCHAR] Loading ${_data.animations.length} animations for ${characterId}');
+    trace('[PACKERCHAR] Loading ${getCharacterAnimations().length} animations for ${characterId}');
 
-    FlxAnimationUtil.addAtlasAnimations(this, _data.animations);
+    FlxAnimationUtil.addAtlasAnimations(this, getCharacterAnimations());
 
-    for (anim in _data.animations)
+    for (anim in getCharacterAnimations())
     {
       if (anim.offsets == null)
       {

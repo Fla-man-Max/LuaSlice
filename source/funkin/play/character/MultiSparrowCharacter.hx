@@ -63,22 +63,22 @@ class MultiSparrowCharacter extends BaseCharacter
     var textureList:Array<FlxAtlasFrames> = [];
     var addedAssetPaths:Array<String> = [];
 
-    var mainTexture:FlxAtlasFrames = Paths.getSparrowAtlas(_data.assetPath);
+    var mainTexture:FlxAtlasFrames = Paths.getSparrowAtlas(getAssetPath());
     if (mainTexture == null)
     {
-      log('Multi-Sparrow atlas could not load PRIMARY texture: ${_data.assetPath}');
-      FlxG.log.error('Multi-Sparrow atlas could not load PRIMARY texture: ${_data.assetPath}');
+      log('Multi-Sparrow atlas could not load PRIMARY texture: ${getAssetPath()}');
+      FlxG.log.error('Multi-Sparrow atlas could not load PRIMARY texture: ${getAssetPath()}');
       return;
     }
     else
     {
-      log('Creating multi-sparrow atlas: ${_data.assetPath}');
+      log('Creating multi-sparrow atlas: ${getAssetPath()}');
       mainTexture.parent.destroyOnNoUse = false;
     }
 
     var hasTextureAtlas:Bool = false;
 
-    for (anim in _data.animations)
+    for (anim in getCharacterAnimations())
     {
       if (anim.renderType == "animateatlas")
       {
@@ -87,7 +87,7 @@ class MultiSparrowCharacter extends BaseCharacter
       }
     }
 
-    for (animation in _data.animations)
+    for (animation in getCharacterAnimations())
     {
       if (animation.assetPath == null) continue;
       if (addedAssetPaths.contains(animation.assetPath)) continue;
@@ -143,15 +143,15 @@ class MultiSparrowCharacter extends BaseCharacter
     _usedAtlases.push(mainTexture);
 
     this.frames = FlxAnimateFrames.combineAtlas(textureList);
-    this.setScale(_data.scale);
+    this.setScale(getBaseScale());
   }
 
   function buildAnimations():Void
   {
-    log('[MULTISPARROWCHAR] Loading ${_data.animations.length} animations for ${characterId}');
+    log('[MULTISPARROWCHAR] Loading ${getCharacterAnimations().length} animations for ${characterId}');
 
     // We need to swap to the proper frame collection before adding the animations, I think?
-    for (anim in _data.animations)
+    for (anim in getCharacterAnimations())
     {
       switch (anim.renderType)
       {

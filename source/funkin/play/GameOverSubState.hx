@@ -77,6 +77,10 @@ class GameOverSubState extends MusicBeatSubState
    * The music playing in the background of the state.
    */
   var gameOverMusic:Null<FunkinSound> = null;
+  var confirmTimer:Null<FlxTimer> = null;
+  var lostFocus:Bool = false;
+  var musicPausedForFocus:Bool = false;
+  var timerPausedForFocus:Bool = false;
 
   /**
    * Whether the player has confirmed and prepared to restart the level or to go back to the freeplay menu.
@@ -381,7 +385,7 @@ class GameOverSubState extends MusicBeatSubState
       final FADE_TIMER:Float = (gameOverMusic?.length ?? 0) / 7000;
 
       // After the animation finishes...
-      new FlxTimer().start(FADE_TIMER, function(tmr:FlxTimer)
+      confirmTimer = new FlxTimer().start(FADE_TIMER, function(tmr:FlxTimer)
       {
         // ...fade out the graphics. Then after that happens...
 
@@ -454,7 +458,39 @@ class GameOverSubState extends MusicBeatSubState
           }, true);
         }
       });
+      if (lostFocus && Preferences.autoPause && confirmTimer != null)
+      {
+        timerPausedForFocus = true;
+        confirmTimer.active = false;
+      }
     }
+  }
+
+  override public function onFocusLost():Void
+  {
+    super.onFocusLost();
+    lostFocus = true;
+    if (!Preferences.autoPause) return;
+    if (gameOverMusic != null && gameOverMusic.playing)
+    {
+      musicPausedForFocus = true;
+      gameOverMusic.pause();
+    }
+    if (confirmTimer != null && confirmTimer.active)
+    {
+      timerPausedForFocus = true;
+      confirmTimer.active = false;
+    }
+  }
+
+  override public function onFocus():Void
+  {
+    super.onFocus();
+    lostFocus = false;
+    if (musicPausedForFocus) gameOverMusic?.resume();
+    if (timerPausedForFocus && confirmTimer != null && !confirmTimer.finished) confirmTimer.active = true;
+    musicPausedForFocus = false;
+    timerPausedForFocus = false;
   }
 
   override public function dispatchEvent(event:ScriptEvent):Void
@@ -530,6 +566,11 @@ class GameOverSubState extends MusicBeatSubState
       gameOverMusic.looped = !(isEnding || isStarting);
       gameOverMusic.onComplete = onComplete;
       gameOverMusic.play();
+      if (lostFocus && Preferences.autoPause)
+      {
+        musicPausedForFocus = true;
+        gameOverMusic.pause();
+      }
     }
     else
     {
@@ -615,6 +656,8 @@ class GameOverSubState extends MusicBeatSubState
 
   override public function destroy():Void
   {
+    confirmTimer?.cancel();
+    confirmTimer = null;
     super.destroy();
     if (gameOverMusic != null)
     {

@@ -87,6 +87,10 @@ class Module implements IPlayStateScriptedClass implements IStateChangingScripte
   /**
    * Called when ANY script event is dispatched.
    */
+  public function onCustom(event:CustomScriptEvent):Void
+  {
+  }
+
   public function onScriptEvent(event:ScriptEvent)
   {
   }

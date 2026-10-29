@@ -1,0 +1,146 @@
+import funkin.modding.module.Module;
+import funkin.ui.debug.charting.ChartEditorState;
+import funkin.ui.debug.charting.toolboxes.ChartEditorOffsetsToolbox;
+import funkin.ui.haxeui.components.CharacterPlayer;
+import funkin.ui.mainmenu.MainMenuState;
+import funkin.audio.waveform.WaveformSprite;
+import funkin.Assets;
+import funkin.Paths;
+import funkin.util.assets.SoundUtil;
+import funkin.util.Constants;
+import funkin.Preferences;
+import flixel.FlxG;
+import flixel.math.FlxRect;
+import haxe.ui.events.ScrollEvent;
+import haxe.ui.geom.Point;
+import haxe.ui.validation.ValidationManager;
+
+class UpstreamEditorRegression extends Module
+{
+  var phase = 0;
+  var elapsed = 0.0;
+  var checks = 0;
+  var failed = false;
+
+  public function new() { super('upstream-editor-regression', 500); }
+
+  function check(name, callback)
+  {
+    try
+    {
+      callback();
+      checks++;
+      trace('UPSTREAM_CASE_OK: ' + name);
+    }
+    catch (error:Dynamic)
+    {
+      failed = true;
+      trace('UPSTREAM_CASE_FAILED: ' + name + ': ' + error);
+    }
+  }
+
+  override function onUpdate(event)
+  {
+    elapsed += event.elapsed;
+    if (phase == 0 && elapsed > 2)
+    {
+      phase = 1;
+      elapsed = 0;
+      Preferences.autoPause = false;
+      FlxG.autoPause = false;
+      FlxG.switchState(() -> new ChartEditorState({targetSongId: 'tutorial'}));
+    }
+    else if (phase == 1 && elapsed > 2 && Std.isOfType(FlxG.state, ChartEditorState))
+    {
+      phase = 2;
+      var editor = FlxG.state;
+      check('preview-scale', function()
+      {
+        var preview = new CharacterPlayer(false);
+        preview.targetScale = 0.5;
+        preview.loadCharacter('bf-pixel');
+        if (preview.character == null) throw 'Pixel character missing';
+        if (Math.abs(preview.character.scale.x - 3) > 0.001) throw 'Pixel preview ignored its base scale';
+        preview.targetScale = 0.25;
+        if (Math.abs(preview.character.scale.x - 1.5) > 0.001) throw 'Changing preview scale discarded character scale';
+        if (Math.abs(preview.character.x - (preview.cachedScreenX - preview.character.globalOffsets[0] * 1.5)) > 0.01)
+          throw 'Character was not immediately repositioned';
+        preview.disposeComponent();
+      });
+      check('waveform-clipping', function()
+      {
+        var sound = SoundUtil.buildSoundFromBytes(Assets.getBytes(Paths.inst('tutorial')));
+        if (sound == null || sound.waveformData == null) throw 'Instrumental waveform missing';
+        var sprite = new WaveformSprite(sound.waveformData);
+        sprite.width = 100;
+        sprite.height = 65;
+        sprite.clipRect = new FlxRect(0, 0, 20, 65);
+        sprite.update(0);
+        sprite.clipRect = new FlxRect(30, 0, 20, 65);
+        sprite.draw();
+        if (sprite.vertices.get(0) != 30) throw 'Clip change retained old waveform geometry until next update';
+        sprite.clipRect = new FlxRect(50, 0, 20, 65);
+        sprite.draw();
+        if (sprite.vertices.get(0) != 50) throw 'Repeated clip changes retained stale geometry';
+        var reusedClip = sprite.clipRect;
+        reusedClip.x = 70;
+        sprite.clipRect = reusedClip;
+        sprite.draw();
+        if (sprite.vertices.get(0) != 70) throw 'Reusing a clip rectangle kept stale geometry';
+        sprite.clipRect = null;
+        sprite.draw();
+        if (sprite.vertices.get(0) != 0) throw 'Removing the clip kept the old clipped geometry';
+        sprite.destroy();
+        sound.destroy();
+      });
+      check('instrumental-offset-drag', function()
+      {
+        editor.clearVocals();
+        var toolbox = new ChartEditorOffsetsToolbox(editor);
+        toolbox.waveformPlayer.waveform.waveformData = null;
+        toolbox.waveformOpponent.waveform.waveformData = null;
+        toolbox.movePlayheadToMouse();
+        if (!Math.isFinite(toolbox.audioPreviewTracks.time)) throw 'Instrumental-only playhead time is invalid';
+        toolbox.playheadRelativePos = -20;
+        toolbox.waveformScrollview.dispatch(new ScrollEvent(ScrollEvent.SCROLL));
+        if (!Math.isFinite(toolbox.audioPreviewTracks.time)) throw 'Instrumental-only scrolling time is invalid';
+        toolbox.stopAudioPreview();
+        toolbox.disposeComponent();
+      });
+      check('playbar-alignment', function()
+      {
+        editor.handlePlaybar();
+        var bar = editor.playbarHeadLayout;
+        if (bar.x != 0 || bar.width != FlxG.width) throw 'Playbar is shifted or cut off by the viewport';
+        var range = bar.playbarHead.findComponent('range');
+        if (range == null || range.virtualStart == null || range.virtualStart >= 0) throw 'Playhead does not account for its left-edge padding';
+        var slider = bar.playbarHead;
+        slider.pos = 0;
+        ValidationManager.instance.process();
+        var thumb = slider.findComponent('end-thumb');
+        if (thumb == null) throw 'Playbar handle missing';
+        var center = thumb.left + thumb.width / 2;
+        if (Math.abs(center - 4) > 1) throw 'Start-of-song handle is not aligned with the left edge';
+        slider.pos = editor.songLengthInPixels;
+        ValidationManager.instance.process();
+        center = thumb.left + thumb.width / 2;
+        if (Math.abs(center - (FlxG.width - 4)) > 1) throw 'End-of-song handle is outside its right-edge target: center=' + center + ' W=' + FlxG.width + ' pos=' + slider.pos + ' end=' + slider.end + ' max=' + slider.max + ' L=' + editor.songLengthInPixels;
+        if (Math.abs(slider.posFromCoord(new Point(4, 0))) > 0.01) throw 'Dragging to the start did not seek to zero';
+        if (Math.abs(slider.posFromCoord(new Point(FlxG.width - 4, 0)) - editor.songLengthInPixels) > 0.01)
+          throw 'Dragging to the end did not seek to the song end';
+      });
+      FlxG.stage.window.title = 'LuaSlice Chart Editor - test';
+      FlxG.switchState(() -> new MainMenuState());
+      elapsed = 0;
+    }
+    else if (phase == 2 && elapsed > 2 && Std.isOfType(FlxG.state, MainMenuState))
+    {
+      phase = 3;
+      check('window-title-after-exit', function()
+      {
+        if (FlxG.stage.window.title != Constants.TITLE) throw 'Closing the editor kept its document title';
+      });
+      trace(failed ? 'UPSTREAM_REGRESSION_FAILED' : 'UPSTREAM_REGRESSION_OK: ' + checks);
+    }
+  }
+}

@@ -11,6 +11,7 @@ class LuaHookCatalog
     'onSectionHit',
     'onDestroy',
     'onEvent',
+    'onCustom',
     'onCreateEvent',
     'onStateCreate',
     'onDestroyEvent',

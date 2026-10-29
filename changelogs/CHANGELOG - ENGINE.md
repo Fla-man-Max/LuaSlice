@@ -1,11 +1,119 @@
 # LuaSlice Engine Changelog
 
-Important LuaSlice engine updates are tracked here.
-I'm making it as simple, professional, FNF style. (non-AI!!)
+## v0.1.0 - 2026-10-29
 
-## [0.1.0] - 2026-09-26
+- Psych Engine Lua API is finally fixed!
 
-- Psych Engine Lua API is finally added!
+### Editor fixes
+
+- Character previews now keep the character's original scale, including pixel characters, and update their position when resized. (FNF #8318)
+- Fixed dragging the Offsets playhead or scrolling its preview on songs without player vocals. (FNF #8317)
+- Fixed Offsets waveforms drawing outside their preview after scrolling. (FNF #8313)
+- Aligned the Chart Editor playbar with the window and kept its handle reachable at both ends. (FNF #8314)
+- Closing the Chart Editor restores the LuaSlice window title. (FNF #8311)
+
+### Gameplay and input
+
+- Fixed recycled notes keeping the previous note type's scoring settings.
+- Fixed note-style offsets being lost when updating note hitboxes, and hold offsets not updating when changing styles.
+- Fixed inputs outside the judgement window being counted as successful hits.
+- Fixed song-end updates trying to use music that had already been stopped or cleared.
+- Fixed Game Over music and the retry confirmation timer continuing while the window is unfocused with Pause on Unfocus enabled.
+- Fixed precise input for controller triggers, duplicate controller listeners, and old bindings remaining after input is reinitialized.
+- Fixed removing the last binding in Controls.
+- Added optional note motion blur. It is off by default and leaves pixel notes unblurred.
+- Fixed the song-shader setting not removing stage and camera effects. Max Low Quality also keeps song shaders disabled.
+
+### Chart Editor and converters
+
+- Fixed playtests returning straight to the editor when its opening fade finished late.
+- Fixed playtest audio not starting correctly, including playtests started partway through a song.
+- Reset Pause and Game Over state before starting another playtest.
+- Fixed camera resets happening during a state switch instead of after the new state was ready.
+- Fixed note parameters being shared between copied notes or lost when moving copied notes to another time.
+- Fixed ghost notes, hold previews and event previews staying visible after they were no longer needed.
+- Fixed audio previews, replaced instrumentals, vocals and waveforms not being released properly when importing another chart.
+- Fixed missing character icons crashing the character selector and Metadata toolbox.
+- Stopped audio changes from opening the Offsets or Freeplay toolbox just to refresh a value.
+- Added Set Target Bop Speed to the character preview's supported events.
+- Fixed Psych chart imports accepting the wrong `song` value as the chart, negative hold lengths, invalid scroll speeds and unsorted notes.
+- Added conversion for Psych's older numbered note types, including Alt Animation, Hurt Note, GF Sing and No Animation.
+- Fixed Codename charts wrapped inside a `song` object not importing correctly.
+- Added Codename metadata and event-file lookup for charts stored in `charts/` and variation folders.
+- Fixed Codename imports losing metadata fields, ignoring external BPM changes, or repeating BPM entries at the same time.
+- Added support for Codename's numbered events and single-value event parameters, and corrected the School Evil stage name.
+- Fixed invalid numeric chart values being accepted as BPM, timing or speed values.
+- Added file-read error handling to the import dialogs. An unreadable audio file now reports the problem instead of crashing the picker callback.
+- Fixed instrumental changes destroying the previous track before the replacement had finished loading.
+- A missing or broken waveform no longer stops an otherwise valid vocal track from loading. Invalid audio is still rejected.
+
+### Mods and the Mod Menu
+
+- Fixed removed mods staying in the enabled-mod list and being reported as missing on the next launch.
+- Kept mod order and deliberately disabled mods when rescanning. New valid mods are picked up automatically on mobile; desktop mods remain opt-in.
+- Added a warning for folders missing `_polymod_meta.json`. Only that mod is skipped, and **Make one for me** creates a starter file without replacing an existing one.
+- Mods become available when their missing metadata is added. Creating metadata does not convert the mod's charts or scripts.
+- Set the supported mod API range to FNF 0.8.5 through 0.8.7.
+- Fixed folder and ZIP mod audio loading through a web-request path on native builds. Audio is now read from the mod filesystem and decoded from its bytes.
+- Added clearer errors for missing, empty or unreadable mod audio, and caught failures while queuing song audio.
+- Fixed ordinary PNG mod images being treated as compressed base-game textures on mobile.
+- Fixed Mod Menu entries being clipped out of their lists, and added a fallback for missing or broken mod icons.
+- Restored the Mod Menu on mobile. Tap to move a mod between lists, swipe to scroll, or hold to drag it.
+- Fixed touch scrolling being confused with dragging, taps activating buttons before release, and the Back action being missed with mixed touch/controller input.
+- Fixed rescans interrupting Mod Menu transitions and missing folder changes when the number of installed mods stayed the same.
+- Updated the Mod Menu instructions to match the controls on each platform.
+
+### Scripting
+
+- Switched native Lua from hxlua to LuaJIT through hxluajit and hxluajit-wrapper. Existing LuaSlice `.lua`/`.luag` scripts and Psych `.luap`/`.luapg` scripts keep their separate loading rules.
+- Lua now uses Lua 5.1-compatible syntax. Lua 5.4-only syntax and bytecode need updating; `table.pack` and `table.unpack` remain available.
+- Added the Psych 1.0.4 Lua bridge, mod-relative asset lookup, custom event/note-type scripts, song scripts, Haxe calls, custom substates and script reload support.
+- Fixed song-script routing and kept unrelated songs' scripts from loading together.
+- Fixed NxScript hooks not being retained, including scripts beginning with a UTF-8 BOM.
+- Added bulk property setters/getters, property references, configuration helpers and shared tween helpers for LuaSlice Lua and SScript.
+- Added Lua coroutine tasks with wait/cancel helpers, optional script profiling, runtime information and generated LuaLS definitions.
+- Fixed property helpers retaining old objects after replacement. A failed bulk assignment reports its path without stopping the remaining assignments.
+- Fixed SScript class scripts starting before their state was ready, and added class-script lifecycle hooks to substates.
+- Connected LuaSlice's original Lua API to gameplay and menu events without repeating beat, step or focus callbacks.
+- Added custom script events and `onCustom` hooks for HScript, LuaSlice Lua, Psych Lua, SScript and NxScript. Events support cancellation and stopping propagation.
+- Fixed string-keyed Haxe Maps, including nested custom-event data, not reaching Lua as tables.
+- Fixed stopped events continuing to later script targets, and inherited global Lua hooks running again for each local script.
+- Added character overrides for asset paths, animations, scale and health icons across Sparrow, Packer, Animate Atlas, Multi-Sparrow and Multi-Animate characters.
+- Added stage getters for BF, Dad and GF scroll factors and draw order.
+- Fixed scripted note kinds and active song-event handlers not receiving `onCreate` after gameplay finished creating.
+- Fixed scripts closing their Lua state while a callback was still running, and failed script initialization leaving a Lua state behind.
+- Fixed reloads leaving custom note graphics and splash sprites behind.
+- Added Psych Sparrow hold bodies and caps, including trimmed frames, downscroll and the older purple end-cap name.
+- Reused matching generated hold textures and released them after reload or song cleanup without destroying textures still used by live or pooled notes.
+- Updated `onSpawnNote` to pass strum time as its fifth argument, matching Psych 1.0.4.
+- Script errors now include the mod, callback and traceback. Repeated identical errors are reported once per script instance.
+- Updated both Lua API guides with script folders, examples, reload behavior and compatibility notes.
+
+### Menus, editors and saves
+
+- Fixed mobile Freeplay swipes not moving the song list, tracked the active finger through a drag, and kept flick scrolling separate from difficulty selection.
+- Fixed Freeplay mouse-wheel/trackpad scrolling and stale highlighting after changing a song filter.
+- Fixed option rows using the wrong camera or hitbox, which could toggle a different setting from the one being pressed.
+- Moved Subtitles, Camera Zooms, Loading Screens, Flashing Lights and the mobile Pause Button to Performance.
+- Added **Hit now!** on desktop and **Tap now!** on mobile above the calibration receptor when an input is due.
+- Corrected the early/late direction and input timing used by lag calibration.
+- Added trackpad panning to the Animation and Stage editors, with Ctrl+scroll for zooming.
+- Fixed the Stage Editor keeping its file-drop listener after closing.
+- Cleaned up Animation Editor character exports so unchanged default fields are left out, without changing the character being edited.
+- Fixed save-version data sharing the default version object. Failed writes now report an error, and clearing a save stops if its recovery copy could not be written.
+- Restored LuaSlice's Discord application ID when no custom ID is set.
+
+### Builds and files
+
+- Replaced the old setup batch file with `Setup LuaSlice.bat`, including Windows, Android, both, or setup-only choices.
+- Windows and Android builds use a temporary short path to avoid long-path compiler and linker errors.
+- Fixed Android release setup creating a broken signing configuration when keystore details were missing.
+- Added Linux build instructions and a Linux x64 release build. The runtime checks also run on Linux.
+- Added an iOS build workflow that produces an unsigned iPhone IPA and a simulator package. The IPA still needs Apple signing before installation on a phone.
+- Fixed iOS simulator linking against the video library by using an ARM64 Mac runner and matching ARM64 tools.
+- Removed the upstream Apple signing team from the local project. Signed builds can use `IOS_TEAM_ID` instead.
+- Included the engine, FNF and Psych API changelogs and the LuaSlice API guide in the build's documentation assets.
+- Stopped warning about missing optional Newgrounds environment values, while still checking values required by enabled features.
 
 ## [0.0.9] - 2026-09-08
 

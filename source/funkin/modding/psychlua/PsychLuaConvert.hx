@@ -20,6 +20,15 @@ class PsychLuaConvert
       Lua.createtable(state, array.length, 0);
       for (i in 0...array.length) { toLua(state, array[i], depth + 1); Lua.rawseti(state, -2, i + 1); }
     }
+    else if (Std.isOfType(value, haxe.ds.StringMap))
+    {
+      Lua.newtable(state);
+      for (key => item in cast(value, Map<String, Dynamic>))
+      {
+        toLua(state, item, depth + 1);
+        Lua.setfield(state, -2, key);
+      }
+    }
     else if (Type.typeof(value) == Type.ValueType.TObject)
     {
       Lua.newtable(state);

@@ -305,11 +305,12 @@ class FreeplayState extends MusicBeatSubState
     }
     else
     {
-      var allScriptedCards:Array<String> = ScriptedBackingCard.listScriptClasses();
+      var allScriptedCards:Array<String> = polymod.hscript._internal.PolymodScriptClass.listScriptClassesExtending('funkin.ui.freeplay.backcards.BackingCard');
       for (cardClass in allScriptedCards)
       {
-        var card:BackingCard = ScriptedBackingCard.scriptInit(cardClass, 'unknown');
-        if (card.currentCharacter == currentCharacterId)
+        var cardRef = polymod.hscript._internal.PolymodStaticClassReference.tryBuild(cardClass);
+        var card:Null<BackingCard> = cardRef == null ? null : cast cardRef.instantiate(['unknown']);
+        if (card != null && card.currentCharacter == currentCharacterId)
         {
           backingCardPrep = card;
           break;
@@ -648,7 +649,11 @@ class FreeplayState extends MusicBeatSubState
     letterSort.changeSelectionCallback = (str) ->
     {
       var curSong:Null<FreeplaySongData> = currentCapsule?.freeplayData;
-      currentCapsule.selected = false;
+      if (currentCapsule != null)
+      {
+        currentCapsule.selected = false;
+        currentCapsule.forceHighlight = false;
+      }
 
       switch (str)
       {

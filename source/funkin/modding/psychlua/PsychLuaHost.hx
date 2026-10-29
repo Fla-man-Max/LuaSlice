@@ -28,10 +28,14 @@ class PsychLuaHost
   public final game:PlayState;
   public final noteOptions:PsychLuaNotes;
   public var scripts(default, null):Array<PsychLuaScript> = [];
+  public var hscripts(default, null):Array<PsychLuaHScript> = [];
+  public var ratingPercent:Float = 0;
+  public var ratingName:String = '?';
+  public var ratingFC:String = '';
   public final objects:Map<String, Dynamic> = [];
   public final variables:Map<String, Dynamic> = [];
   public final owners:Map<String, PsychLuaScript> = [];
-  public final containers:Map<String, flixel.FlxState> = [];
+  public final containers:Map<String, Dynamic> = [];
   public final tweens:Map<String, FlxTween> = [];
   public final timers:Map<String, FlxTimer> = [];
   public final sounds:Map<String, FlxSound> = [];
@@ -52,11 +56,13 @@ class PsychLuaHost
   var lastSection:Int = -1;
   var holdSteps:Map<SustainTrail, Int> = [];
   var errorText:FlxText;
+  var ratingTallies:Array<Int> = [-1, -1, -1, -1, -1];
 
   public function new(game:PlayState) { this.game = game; noteOptions = new PsychLuaNotes(this); }
 
   public function start():Void
   {
+    refreshRating();
     var entries = discover();
     lastReloadAttempt = [for (entry in entries) entry.path + ':' + signature(entry.path)].join('|');
     for (entry in entries) load(entry.path, entry.root);
@@ -122,7 +128,9 @@ class PsychLuaHost
       {
         var kinds:Map<String, Bool> = [];
         for (note in game.currentChart.notes) if (note.kind != null && note.kind != '') kinds.set(note.kind, true);
-        for (kind in kinds.keys()) addFile(result, root, 'custom_notetypes/' + kind + '.luap');
+        var orderedKinds = [for (kind in kinds.keys()) kind];
+        orderedKinds.sort(Reflect.compare);
+        for (kind in orderedKinds) addFile(result, root, 'custom_notetypes/' + kind + '.luap');
         for (event in game.currentChart.events) addFile(result, root, 'custom_events/' + event.eventKind + '.luap');
       }
     }
@@ -225,19 +233,35 @@ class PsychLuaHost
 
   public function reload():Bool
   {
+    if (disposed || unloading) return false;
+    for (script in scripts)
+    {
+      if (script.depth == 0) continue;
+      reloadRequested = true;
+      return false;
+    }
     var entries = discover();
     lastReloadAttempt = [for (entry in entries) entry.path + ':' + signature(entry.path)].join('|');
     for (entry in entries)
     {
       var probe = new PsychLuaScript(this, entry.path, entry.root);
-      var valid = probe.compile(File.getContent(entry.path));
+      var valid = false;
+      try { valid = probe.compile(File.getContent(entry.path)); }
+      catch (error:Dynamic)
+      {
+        probe.destroy();
+        report('[' + entry.path + '] Reload validation failed: ' + Std.string(error));
+        return false;
+      }
       probe.destroy();
       if (!valid) return false;
     }
     unloading = true;
     for (script in scripts.copy()) script.destroy();
     scripts.resize(0);
+    unloadHScripts();
     unloading = false;
+    noteOptions.clear(true);
     holdSteps.clear();
     signatures.clear();
     start();
@@ -266,6 +290,7 @@ class PsychLuaHost
       reloadRequested = false;
       try reload() catch (error:haxe.Exception) report('Reload: ' + error.message);
     }
+    refreshRating();
     for (script in scripts) updateGlobals(script);
     call('onUpdate', [elapsed]);
   }
@@ -276,12 +301,138 @@ class PsychLuaHost
     for (script in scripts.copy())
     {
       if (script == exclude || script.closed) continue;
-      var value = script.call(name, args);
+      var value:Dynamic = script.call(name, args);
       if (value != PsychLuaScript.CONTINUE) result = value;
-      if (!ignoreStops && (value == PsychLuaScript.STOP_LUA || value == PsychLuaScript.STOP_ALL)) break;
+      if (!ignoreStops && value == PsychLuaScript.STOP_ALL) return result;
+      if (!ignoreStops && value == PsychLuaScript.STOP_LUA) break;
+    }
+    var value:Dynamic = callHScripts(name, args, ignoreStops);
+    if (value != PsychLuaScript.CONTINUE) result = value;
+    return result;
+  }
+
+  public function callHScripts(name:String, args:Array<Dynamic>, ignoreStops:Bool = false, ?exclusions:Array<String>, ?excludeValues:Array<Dynamic>):Dynamic
+  {
+    var result:Dynamic = PsychLuaScript.CONTINUE;
+    for (hscript in hscripts.copy())
+    {
+      if (!hscripts.contains(hscript) || (exclusions != null && exclusions.contains(hscript.origin)) || !hscript.exists(name)) continue;
+      var value:Dynamic = hscript.call(name, args ?? [])?.returnValue;
+      if (value == null || (excludeValues != null && excludeValues.contains(value))) continue;
+      if (value != PsychLuaScript.CONTINUE) result = value;
+      if (!ignoreStops && (value == PsychLuaScript.STOP_HSCRIPT || value == PsychLuaScript.STOP_ALL)) break;
     }
     return result;
   }
+
+  public function setOnHScripts(field:String, value:Dynamic, ?exclusions:Array<String>):Void
+  {
+    for (hscript in hscripts) if (exclusions == null || !exclusions.contains(hscript.origin)) hscript.set(field, value);
+  }
+
+  public function findHScript(path:String):PsychLuaHScript
+  {
+    for (hscript in hscripts) if (hscript.origin == path) return hscript;
+    return null;
+  }
+
+  public function loadHScript(path:String, owner:PsychLuaScript):Bool
+  {
+    if (disposed || unloading || owner.closed || !FileSystem.exists(path) || FileSystem.isDirectory(path)) return false;
+    var hscript:PsychLuaHScript = null;
+    try
+    {
+      hscript = new PsychLuaHScript(owner, path);
+      hscripts.push(hscript);
+      hscript.run(File.getContent(path), null);
+      if (!hscript.lastRunSucceeded || !hscripts.contains(hscript))
+      {
+        hscripts.remove(hscript);
+        hscript.destroy();
+        return false;
+      }
+      if (hscript.exists('onCreate') && hscript.call('onCreate', []) == null)
+      {
+        hscripts.remove(hscript);
+        hscript.destroy();
+        return false;
+      }
+      return hscripts.contains(hscript);
+    }
+    catch (error:Dynamic)
+    {
+      if (hscript != null) { hscripts.remove(hscript); hscript.destroy(); }
+      report('[$path] ' + Std.string(error));
+      return false;
+    }
+  }
+
+  public function unloadHScript(path:String):Bool
+  {
+    var hscript = findHScript(path);
+    if (hscript == null) return false;
+    hscripts.remove(hscript);
+    if (hscript.exists('onDestroy')) hscript.call('onDestroy', []);
+    hscript.destroy();
+    return true;
+  }
+
+  function unloadHScripts():Void
+  {
+    for (hscript in hscripts.copy()) unloadHScript(hscript.origin);
+  }
+
+  public function setRating(percent:Null<Float>, name:Null<String>, fc:Null<String>):Void
+  {
+    if (percent != null)
+    {
+      if (!Math.isFinite(percent)) throw 'Rating percent must be finite';
+      ratingPercent = Math.min(1, Math.max(0, percent));
+    }
+    if (name != null) ratingName = name;
+    if (fc != null) ratingFC = fc;
+    for (script in scripts) applyRating(script);
+  }
+
+  public function refreshRating():Void
+  {
+    var tallies = funkin.Highscore.tallies;
+    if (ratingTallies[0] == tallies.sick && ratingTallies[1] == tallies.good && ratingTallies[2] == tallies.bad
+      && ratingTallies[3] == tallies.shit && ratingTallies[4] == tallies.missed) return;
+    ratingTallies[0] = tallies.sick;
+    ratingTallies[1] = tallies.good;
+    ratingTallies[2] = tallies.bad;
+    ratingTallies[3] = tallies.shit;
+    ratingTallies[4] = tallies.missed;
+    for (script in scripts) updateGlobals(script);
+    var result:Dynamic = call('onRecalculateRating', []);
+    if (result == PsychLuaScript.STOP || result == PsychLuaScript.STOP_ALL) return;
+    var played = tallies.sick + tallies.good + tallies.bad + tallies.shit + tallies.missed;
+    if (played <= 0)
+    {
+      setRating(0, '?', '');
+      return;
+    }
+    ratingPercent = Math.min(1, Math.max(0, (tallies.sick + tallies.good * 0.67 + tallies.bad * 0.34) / played));
+    ratingName = RATING_NAMES[RATING_NAMES.length - 1].name;
+    if (ratingPercent < 1) for (entry in RATING_NAMES) if (ratingPercent < entry.limit) { ratingName = entry.name; break; }
+    ratingFC = tallies.missed == 0
+      ? (tallies.bad > 0 || tallies.shit > 0 ? 'FC' : tallies.good > 0 ? 'GFC' : tallies.sick > 0 ? 'SFC' : '')
+      : (tallies.missed < 10 ? 'SDCB' : 'Clear');
+    for (script in scripts) applyRating(script);
+  }
+
+  function applyRating(script:PsychLuaScript):Void
+  {
+    script.set('rating', ratingPercent);
+    script.set('ratingName', ratingName);
+    script.set('ratingFC', ratingFC);
+  }
+
+  static final RATING_NAMES:Array<{name:String, limit:Float}> = [
+    {name: 'You Suck!', limit: 0.2}, {name: 'Shit', limit: 0.4}, {name: 'Bad', limit: 0.5}, {name: 'Bruh', limit: 0.6},
+    {name: 'Meh', limit: 0.69}, {name: 'Nice', limit: 0.7}, {name: 'Good', limit: 0.8}, {name: 'Great', limit: 0.9},
+    {name: 'Sick!', limit: 1}, {name: 'Perfect!!', limit: 1}];
 
   public function event(event:ScriptEvent):Void
   {
@@ -291,6 +442,10 @@ class PsychLuaHost
     switch (event.type)
     {
       case SONG_START: name = 'onSongStart';
+      case CUSTOM:
+        var custom:CustomScriptEvent = cast event;
+        name = 'onCustom';
+        args = [custom.id, custom.data];
       case SONG_END: name = 'onEndSong';
       case PAUSE: name = 'onPause';
       case RESUME: name = 'onResume';
@@ -310,6 +465,7 @@ class PsychLuaHost
         var player = game.playerStrumline.notes.members.contains(note);
         name = event.type == NOTE_INCOMING ? 'onSpawnNote' : event.type == NOTE_MISS ? 'noteMiss' : (player ? 'goodNoteHit' : 'opponentNoteHit');
         args = [notes().indexOf(note), cast(note.direction, Int), note.kind, false];
+        if (event.type == NOTE_INCOMING) args.push(note.noteData.time);
       case NOTE_HOLD_DROP:
         var drop:HoldNoteScriptEvent = cast event;
         var hold = drop.holdNote;
@@ -338,7 +494,7 @@ class PsychLuaHost
     }
     if (name == null) return;
     for (script in scripts) updateGlobals(script);
-    var result = call(name, args);
+    var result:Dynamic = call(name, args);
     if (result == PsychLuaScript.STOP || result == PsychLuaScript.STOP_ALL) event.cancelEvent();
   }
 
@@ -368,6 +524,14 @@ class PsychLuaHost
     script.set('difficultyName', game.currentDifficulty);
     script.set('inGameOver', game.isPlayerDying);
     script.set('mustHitSection', cameraTarget == 'boyfriend');
+    var tallies = funkin.Highscore.tallies;
+    script.set('misses', tallies.missed);
+    script.set('songMisses', tallies.missed);
+    script.set('hits', tallies.totalNotesHit);
+    script.set('combo', tallies.combo);
+    script.set('botPlay', game.isBotPlayMode);
+    script.set('practice', game.isPracticeMode);
+    applyRating(script);
   }
 
   public function receptors():Array<Dynamic>
@@ -460,20 +624,21 @@ class PsychLuaHost
   {
     var object = objects.get(tag);
     if (object == null) return;
-    var container = containers.get(tag);
-    if (container != null) container.remove(cast object, true);
+    detachObject(tag);
     if (Std.isOfType(object, FlxBasic)) game.remove(cast object, true);
-    containers.remove(tag);
     if (destroy)
     {
       objects.remove(tag);
       owners.remove(tag);
+      var children = [for (child => container in containers) if (container == object) child];
+      for (child in children) removeObject(child, true);
       if (Std.isOfType(object, FlxBasic)) cast(object, FlxBasic).destroy();
     }
   }
 
   public function releaseOwned(script:PsychLuaScript):Void
   {
+    for (hscript in hscripts.copy()) if (hscript.owner == script) unloadHScript(hscript.origin);
     for (tag in [for (tag => owner in tweenOwners) if (owner == script) tag])
     { tweens.get(tag)?.cancel(); tweens.remove(tag); tweenOwners.remove(tag); }
     for (tag in [for (tag => owner in timerOwners) if (owner == script) tag])
@@ -481,6 +646,18 @@ class PsychLuaHost
     for (tag in [for (tag => owner in soundOwners) if (owner == script) tag])
     { var sound = sounds.get(tag); FlxG.sound.list.remove(sound, true); sound?.destroy(); sounds.remove(tag); soundOwners.remove(tag); }
     for (tag in [for (tag => owner in owners) if (owner == script) tag]) removeObject(tag, true);
+  }
+
+  public function detachObject(tag:String):Void
+  {
+    var object = objects.get(tag);
+    var container = containers.get(tag);
+    if (container != null)
+    {
+      if (Std.isOfType(container, Array)) cast(container, Array<Dynamic>).remove(object);
+      else if (Reflect.getProperty(container, 'members') != null) container.remove(object, true);
+    }
+    containers.remove(tag);
   }
 
   public function report(message:String):Void
@@ -506,6 +683,7 @@ class PsychLuaHost
     disposed = true;
     for (script in scripts.copy()) script.destroy();
     scripts.resize(0);
+    unloadHScripts();
     noteOptions.clear();
     for (character in characterCache)
     {

@@ -30,7 +30,7 @@ class SongDataUtils
       var data:Int = note.data;
       var length:Float = note.length;
       var kind:Null<String> = note.kind;
-      return new SongNoteData(time, data, length, kind);
+      return new SongNoteData(time, data, length, kind, note.cloneParams());
     };
 
     var result = [
@@ -277,13 +277,30 @@ class SongDataUtils
   /**
    * Serialize note and event data and write it to the clipboard.
    */
+  static var internalChartClipboard:String = '';
+
+  public static function hasItemsOnClipboard():Bool
+  {
+    return chartClipboardText() != '';
+  }
+
+  static function chartClipboardText():String
+  {
+    var text:Null<String> = null;
+    try text = ClipboardUtil.getClipboard()
+    catch (error:Dynamic) trace('[SongDataUtils] System clipboard unavailable: $error');
+    return text == null || text == '' ? internalChartClipboard : text;
+  }
+
   public static function writeItemsToClipboard(data:SongClipboardItems):Void
   {
     var ignoreNullOptionals = true;
     var writer = new json2object.JsonWriter<SongClipboardItems>(ignoreNullOptionals);
     var dataString:String = writer.write(data, ' ');
 
-    ClipboardUtil.setClipboard(dataString);
+    internalChartClipboard = dataString;
+    try ClipboardUtil.setClipboard(dataString)
+    catch (error:Dynamic) trace('[SongDataUtils] Using internal chart clipboard: $error');
 
     trace('Wrote ' + data.notes.length + ' notes and ' + data.events.length + ' events to clipboard.');
   }
@@ -293,7 +310,8 @@ class SongDataUtils
    */
   public static function readItemsFromClipboard():SongClipboardItems
   {
-    var notesString = ClipboardUtil.getClipboard();
+    var notesString = chartClipboardText();
+    if (notesString == '') return {valid: false, notes: [], events: []};
 
     trace('Read ${notesString.length} characters from clipboard.');
 
@@ -313,6 +331,7 @@ class SongDataUtils
     else
     {
       var data:SongClipboardItems = parser.value;
+      if (data == null || data.notes == null || data.events == null) return {valid: false, notes: [], events: []};
       trace('Parsed ' + data.notes.length + ' notes and ' + data.events.length + ' from clipboard.');
       data.valid = true;
       return data;

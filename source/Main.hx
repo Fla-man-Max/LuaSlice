@@ -59,7 +59,7 @@ class Main extends Sprite
     psychLuaTestMode = Sys.args().indexOf('--lua-test') >= 0 && sys.FileSystem.exists('psych-test.marker');
     if (psychLuaTestMode)
     {
-      var saveDirectory = haxe.io.Path.join([Sys.getCwd(), 'psych-test-save']);
+      var saveDirectory = haxe.io.Path.join([Sys.getCwd(), 'psych-test-save', 'company', 'game']);
       if (!sys.FileSystem.exists(saveDirectory)) sys.FileSystem.createDirectory(saveDirectory);
       @:privateAccess lime.system.System.__applicationStorageDirectory = saveDirectory;
     }
@@ -82,7 +82,7 @@ class Main extends Sprite
     openfl.utils._internal.Log.level = openfl.utils._internal.Log.LogLevel.INFO;
 
     #if (desktop && FEATURE_PSYCH_LUA)
-    if (psychLuaTestMode) funkin.modding.PolymodHandler.loadModsByDir(['psych-lua-test']);
+    if (psychLuaTestMode) funkin.modding.PolymodHandler.loadModsByDir(Sys.args().indexOf('--lua-test-no-mods') >= 0 ? [] : ['psych-lua-test']);
     else
     #end
       funkin.modding.PolymodHandler.loadEnabledMods();

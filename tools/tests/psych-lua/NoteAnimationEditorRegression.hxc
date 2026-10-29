@@ -1,0 +1,83 @@
+import flixel.FlxG;
+import funkin.modding.module.Module;
+import funkin.ui.debug.charting.ChartEditorState;
+import funkin.ui.debug.charting.toolboxes.ChartEditorNoteDataToolbox;
+import funkin.data.song.SongData.SongNoteDataRaw;
+import funkin.data.song.SongData.NoteParamData;
+import haxe.ui.components.DropDown;
+import haxe.ui.components.TextField;
+import haxe.ui.components.CheckBox;
+import haxe.ui.events.UIEvent;
+
+class NoteAnimationEditorRegression extends Module
+{
+    var checked = false;
+
+    public function new()
+    {
+        super("note-animation-editor-regression", 102);
+    }
+
+    override function onUpdate(event)
+    {
+        if (checked || !Std.isOfType(FlxG.state, ChartEditorState)) return;
+        checked = true;
+        try
+        {
+        var editor = FlxG.state;
+        var oldKind = editor.noteKindToPlace;
+        var oldParams = editor.noteParamsToPlace;
+        var oldSelection = editor.currentNoteSelection;
+        var note = new SongNoteDataRaw(100, 0, 0, "play_animation", [
+            new NoteParamData("animation", "idle"),
+            new NoteParamData("target", "opponent"),
+            new NoteParamData("force", 0)
+        ]);
+        editor.noteKindToPlace = "play_animation";
+        editor.currentNoteSelection = [note];
+        var toolbox = ChartEditorNoteDataToolbox.build(editor);
+        toolbox.refresh();
+        var target = toolbox.findComponent("noteParam-target", DropDown, true);
+        var animation = toolbox.findComponent("noteParam-animation", TextField, true);
+        var force = toolbox.findComponent("noteParam-force", CheckBox, true);
+        if (target == null || animation == null || force == null) throw "Play Animation parameter controls are missing";
+        if (target.selectedItem.value != "opponent" || animation.value != "idle" || force.selected)
+            throw "Reordered legacy parameters were not restored by name";
+        target.selectedItem = {text: "Player", value: "player"};
+        target.dispatch(new UIEvent(UIEvent.CHANGE));
+        animation.value = "singLEFT";
+        animation.dispatch(new UIEvent(UIEvent.CHANGE));
+        force.selected = true;
+        force.dispatch(new UIEvent(UIEvent.CHANGE));
+        for (param in note.params)
+        {
+            if (param.name == "target" && param.value != "player") throw "Target dropdown did not serialize its value";
+            if (param.name == "animation" && param.value != "singLEFT") throw "Animation input did not serialize";
+            if (param.name == "force" && param.value != true) throw "Force checkbox did not serialize a boolean";
+        }
+        if (!editor.saveDataDirty) throw "Animation parameter edits did not mark the chart dirty";
+        note.params = [new NoteParamData("animation", "idle"), new NoteParamData("force", "false")];
+        toolbox.refresh();
+        force = toolbox.findComponent("noteParam-force", CheckBox, true);
+        if (force.selected) throw "Legacy string false force was treated as enabled";
+        note.params = [new NoteParamData("animation", "idle")];
+        toolbox.refresh();
+        target = toolbox.findComponent("noteParam-target", DropDown, true);
+        force = toolbox.findComponent("noteParam-force", CheckBox, true);
+        if (target.selectedItem.value != "auto" || !force.selected) throw "Missing legacy parameters did not use defaults";
+        note.params.push(new NoteParamData("target", "legacy-stage-prop"));
+        toolbox.refresh();
+        target = toolbox.findComponent("noteParam-target", DropDown, true);
+        if (target.selectedItem.value != "legacy-stage-prop") throw "Legacy stage prop targets were lost";
+        toolbox.disposeComponent();
+        editor.currentNoteSelection = oldSelection;
+        editor.noteKindToPlace = oldKind;
+        editor.noteParamsToPlace = oldParams;
+        trace("PLAY_ANIMATION_EDITOR_REGRESSION_OK");
+        }
+        catch (error:Dynamic)
+        {
+            trace("COMMUNITY_REGRESSION_FAILED: " + error);
+        }
+    }
+}

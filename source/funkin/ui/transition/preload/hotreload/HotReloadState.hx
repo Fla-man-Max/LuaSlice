@@ -17,7 +17,7 @@ typedef HotReloadStateParams =
 }
 
 @:nullSafety
-class HotReloadState extends MusicBeatState
+class HotReloadState extends flixel.FlxState
 {
   var params:HotReloadStateParams;
   var tasks:Array<AssetReloadTask> = [];
@@ -70,6 +70,15 @@ class HotReloadState extends MusicBeatState
     try
     {
       task.run();
+      if (PolymodHandler.hasPendingVisualWarning())
+      {
+        finished = true;
+        FlxG.switchState(() -> new funkin.ui.options.ModPhotosensitivityWarningState(() -> {
+          PolymodHandler.acknowledgeVisualWarning();
+          FlxG.switchState(() -> new HotReloadState(params));
+        }));
+        return;
+      }
       taskIndex++;
       updateProgress();
     }

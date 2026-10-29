@@ -25,8 +25,11 @@ import polymod.backends.PolymodAssets.PolymodAssetType;
 import polymod.format.ParseRules.TextFileFormat;
 import polymod.Polymod;
 import haxe.io.Path;
+import StringTools as HaxeStringTools;
 import luaslice.modding.ModSelection;
 import luaslice.modding.ModMetadataRepair;
+import luaslice.modding.ModWarningPolicy;
+import luaslice.modding.ModWarningPolicy.ModVisualWarning;
 
 typedef AssetReloadTask =
 {
@@ -94,6 +97,28 @@ class PolymodHandler
   static var modFileSystem:Null<ZipFileSystem> = null;
   static var cachedModMetadata:Null<Array<ModMetadata>> = null;
   static var metadataRepair:ModMetadataRepair = new ModMetadataRepair();
+  static var warningPolicy:ModWarningPolicy = new ModWarningPolicy();
+  static var deferredModDirs:Array<String> = [];
+  public static var pendingVisualWarnings(default, null):Array<ModVisualWarning> = [];
+
+  public static function hasPendingVisualWarning():Bool
+  {
+    return pendingVisualWarnings.length > 0;
+  }
+
+  public static function resumeAfterVisualWarning():Void
+  {
+    var dirs = deferredModDirs.copy();
+    acknowledgeVisualWarning();
+    loadModsByDir(dirs);
+  }
+
+  public static function acknowledgeVisualWarning():Void
+  {
+    warningPolicy.acknowledge(pendingVisualWarnings);
+    pendingVisualWarnings = [];
+    deferredModDirs = [];
+  }
 
   /**
    * If the mods folder doesn't exist, create it.
@@ -187,6 +212,21 @@ class PolymodHandler
       var path = Path.join([MOD_FOLDER, dir]);
       return fileSystem.exists(path) && fileSystem.isDirectory(path);
     });
+    pendingVisualWarnings = warningPolicy.pending([for (dir in dirs) {
+      var contents:Null<String> = null;
+      var metadataPath = Path.join([MOD_FOLDER, dir, polymod.PolymodConfig.modMetadataFile]);
+      try
+      {
+        contents = fileSystem.getFileContent(metadataPath);
+      }
+      catch (error:Dynamic)
+      {
+        trace('Could not read visual warning metadata for "$dir": $error');
+      }
+      {dir: dir, contents: contents};
+    }]);
+    deferredModDirs = hasPendingVisualWarning() ? dirs.copy() : [];
+    if (hasPendingVisualWarning()) dirs = [];
     if (dirs.length == 0)
     {
       trace('You attempted to load zero mods.');
@@ -333,7 +373,23 @@ class PolymodHandler
       funkin.Paths,
       funkin.Preferences,
       funkin.util.Constants,
-      flixel.FlxG
+      flixel.FlxG,
+      flixel.FlxSprite,
+      flixel.FlxCamera,
+      flixel.FlxObject,
+      flixel.text.FlxText,
+      flixel.tweens.FlxTween,
+      flixel.tweens.FlxEase,
+      flixel.util.FlxTimer,
+      flixel.math.FlxMath,
+      funkin.graphics.FunkinSprite,
+      funkin.play.PlayState,
+      funkin.Conductor,
+      haxe.Json,
+      HaxeStringTools,
+      Math,
+      Std,
+      Lambda
     ];
 
     for (cls in DEFAULT_IMPORTS)
@@ -406,6 +462,7 @@ class PolymodHandler
     // `haxe.Unserializer`
     // Unserializer.DEFAULT_RESOLVER.resolveClass() can access blacklisted packages
     Polymod.blacklistImport('haxe.Unserializer');
+    Polymod.blacklistImport('openfl.filesystem.File');
 
     // `lime.utils.AssetLibrary`
     // If you create your own library using a manifest, AssetLibrary.__fromManifest() can access blacklisted packages apparently.
@@ -507,6 +564,15 @@ class PolymodHandler
       var className:String = Type.getClassName(cls);
       Polymod.blacklistImport(className);
     }
+
+    #if FEATURE_PSYCH_LUA
+    for (cls in ClassMacro.listClassesInPackage('crowplexus'))
+    {
+      if (cls == null) continue;
+      Polymod.blacklistImport(Type.getClassName(cls));
+    }
+    Polymod.blacklistInstanceFields(funkin.modding.psychlua.PsychLuaHScript, ['interp', 'parser', 'expr', 'config', 'owner']);
+    #end
 
     // `io.newgrounds.*`
     // Contains functions which allow for cheating medals and leaderboards.
@@ -701,9 +767,10 @@ class PolymodHandler
    * Clear and reload from disk all data assets.
    * Useful for "hot reloading" for fast iteration!
    */
-  public static function forceReloadAssets():Void
+  public static function forceReloadAssets(?onComplete:Void->Void):Void
   {
-    for (task in buildAssetReloadTasks()) task.run();
+    funkin.util.plugins.ReloadAssetsDebugPlugin.hotReloadInProgress = true;
+    FlxG.switchState(() -> new funkin.ui.transition.preload.hotreload.HotReloadState({onComplete: onComplete}));
   }
 
   public static function buildAssetReloadTasks():Array<AssetReloadTask>

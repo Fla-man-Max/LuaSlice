@@ -15,6 +15,8 @@ import haxe.io.Bytes;
 class ConverterEditorTest extends Module
 {
     var phase = 0;
+    var playtestElapsed = 0.0;
+    var playtestAudioVerified = false;
 
     public function new()
     {
@@ -55,11 +57,67 @@ class ConverterEditorTest extends Module
                 ChartEditorAudioHandler.loadInstFromBytes(editor, Bytes.ofString("not audio"), "invalid");
                 if (ChartEditorAudioHandler.playInstrumental(editor, "invalid")) throw "Corrupt audio accepted";
                 trace("CONVERTER_EDITOR_OGG_OK");
+                editor.playtestStartTime = true;
+                editor.playtestPracticeMode = true;
+                editor.playtestBotPlayMode = true;
+                editor.playtestShowResults = false;
+                editor.playtestSongScripts = false;
+                editor.scrollPositionInMs = 0;
+                editor.playheadPositionInMs = 500;
+                editor.testSongInPlayState(false);
+                phase = 3;
             }
             catch (error:Dynamic)
             {
                 trace("CONVERTER_EDITOR_FAILED: " + error);
             }
         }
+        else if (phase == 3 && Std.isOfType(FlxG.state.subState, PlayState))
+        {
+            playtestElapsed += event.elapsed;
+            if (playtestElapsed > 4 && playtestAudioVerified)
+            {
+                if (FlxG.sound.music == null || !FlxG.sound.music.playing)
+                    trace("CONVERTER_EDITOR_FAILED: Playtest did not start its instrumental from the selected position");
+                else
+                {
+                    phase = 4;
+                    FlxG.state.subState.close();
+                }
+            }
+            else if (playtestElapsed > 15)
+                trace("CONVERTER_EDITOR_FAILED: Playtest audio verification timed out");
+        }
+        else if (phase == 4 && Std.isOfType(FlxG.state, ChartEditorState) && !Std.isOfType(FlxG.state.subState, PlayState) && PlayState.instance == null)
+        {
+            phase = 5;
+            if (!FlxG.cameras.list.contains(FlxG.state.uiCamera))
+                trace("CONVERTER_EDITOR_FAILED: Editor UI camera was not restored");
+            else
+                trace("EDITOR_PLAYTEST_RETURN_OK");
+        }
+    }
+
+    override function onSongStart(event)
+    {
+        if (phase != 3) return;
+        if (FlxG.sound.music == null || Math.abs(FlxG.sound.music.time - 500) > 80)
+            trace("CONVERTER_EDITOR_FAILED: Instrumental did not start at 500ms");
+        else
+            playtestAudioVerified = true;
+    }
+
+    override function onSubStateCloseBegin(event)
+    {
+        if (phase == 3 && Std.isOfType(FlxG.state.subState, PlayState))
+        {
+            trace("CONVERTER_EDITOR_FAILED: Playtest closed before its audio could be verified");
+        }
+    }
+
+    override function onSubStateOpenEnd(event)
+    {
+        if (phase == 3 && Std.isOfType(FlxG.state.subState, PlayState))
+            FlxG.state.subState.disableKeys = true;
     }
 }

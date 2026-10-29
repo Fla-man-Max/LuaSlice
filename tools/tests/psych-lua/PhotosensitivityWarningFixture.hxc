@@ -1,0 +1,10 @@
+import funkin.modding.module.Module;
+
+class PhotosensitivityWarningFixture extends Module
+{
+  public function new()
+  {
+    super('photosensitivity-warning-fixture');
+    trace('[MOD_WARNING_FIXTURE] INITIALIZED');
+  }
+}

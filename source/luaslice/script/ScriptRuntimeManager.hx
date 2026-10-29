@@ -144,6 +144,15 @@ class ScriptRuntimeManager
     for (script in scripts) script.callHook(name, args);
   }
 
+  public function callCustomEvent(event:funkin.modding.events.ScriptEvent.CustomScriptEvent):Void
+  {
+    for (script in scripts)
+    {
+      if (!event.shouldPropagate) break;
+      script.callHook('onCustom', [event]);
+    }
+  }
+
   public function destroy():Void
   {
     for (script in scripts) script.destroy();

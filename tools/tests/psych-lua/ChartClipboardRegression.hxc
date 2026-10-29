@@ -1,0 +1,72 @@
+import funkin.modding.module.Module;
+import funkin.ui.debug.charting.ChartEditorState;
+import funkin.ui.debug.charting.commands.CutItemsCommand;
+import funkin.ui.debug.charting.commands.PasteItemsCommand;
+import funkin.data.song.SongData.SongNoteData;
+import funkin.data.song.SongData.SongEventData;
+import funkin.data.song.SongDataUtils;
+import funkin.util.ClipboardUtil;
+import funkin.save.Save;
+import funkin.ui.debug.charting.dialogs.ChartEditorTouchContextMenu;
+import haxe.ui.actions.ActionManager;
+import haxe.ui.events.ActionEvent;
+import Reflect;
+
+class ChartClipboardRegression extends Module
+{
+  var done = false;
+  function new() { super('chart-clipboard-regression'); }
+
+  override function onUpdate(event)
+  {
+    super.onUpdate(event);
+    if (done || !(FlxG.state is ChartEditorState)) return;
+    done = true;
+    try
+    {
+    var editor = cast(FlxG.state, ChartEditorState);
+    ClipboardUtil.setClipboard('{}');
+    if (SongDataUtils.readItemsFromClipboard().valid) throw 'Empty chart clipboard was accepted';
+    var note = new SongNoteData(1000, 0, 0, '', []);
+    var songEvent = new SongEventData(1300, 'FocusCamera', {char: 0});
+    editor.currentSongChartNoteData = [note];
+    editor.currentSongChartEventData = [songEvent];
+    editor.performCommand(new CutItemsCommand([note], [songEvent]));
+    var copied = SongDataUtils.readItemsFromClipboard();
+    if (!copied.valid || copied.notes.length != 1 || copied.events.length != 1) throw 'Cut did not copy notes and events';
+    if (copied.notes[0].time != 0 || copied.events[0].time != 300) throw 'Cut lost relative note/event timing';
+    ClipboardUtil.setClipboard('');
+    var fallback = SongDataUtils.readItemsFromClipboard();
+    if (!fallback.valid || fallback.events[0].time != 300) throw 'Internal chart clipboard fallback lost copied data';
+    editor.performCommand(new PasteItemsCommand(2000));
+    if (editor.currentSongChartNoteData[0].time != 2000 || editor.currentSongChartEventData[0].time != 2300)
+      throw 'Pasting mixed chart items changed timing';
+    editor.undoLastCommand();
+    if (editor.currentSongChartNoteData.length != 0 || editor.currentSongChartEventData.length != 0) throw 'Paste undo failed';
+    editor.undoLastCommand();
+    if (editor.currentSongChartNoteData[0] != note || editor.currentSongChartEventData[0] != songEvent) throw 'Cut undo failed';
+    var oldDuration = Save.instance.chartEditorLongPressDuration.value;
+    Save.instance.chartEditorLongPressDuration.value = 1.8;
+    editor.loadPreferences();
+    editor.writePreferences();
+    if (Save.instance.chartEditorLongPressDuration.value != 1.8) throw 'Long press preference was overwritten';
+    Save.instance.chartEditorLongPressDuration.value = oldDuration;
+    Save.system.flush();
+    var manager = Reflect.getProperty(ActionManager, 'instance');
+    if (manager == null) throw 'Action manager was unavailable to the lifecycle fixture';
+    var previousList = manager._events == null ? null : manager._events._map.get(ActionEvent.ACTION_START);
+    var previousActions = previousList == null ? 0 : previousList.length;
+    var menu = new ChartEditorTouchContextMenu(editor, 'Lifecycle regression', []);
+    menu.disposeComponent();
+    editor.isHaxeUIDialogOpen = false;
+    var remainingList = manager._events._map.get(ActionEvent.ACTION_START);
+    var remainingActions = remainingList == null ? 0 : remainingList.length;
+    if (remainingActions != previousActions) throw 'Closing touch menus retained global input handlers';
+    trace('CHART_CLIPBOARD_REGRESSION_OK');
+    }
+    catch (error:Dynamic)
+    {
+        trace("COMMUNITY_REGRESSION_FAILED: " + error);
+    }
+  }
+}

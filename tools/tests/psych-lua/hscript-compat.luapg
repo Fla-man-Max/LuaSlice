@@ -1,0 +1,47 @@
+function onCreatePost()
+    if songPath ~= 'tutorial' then return end
+    assert(runHaxeCode([[
+        if (Preferences == null || Constants == null || FunkinSprite == null) throw 'Missing common HScript defaults';
+        if (Constants.SAVE_NAME == null || Constants.SAVE_PATH == null || Constants.BASE_SAVE_SLOT == null) throw 'Missing inline engine constants';
+        if (Reflect.getProperty(Constants, 'SAVE_NAME') != Constants.SAVE_NAME) throw 'Inline constant property reflection differs';
+        if (Reflect.field(Constants, 'BASE_SAVE_SLOT') != Constants.BASE_SAVE_SLOT) throw 'Inline constant field reflection differs';
+        if (!Reflect.hasField(Constants, 'SAVE_PATH') || Reflect.fields(Constants).indexOf('SAVE_PATH') == -1) throw 'Inline constants are not discoverable';
+        var constantWriteDenied = false;
+        try { Reflect.setProperty(Constants, 'SAVE_NAME', 'invalid'); } catch (error:Dynamic) { constantWriteDenied = true; }
+        if (!constantWriteDenied) throw 'Inline engine constants must remain read-only';
+        var data = {value: 20};
+        Reflect.setProperty(data, 'value', Reflect.getProperty(data, 'value') + 2);
+        setVar('hscriptSharedValue', data.value);
+        function hscriptAdd(value:Int):Int { return value + getVar('hscriptSharedValue'); }
+        createCallback('hscriptCallback', function(value) { return hscriptAdd(value); });
+        return true;
+    ]]) == true)
+    assert(hscriptCallback(20) == 42)
+    assert(runHaxeFunction('hscriptAdd', {20}) == 42)
+    assert(getVar('hscriptSharedValue') == 22)
+    assert(runHaxeCode('return injectedValue + 1;', {injectedValue = 41}) == 42)
+    debugPrint('HSCRIPT_DEFAULTS_CALLBACKS_OK')
+    assert(runHaxeCode([[
+        import flixel.FlxSprite as ImportedSprite;
+        import optional.missing.ModClass;
+        return ImportedSprite != null;
+    ]]) == true)
+    debugPrint('HSCRIPT_OPTIONAL_IMPORT_OK')
+    assert(runHaxeCode('var invalid = ;') == nil)
+    assert(runHaxeCode('return 42;') == 42)
+    debugPrint('HSCRIPT_PARSE_RECOVERY_OK')
+    assert(runHaxeCode('throw "intentional HScript recovery test";') == nil)
+    assert(runHaxeCode('return 42;') == 42)
+    debugPrint('HSCRIPT_RUNTIME_RECOVERY_OK')
+    runHaxeCode([[createCallback('hscriptThrowingCallback', function() { throw 'intentional callback recovery test'; });]])
+    assert(hscriptThrowingCallback() == nil)
+    assert(runHaxeCode('return 42;') == 42)
+    debugPrint('HSCRIPT_CALLBACK_RECOVERY_OK')
+    assert(addHaxeLibrary('File', 'sys.io') == false)
+    assert(runHaxeCode('import Sys; return true;') == nil)
+    assert(runHaxeCode('return Type.resolveClass("sys.io.File");') == nil)
+    assert(runHaxeCode('return Reflect.getProperty(FlxG, "save");') == nil)
+    assert(runHaxeCode('return 42;') == 42)
+    debugPrint('HSCRIPT_SANDBOX_OK')
+    debugPrint('HSCRIPT_COMPAT_RECOVERY_OK')
+end

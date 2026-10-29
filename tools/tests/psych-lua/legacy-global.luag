@@ -1,4 +1,7 @@
 legacyShared = 42
+function onLuaPauseMenuAccept(id)
+    if id == 'inherited-hook-regression' then print('LUASLICE_INHERITED_HOOK_ONCE') end
+end
 function onCreate()
     assert(legacyPrivate == nil)
     print('LUASLICE_GLOBAL_ISOLATION_OK')

@@ -1,0 +1,19 @@
+import funkin.play.notes.notekind.NoteKind;
+import funkin.play.PlayState;
+
+class CreationNoteKindTest extends NoteKind
+{
+    var lastGame = null;
+
+    public function new(id)
+    {
+        super("creation-note-test");
+    }
+
+    override function onCreate(event)
+    {
+        if (lastGame == PlayState.instance) throw "Note kind initialized twice for one PlayState";
+        lastGame = PlayState.instance;
+        trace("NOTE_KIND_CREATE_REGRESSION_OK");
+    }
+}

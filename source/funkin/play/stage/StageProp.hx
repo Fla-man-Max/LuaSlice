@@ -24,6 +24,10 @@ class StageProp extends FunkinSprite implements IStateStageProp
   {
   }
 
+  public function onCustom(event:CustomScriptEvent):Void
+  {
+  }
+
   public function onScriptEvent(event:ScriptEvent)
   {
   }

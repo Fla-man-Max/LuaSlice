@@ -133,7 +133,6 @@ class SustainTrail extends FlxSprite
     super(0, 0);
 
     setupHoldNoteGraphic(noteStyle);
-    noteStyleOffsets = noteStyle.getHoldNoteOffsets();
 
     // BASIC SETUP
     this.sustainLength = sustainLength;
@@ -208,6 +207,7 @@ class SustainTrail extends FlxSprite
    */
   public function setupHoldNoteGraphic(noteStyle:NoteStyle):Void
   {
+    noteStyleOffsets = noteStyle.getHoldNoteOffsets();
     loadGraphic(noteStyle.getHoldNoteAssetPath());
 
     antialiasing = true;

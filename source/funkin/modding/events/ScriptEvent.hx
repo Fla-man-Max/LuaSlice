@@ -229,6 +229,24 @@ class GhostMissNoteScriptEvent extends ScriptEvent
   }
 }
 
+class CustomScriptEvent extends ScriptEvent
+{
+  public var id(default, null):String;
+  public var data:Map<String, Dynamic>;
+
+  public function new(id:String, cancelable:Bool = true)
+  {
+    super(CUSTOM, cancelable);
+    this.id = id;
+    this.data = [];
+  }
+
+  override public function toString():String
+  {
+    return 'CustomScriptEvent(id=$id, cancelable=$cancelable)';
+  }
+}
+
 class HoldNoteScriptEvent extends NoteScriptEvent
 {
   /**

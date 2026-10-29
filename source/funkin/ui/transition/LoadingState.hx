@@ -296,7 +296,10 @@ class LoadingState extends MusicBeatSubState
     stageDirectory = daStage?._data?.directory ?? "shared";
     Paths.setCurrentLevel(stageDirectory);
 
-    if (funkin.ui.FullScreenScaleMode.instance != null) funkin.ui.FullScreenScaleMode.instance.onMeasurePostAwait();
+    if (asSubState)
+      funkin.ui.FullScreenScaleMode.instance?.onMeasurePostAwait();
+    else
+      FlxG.signals.preStateSwitch.addOnce(() -> funkin.ui.FullScreenScaleMode.instance?.onMeasurePostAwait());
 
     var playStateCtor:() -> PlayState = function()
     {

@@ -1184,6 +1184,9 @@ class Strumline extends FlxSpriteGroup
 
       noteSprite.setupNoteGraphic(noteKindStyle);
 
+      noteSprite.noteData = note;
+      noteSprite.direction = note.getDirection();
+
       var trueScale = new FlxPoint(strumlineScale.x, strumlineScale.y);
       #if mobile
       if (inMobileTouchMode)
@@ -1196,9 +1199,9 @@ class Strumline extends FlxSpriteGroup
 
       noteSprite.scale.scale(trueScale.x, trueScale.y);
       noteSprite.updateHitbox();
-
-      noteSprite.direction = note.getDirection();
-      noteSprite.noteData = note;
+      final noteOffsets = noteKindStyle.getNoteOffsets();
+      noteSprite.offset.x += noteOffsets[0];
+      noteSprite.offset.y += noteOffsets[1];
 
       noteSprite.x = this.x;
       noteSprite.x += getXPos(DIRECTIONS[note.getDirection() % KEY_COUNT]);
@@ -1208,7 +1211,7 @@ class Strumline extends FlxSpriteGroup
 
       noteSprite.graphic.destroyOnNoUse = false;
 
-      if (noteKind != null) noteSprite.scoreable = noteKind.scoreable;
+      noteSprite.scoreable = noteKind == null || noteKind.scoreable;
     }
 
     return noteSprite;
@@ -1251,7 +1254,7 @@ class Strumline extends FlxSpriteGroup
 
       holdNoteSprite.graphic.destroyOnNoUse = false;
 
-      if (noteKind != null) holdNoteSprite.scoreable = noteKind.scoreable;
+      holdNoteSprite.scoreable = noteKind == null || noteKind.scoreable;
     }
 
     return holdNoteSprite;

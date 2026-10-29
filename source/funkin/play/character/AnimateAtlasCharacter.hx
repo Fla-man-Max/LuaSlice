@@ -31,15 +31,15 @@ class AnimateAtlasCharacter extends BaseCharacter
     loadAtlas();
     loadAnimations();
 
-    log('Successfully loaded texture atlas for ${characterId} with ${_data.animations.length} animations.');
+    log('Successfully loaded texture atlas for ${characterId} with ${getCharacterAnimations().length} animations.');
     super.onCreate(event);
   }
 
   function loadAtlas():Void
   {
     log('Loading sprite atlas for ${characterId}.');
-    var assetLibrary:String = Paths.getLibrary(_data.assetPath);
-    var assetPath:String = Paths.stripLibrary(_data.assetPath);
+    var assetLibrary:String = Paths.getLibrary(getAssetPath());
+    var assetPath:String = Paths.stripLibrary(getAssetPath());
 
     loadTextureAtlas(assetPath, assetLibrary, getAtlasSettings());
 
@@ -54,16 +54,16 @@ class AnimateAtlasCharacter extends BaseCharacter
       this.antialiasing = true;
     }
 
-    this.setScale(_data.scale);
+    this.setScale(getBaseScale());
   }
 
   function loadAnimations():Void
   {
-    log('Loading ${_data.animations.length} animations for ${characterId}');
+    log('Loading ${getCharacterAnimations().length} animations for ${characterId}');
 
-    FlxAnimationUtil.addTextureAtlasAnimations(this, _data.animations);
+    FlxAnimationUtil.addTextureAtlasAnimations(this, getCharacterAnimations());
 
-    for (anim in _data.animations)
+    for (anim in getCharacterAnimations())
     {
       if (anim.offsets == null)
       {

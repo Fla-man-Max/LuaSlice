@@ -17,7 +17,7 @@ class ScriptEventDispatcher
    */
   public static function callEvent(target:Null<IScriptedClass>, event:ScriptEvent):Void
   {
-    if (target == null || event == null) return;
+    if (target == null || event == null || !event.shouldPropagate) return;
 
     target.onScriptEvent(event);
 
@@ -45,6 +45,9 @@ class ScriptEventDispatcher
         return;
       case UPDATE:
         target.onUpdate(cast event);
+        return;
+      case CUSTOM:
+        target.onCustom(cast event);
         return;
       default: // Continue;
     }

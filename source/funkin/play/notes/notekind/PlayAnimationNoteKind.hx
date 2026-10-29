@@ -9,38 +9,54 @@ class PlayAnimationNoteKind extends NoteKind
 {
   public function new()
   {
-    super('play_animation', 'Plays an animation when the note is hit.', null, [
+    super('play_animation', 'Play Animation', null, [
       {
         name: 'target',
-        description: 'player, opponent, girlfriend, or the name of a stage prop.',
-        type: NoteKindParamType.STRING,
-        data: {defaultValue: 'auto'}
+        description: 'Character Target',
+        type: NoteKindParamType.ENUM,
+        data: {
+          defaultValue: 'auto',
+          options: [
+            {text: 'Note owner (Auto)', value: 'auto'},
+            {text: 'Player', value: 'player'},
+            {text: 'Opponent', value: 'opponent'},
+            {text: 'Girlfriend', value: 'girlfriend'}
+          ]
+        }
       },
       {
         name: 'animation',
-        description: 'Animation name to play.',
+        description: 'Animation Name',
         type: NoteKindParamType.STRING,
         data: {defaultValue: 'idle'}
       },
       {
         name: 'force',
-        description: 'Use 1 to restart and force the animation.',
-        type: NoteKindParamType.INT,
-        data: {min: 0, max: 1, step: 1, defaultValue: 1}
+        description: 'Force Animation',
+        type: NoteKindParamType.BOOL,
+        data: {defaultValue: true}
       }
     ], true);
   }
 
   override public function onNoteHit(event:HitNoteScriptEvent):Void
   {
+    if (event.eventCanceled || event.note == null) return;
     var state = PlayState.instance;
     var stage = state?.currentStage;
     if (stage == null) return;
 
-    var targetName:String = event.note.getParam('target') ?? 'auto';
-    var animationName:String = event.note.getParam('animation') ?? 'idle';
-    var forceValue:Null<Int> = event.note.getParam('force');
-    var force:Bool = (forceValue ?? 1) != 0;
+    var targetName:String = StringTools.trim(Std.string(event.note.getParam('target') ?? 'auto'));
+    var animationName:String = Std.string(event.note.getParam('animation') ?? 'idle');
+    var forceValue:Dynamic = event.note.getParam('force');
+    var force:Bool = forceValue == null;
+    if (Std.isOfType(forceValue, Bool)) force = cast forceValue;
+    else if (Std.isOfType(forceValue, Int) || Std.isOfType(forceValue, Float)) force = forceValue != 0;
+    else if (Std.isOfType(forceValue, String))
+    {
+      var text:String = StringTools.trim(cast forceValue).toLowerCase();
+      force = text == '1' || text == 'true';
+    }
     var target:Null<FlxSprite> = null;
 
     switch (targetName.toLowerCase())
@@ -57,14 +73,45 @@ class PlayAnimationNoteKind extends NoteKind
         target = stage.getNamedProp(targetName);
     }
 
-    if (target == null) return;
+    if (target == null || !target.exists)
+    {
+      trace('[Play Animation note] Target "$targetName" is unavailable.');
+      return;
+    }
 
     if (Std.isOfType(target, BaseCharacter))
     {
-      cast(target, BaseCharacter).playAnimation(animationName, force, force);
+      var character:BaseCharacter = cast target;
+      if (character.animation?.getByName(animationName) == null)
+      {
+        var found:Bool = false;
+        for (animation in character.getCharacterAnimations())
+        {
+          if ((animation.name == animationName || animation.prefix == animationName) && character.hasAnimation(animation.name))
+          {
+            animationName = animation.name;
+            found = true;
+            break;
+          }
+        }
+        if (!found)
+        {
+          trace('[Play Animation note] Character "${character.characterId}" has no animation or prefix "$animationName".');
+          return;
+        }
+      }
+      var offsets = character.animationOffsets.get(animationName);
+      if (offsets == null || offsets.length < 2) character.setAnimationOffsets(animationName, 0, 0);
+      if (force) character.canPlayOtherAnims = true;
+      character.playAnimation(animationName, force, force);
     }
     else
     {
+      if (target.animation?.getByName(animationName) == null)
+      {
+        trace('[Play Animation note] Target "$targetName" has no animation "$animationName".');
+        return;
+      }
       target.animation.play(animationName, force);
     }
   }

@@ -155,6 +155,7 @@ class ModuleHandler
           }
         }
         ScriptEventDispatcher.callEvent(module, event);
+        if (!event.shouldPropagate) break;
       }
     }
   }

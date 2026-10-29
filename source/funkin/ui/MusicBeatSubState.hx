@@ -309,6 +309,9 @@ class MusicBeatSubState extends FlxSubState implements IEventHandler
   public function dispatchEvent(event:ScriptEvent)
   {
     ModuleHandler.callEvent(event);
+    #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+    if (event.shouldPropagate && event.type == CUSTOM) subStateScripts?.callCustomEvent(cast event);
+    #end
   }
 
   function createWatermarkText():Void

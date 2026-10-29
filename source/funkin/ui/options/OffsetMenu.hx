@@ -911,7 +911,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
     var inputLatencyNs:Int64 = PreciseInputManager.getCurrentTimestamp() - input.timestamp;
     var inputLatencyMs:Float = inputLatencyNs.toFloat() / Constants.NS_PER_MS;
 
-    var noteDiff:Int = Std.int((input.position ?? localConductor.songPosition) - note.noteData.time - inputLatencyMs);
+    var noteDiff:Int = Std.int((localConductor.songPosition - inputLatencyMs) - note.noteData.time);
 
     addDifference(noteDiff);
 

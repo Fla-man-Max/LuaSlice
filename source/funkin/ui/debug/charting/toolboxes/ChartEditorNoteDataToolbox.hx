@@ -5,8 +5,10 @@ import haxe.ui.components.DropDown;
 import haxe.ui.components.TextField;
 import haxe.ui.components.Label;
 import haxe.ui.components.NumberStepper;
+import haxe.ui.components.CheckBox;
 import haxe.ui.containers.Grid;
 import haxe.ui.core.Component;
+import haxe.ui.data.ArrayDataSource;
 import haxe.ui.events.UIEvent;
 import funkin.ui.debug.charting.util.ChartEditorDropdowns;
 import funkin.play.notes.notekind.NoteKindManager;
@@ -196,10 +198,20 @@ class ChartEditorNoteDataToolbox extends ChartEditorBaseToolbox
     }
 
     var noteKindParams:Array<NoteKindParam> = NoteKindManager.getParams(noteKind);
+    if (!setParamsToPlace) chartEditorState.noteParamsToPlace = [];
 
     for (i in 0...noteKindParams.length)
     {
       var param:NoteKindParam = noteKindParams[i];
+      var value:Dynamic = param.data?.defaultValue;
+      for (savedParam in chartEditorState.noteParamsToPlace)
+      {
+        if (savedParam.name == param.name)
+        {
+          value = savedParam.value;
+          break;
+        }
+      }
 
       var paramLabel:Label = new Label();
       paramLabel.value = param.description;
@@ -212,7 +224,7 @@ class ChartEditorNoteDataToolbox extends ChartEditorBaseToolbox
       {
         case NoteKindParamType.INT | NoteKindParamType.FLOAT:
           var paramStepper:NumberStepper = new NumberStepper();
-          paramStepper.value = (setParamsToPlace ? chartEditorState.noteParamsToPlace[i].value : param.data?.defaultValue) ?? 0.0;
+          paramStepper.value = value ?? 0.0;
           paramStepper.percentWidth = 100;
           paramStepper.step = param.data?.step ?? 1.0;
 
@@ -234,45 +246,98 @@ class ChartEditorNoteDataToolbox extends ChartEditorBaseToolbox
 
         case NoteKindParamType.STRING:
           var paramTextField:TextField = new TextField();
-          paramTextField.value = (setParamsToPlace ? chartEditorState.noteParamsToPlace[i].value : param.data?.defaultValue) ?? '';
+          paramTextField.value = value ?? '';
           paramTextField.percentWidth = 100;
           paramComponent = paramTextField;
+
+        case NoteKindParamType.BOOL:
+          var paramCheckBox:CheckBox = new CheckBox();
+          var selected:Bool = false;
+          if (Std.isOfType(value, Bool)) selected = cast value;
+          else if (Std.isOfType(value, Int) || Std.isOfType(value, Float)) selected = value != 0;
+          else if (Std.isOfType(value, String))
+          {
+            var text:String = StringTools.trim(cast value).toLowerCase();
+            selected = text == '1' || text == 'true';
+          }
+          paramCheckBox.selected = selected;
+          paramComponent = paramCheckBox;
+
+        case NoteKindParamType.ENUM:
+          var paramDropDown:DropDown = new DropDown();
+          paramDropDown.percentWidth = 100;
+          paramDropDown.dataSource = new ArrayDataSource();
+          var selectedOption:Dynamic = null;
+          if (param.data?.options != null)
+          {
+            for (option in param.data.options)
+            {
+              paramDropDown.dataSource.add(option);
+              if (option.value == value) selectedOption = option;
+            }
+          }
+          if (selectedOption == null && value != null)
+          {
+            selectedOption = {text: Std.string(value), value: value};
+            paramDropDown.dataSource.add(selectedOption);
+          }
+          paramDropDown.selectedItem = selectedOption;
+          paramComponent = paramDropDown;
       }
 
       if (paramComponent == null)
       {
         continue;
       }
+      paramComponent.id = 'noteParam-${param.name}';
+
+      var placedParam:NoteParamData = null;
+      for (savedParam in chartEditorState.noteParamsToPlace)
+      {
+        if (savedParam.name == param.name)
+        {
+          placedParam = savedParam;
+          break;
+        }
+      }
+      if (placedParam == null)
+      {
+        var initialValue:Dynamic = paramComponent.value;
+        if (param.type == NoteKindParamType.ENUM) initialValue = cast(paramComponent, DropDown).selectedItem?.value;
+        if (param.type == NoteKindParamType.BOOL) initialValue = cast(paramComponent, CheckBox).selected;
+        placedParam = new NoteParamData(param.name, initialValue);
+        chartEditorState.noteParamsToPlace.push(placedParam);
+      }
 
       paramComponent.onChange = function(event:UIEvent)
       {
-        chartEditorState.noteParamsToPlace[i].value = paramComponent.value;
+        var changedValue:Dynamic = paramComponent.value;
+        if (param.type == NoteKindParamType.ENUM) changedValue = cast(paramComponent, DropDown).selectedItem?.value;
+        if (param.type == NoteKindParamType.BOOL) changedValue = cast(paramComponent, CheckBox).selected;
+        placedParam.value = changedValue;
 
         for (note in chartEditorState.currentNoteSelection)
         {
-          if (note.params.length != noteKindParams.length)
+          if (note.kind != chartEditorState.noteKindToPlace) continue;
+          var found:Bool = false;
+          for (noteParam in note.params)
           {
-            break;
+            if (noteParam.name == param.name)
+            {
+              noteParam.value = changedValue;
+              found = true;
+              break;
+            }
           }
-
-          if (note.params[i].name == param.name)
-          {
-            note.params[i].value = paramComponent.value;
-          }
+          if (!found) note.params.push(new NoteParamData(param.name, changedValue));
         }
+        chartEditorState.saveDataDirty = true;
+        chartEditorState.noteDisplayDirty = true;
+        chartEditorState.notePreviewDirty = true;
+        chartEditorState.noteTooltipsDirty = true;
       }
 
       addNoteKindParam(paramLabel, paramComponent);
-    }
-
-    if (!setParamsToPlace)
-    {
-      var noteParamData:Array<NoteParamData> = [];
-      for (i in 0...noteKindParams.length)
-      {
-        noteParamData.push(new NoteParamData(noteKindParams[i].name, toolboxNotesParams[i].component.value));
-      }
-      chartEditorState.noteParamsToPlace = noteParamData;
     }
   }
 

@@ -608,6 +608,10 @@ class Conversation extends FlxSpriteGroup implements IDialogueScriptedClass impl
     if (completeCallback != null) completeCallback();
   }
 
+  public function onCustom(event:CustomScriptEvent):Void
+  {
+  }
+
   public function onScriptEvent(event:ScriptEvent):Void
   {
     propagateEvent(event);

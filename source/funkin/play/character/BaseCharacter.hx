@@ -1,6 +1,7 @@
 package funkin.play.character;
 
 import flixel.math.FlxPoint;
+import funkin.data.animation.AnimationData;
 import funkin.modding.events.ScriptEvent;
 import funkin.data.character.CharacterData;
 import funkin.data.character.CharacterData.CharacterDataParser;
@@ -207,6 +208,21 @@ class BaseCharacter extends Bopper
     return _data.scale;
   }
 
+  public function getAssetPath():String
+  {
+    return _data?.assetPath ?? '';
+  }
+
+  public function getCharacterAnimations():Array<AnimationData>
+  {
+    return _data?.animations ?? [];
+  }
+
+  public function getHealthIconData():Null<HealthIconData>
+  {
+    return _data?.healthIcon;
+  }
+
   public function getDeathCameraZoom():Float
   {
     return _data.death?.cameraZoom ?? 1.0;
@@ -357,7 +373,7 @@ class BaseCharacter extends Bopper
 
   public function getHealthIconId():String
   {
-    return _data?.healthIcon?.id ?? Constants.DEFAULT_HEALTH_ICON;
+    return getHealthIconData()?.id ?? Constants.DEFAULT_HEALTH_ICON;
   }
 
   public function initHealthIcon(isOpponent:Bool):Void
@@ -372,7 +388,7 @@ class BaseCharacter extends Bopper
         log(' WARNING '.warning() + ' Player 1 ($characterId) health icon not found!');
         return;
       }
-      PlayState.instance.iconP1.configure(_data?.healthIcon);
+      PlayState.instance.iconP1.configure(getHealthIconData());
       PlayState.instance.iconP1.flipX = !PlayState.instance.iconP1.flipX; // BF is looking the other way.
     }
     else
@@ -382,7 +398,7 @@ class BaseCharacter extends Bopper
         log(' WARNING '.warning() + ' Player 2 ($characterId) health icon not found!');
         return;
       }
-      PlayState.instance.iconP2.configure(_data?.healthIcon);
+      PlayState.instance.iconP2.configure(getHealthIconData());
     }
   }
 

@@ -1678,6 +1678,12 @@ class ModMenuState extends MusicBeatState
           doHoldAction = true;
         }
       }
+      else
+      {
+        holdDirection = controls.UI_UP ? -1 : controls.UI_DOWN ? 1 : controls.UI_LEFT ? -2 : 2;
+        holdTimer = 0.5;
+        doHoldAction = false;
+      }
     }
     else
     {
@@ -2285,8 +2291,7 @@ class ModMenuState extends MusicBeatState
     refresh();
 
     FlxTransitionableState.skipNextTransIn = true;
-    PolymodHandler.forceReloadAssets();
-    FlxG.switchState(() -> new MainMenuState());
+    PolymodHandler.forceReloadAssets(() -> FlxG.switchState(() -> new MainMenuState()));
   }
 
   function enableMod(item:Null<ModMenuItem>,

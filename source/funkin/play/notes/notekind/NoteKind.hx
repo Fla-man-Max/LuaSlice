@@ -88,6 +88,10 @@ class NoteKind implements INoteScriptedClass
     });
   }
 
+  public function onCustom(event:CustomScriptEvent):Void
+  {
+  }
+
   public function onScriptEvent(event:ScriptEvent):Void
   {
   }
@@ -130,6 +134,8 @@ abstract NoteKindParamType(String) from String to String
   public static final STRING:String = 'String';
   public static final INT:String = 'Int';
   public static final FLOAT:String = 'Float';
+  public static final BOOL:String = 'Bool';
+  public static final ENUM:String = 'Enum';
 }
 
 typedef NoteKindParamData =
@@ -150,7 +156,8 @@ typedef NoteKindParamData =
    * If `precision` is null, there will be 0 decimal places
    */
   ?precision:Null<Int>,
-  ?defaultValue:Dynamic
+  ?defaultValue:Dynamic,
+  ?options:Array<{text:String, value:Dynamic}>
 }
 
 /**

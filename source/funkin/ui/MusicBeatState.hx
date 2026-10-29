@@ -299,6 +299,12 @@ class MusicBeatState extends FlxTransitionableState implements IEventHandler
   public function dispatchEvent(event:ScriptEvent)
   {
     ModuleHandler.callEvent(event);
+    #if FEATURE_LUA_SCRIPTS
+    if (event.shouldPropagate) classLuaScriptManager?.callEvent(event, false);
+    #end
+    #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+    if (event.shouldPropagate && event.type == CUSTOM) classScriptRuntimeManager?.callCustomEvent(cast event);
+    #end
   }
 
   public function getHotReloadParams():HotReloadStateParams

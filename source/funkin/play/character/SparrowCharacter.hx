@@ -36,10 +36,10 @@ class SparrowCharacter extends BaseCharacter
   {
     trace('Loading assets for Sparrow character "${characterId}"', flixel.util.FlxColor.fromString("#89CFF0"));
 
-    var tex:FlxFramesCollection = Paths.getSparrowAtlas(_data.assetPath);
+    var tex:FlxFramesCollection = Paths.getSparrowAtlas(getAssetPath());
     if (tex == null)
     {
-      trace('Could not load Sparrow sprite: ${_data.assetPath}');
+      trace('Could not load Sparrow sprite: ${getAssetPath()}');
       return;
     }
 
@@ -56,16 +56,16 @@ class SparrowCharacter extends BaseCharacter
       this.antialiasing = true;
     }
 
-    this.setScale(_data.scale);
+    this.setScale(getBaseScale());
   }
 
   function loadAnimations()
   {
-    trace('[SPARROWCHAR] Loading ${_data.animations.length} animations for ${characterId}');
+    trace('[SPARROWCHAR] Loading ${getCharacterAnimations().length} animations for ${characterId}');
 
-    FlxAnimationUtil.addAtlasAnimations(this, _data.animations);
+    FlxAnimationUtil.addAtlasAnimations(this, getCharacterAnimations());
 
-    for (anim in _data.animations)
+    for (anim in getCharacterAnimations())
     {
       if (anim.offsets == null)
       {

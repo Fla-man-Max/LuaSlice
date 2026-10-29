@@ -125,6 +125,10 @@ class CharSelectGF extends FunkinSprite implements IBPMSyncedScriptedClass
     updateHitbox();
   }
 
+  public function onCustom(event:CustomScriptEvent):Void
+  {
+  }
+
   public function onScriptEvent(event:ScriptEvent):Void
   {
   };

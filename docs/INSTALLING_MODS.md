@@ -30,3 +30,17 @@
 2. Open the Files app, and navigate to `On My iPhone` -> `Friday Night Funkin` -> `mods`.
 3. Extract the mod you downloaded from its ZIP file, and place the mod folder into the game's `mods` folder.
 4. Restart the game (you may have to [force close](https://support.apple.com/en-us/109359) the app first). The game should detect the mod and start with it.
+
+# Optional mod photosensitivity warning
+
+Mod authors can opt in using the existing custom metadata object inside `_polymod_meta.json`. Keep the other required mod fields and merge this key into any existing `metadata` object:
+
+```json
+"metadata": {
+  "photosensitivityWarning": "true"
+}
+```
+
+The warning is shown before the selected mods' assets and scripts are activated. Players can continue or disable the existing Flashing Lights option and continue. Disabling this option only reduces effects that respect it; other mod visuals can still pose a photosensitivity risk. The option remains available in Options > Performance.
+
+Acknowledgment lasts for the current app session, including song restarts and unchanged hot reloads. Changing a flagged mod's metadata or disabling and re-enabling it requires acknowledgment again. Unflagged mods do not show this warning.

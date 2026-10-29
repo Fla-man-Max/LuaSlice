@@ -3,6 +3,8 @@ package funkin.modding.events;
 @:nullSafety
 enum abstract ScriptEventType(String) from String to String
 {
+  public var CUSTOM = 'CUSTOM';
+
   /**
    * Called when the relevant object is created.
    * Keep in mind that the constructor may be called before the object is needed,

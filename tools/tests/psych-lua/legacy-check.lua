@@ -1,4 +1,5 @@
 assert(legacyPrivate == nil)
+local nativeIncomingChecked = false
 legacyPrivate = 'first'
 function onCreate()
     assert(type(jit) == 'table' and string.find(jit.version, 'LuaJIT'))
@@ -38,4 +39,27 @@ function onCreate()
 end
 function onDestroy()
     print('LUASLICE_LEGACY_DESTROY_OK')
+end
+
+function onCustom(id, data)
+    if id == 'test:lua-cancel' then cancelEvent() end
+    if id == 'test:lua-stop' then stopEventPropagation() end
+    if id ~= 'test:data' then return end
+    assert(data.answer == 42 and data.nested.text == 'UTF-8: ł')
+    print('LUASLICE_CUSTOM_EVENT_OK')
+end
+
+function onNoteIncoming(event)
+    assert(event.type == 'NOTE_INCOMING' and event.note ~= nil and type(event.note.strumTime) == 'number')
+    if not nativeIncomingChecked then
+        nativeIncomingChecked = true
+        print('LUASLICE_NATIVE_EVENT_OK')
+    end
+end
+
+function onNoteHoldDrop(event)
+    assert(event.holdNote ~= nil and event.holdNote.sustainLength == 500)
+    assert(type(event.holdNote.strumTime) == 'number' and event.holdNote.direction == 0)
+    assert(type(event.holdNote.noteData.time) == 'number' and event.holdNote.noteData.length == 500)
+    print('LUASLICE_HOLD_EVENT_OK')
 end

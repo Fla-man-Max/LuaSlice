@@ -25,6 +25,11 @@
       <vbox width="100%">
         <menu-checkbox width="100%" id="menubarPreferenceDoubleClickDelete" text="Enable Double Click Delete" selected="true" />
       </vbox>
+      <hbox id="menubarLongPressDurationRow" width="100%" style="padding: 5px;" verticalAlign="center">
+        <label text="Long-Press Duration" styleName="menuLabel" width="100%" />
+        <number-stepper id="menubarPreferenceLongPressDuration" min="1" max="2" step="0.1" pos="1.5" width="88" />
+        <label text="sec" styleName="menuLabel" />
+      </hbox>
       <menu-separator />
       <hbox width="100%" style="padding: 5px;" verticalAlign="center">
         <label text="Auto-save Time" styleName="menuLabel" width="100%" />

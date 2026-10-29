@@ -1,0 +1,17 @@
+var checked = false;
+
+func onCustom(event)
+{
+    if (event.id != "test:data") return;
+    if (event.data.get("answer") != 42) throw "NxScript custom data was lost";
+    event.data.set("nx", true);
+    trace("NXSCRIPT_CUSTOM_EVENT_OK");
+}
+
+func onUpdate(elapsed)
+{
+    if (checked) return;
+    if (state == null || elapsed < 0) throw "Invalid NxScript state context";
+    checked = true;
+    trace("NXSCRIPT_RUNTIME_OK");
+}

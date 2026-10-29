@@ -24,9 +24,13 @@ class CutItemsCommand implements ChartEditorCommand
   public function execute(state:ChartEditorState):Void
   {
     // Copy the notes.
+    var firstTime:Float = Math.POSITIVE_INFINITY;
+    for (note in notes) firstTime = Math.min(firstTime, note.time);
+    for (songEvent in events) firstTime = Math.min(firstTime, songEvent.time);
+    var timeOffset = Math.isFinite(firstTime) ? Std.int(firstTime) : 0;
     SongDataUtils.writeItemsToClipboard({
-      notes: SongDataUtils.buildNoteClipboard(notes),
-      events: SongDataUtils.buildEventClipboard(events)
+      notes: SongDataUtils.buildNoteClipboard(notes.copy(), timeOffset),
+      events: SongDataUtils.buildEventClipboard(events.copy(), timeOffset)
     });
 
     // Delete the notes.

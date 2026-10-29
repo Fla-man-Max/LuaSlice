@@ -1,0 +1,203 @@
+name: LuaSlice Linux and iOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Build target
+        type: choice
+        options: [all, linux, ios]
+        default: all
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: ${{ matrix.target }} release
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: linux
+            runner: ubuntu-24.04
+          - target: ios
+            runner: macos-15-intel
+    defaults:
+      run:
+        shell: bash
+    env:
+      HXCPP_COMPILE_THREADS: '4'
+      LIBGL_ALWAYS_SOFTWARE: '1'
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        if: inputs.target == 'all' || inputs.target == matrix.target
+        with:
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Install native build dependencies
+        if: inputs.target == 'all' || inputs.target == matrix.target
+        run: |
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            sudo apt-get update
+            sudo apt-get install -y build-essential cmake ninja-build pkg-config libgc1 libpcre3 libpcre2-8-0 \
+              libx11-dev libxi-dev libxext-dev libxinerama-dev libxrandr-dev libgl1-mesa-dev \
+              libxss-dev libxv-dev libxxf86vm-dev libdrm-dev libwayland-dev libxkbcommon-dev \
+              libpipewire-0.3-dev libdecor-0-dev libibus-1.0-dev \
+              libasound2-dev libpulse-dev libudev-dev libgtk-3-dev gamemode-dev \
+              libvlc-dev libvlccore-dev vlc-plugin-base xvfb xauth
+          else
+            brew install cmake ninja pkg-config
+            xcodebuild -version
+            xcrun --sdk iphoneos --show-sdk-version
+          fi
+
+      - name: Install Haxe 4.3.7 and Neko 2.4.1
+        if: inputs.target == 'all' || inputs.target == matrix.target
+        run: |
+          task_tools="$RUNNER_TEMP/luaslice-tools"
+          mkdir -p "$task_tools/haxe" "$task_tools/neko" "$task_tools/haxelib"
+          if [[ "$RUNNER_OS" == Linux ]]; then
+            task_haxe_platform=linux64
+            task_neko_platform=linux64
+          else
+            task_haxe_platform=osx
+            task_neko_platform=osx64
+          fi
+          curl --fail --location --retry 3 "https://github.com/HaxeFoundation/haxe/releases/download/4.3.7/haxe-4.3.7-$task_haxe_platform.tar.gz" -o "$task_tools/haxe.tar.gz"
+          curl --fail --location --retry 3 "https://github.com/HaxeFoundation/neko/releases/download/v2-4-1/neko-2.4.1-$task_neko_platform.tar.gz" -o "$task_tools/neko.tar.gz"
+          tar -xzf "$task_tools/haxe.tar.gz" --strip-components=1 -C "$task_tools/haxe"
+          tar -xzf "$task_tools/neko.tar.gz" --strip-components=1 -C "$task_tools/neko"
+          echo "$task_tools/haxe" >> "$GITHUB_PATH"
+          echo "$task_tools/neko" >> "$GITHUB_PATH"
+          echo "HAXEPATH=$task_tools/haxe" >> "$GITHUB_ENV"
+          echo "HAXE_STD_PATH=$task_tools/haxe/std" >> "$GITHUB_ENV"
+          echo "NEKOPATH=$task_tools/neko" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$task_tools/neko:${LD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+          echo "DYLD_LIBRARY_PATH=$task_tools/neko:${DYLD_LIBRARY_PATH:-}" >> "$GITHUB_ENV"
+
+      - name: Install pinned project libraries
+        if: inputs.target == 'all' || inputs.target == matrix.target
+        run: |
+          haxe --version
+          neko -version
+          haxelib setup "$RUNNER_TEMP/luaslice-tools/haxelib"
+          haxelib --global install hmm 3.1.0 --always --quiet
+          haxelib --global run hmm install
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          for dependency in json.loads(pathlib.Path('hmm.json').read_text())['dependencies']:
+              if dependency['type'] != 'git':
+                  continue
+              path = pathlib.Path('.haxelib') / dependency['name'].replace('.', ',') / 'git'
+              subprocess.run(['git', '-C', str(path), 'submodule', 'update', '--init', '--recursive'], check=True)
+          PY
+          (cd .haxelib/hxcpp/git/tools/hxcpp && haxe compile.hxml)
+
+      - name: Build Linux release
+        if: matrix.target == 'linux' && (inputs.target == 'all' || inputs.target == 'linux')
+        run: |
+          haxelib run lime rebuild linux -release
+          haxelib run lime build linux -64 -release
+
+      - name: Test Linux startup, scripts, converters and editor playtest
+        if: matrix.target == 'linux' && (inputs.target == 'all' || inputs.target == 'linux')
+        run: |
+          haxe -cp source -cp tools/tests -main ModSelectionTest --interp
+          haxe -cp source -cp tools/tests -lib nxscript -main NxInterpreterTest --interp
+          haxe -cp source -cp tools/tests -lib SScript -main ScriptPropertiesTest --interp
+          xvfb-run -a pwsh -NoProfile -File tools/tests/TestPsychLua.ps1 -NoMods
+          xvfb-run -a pwsh -NoProfile -File tools/tests/TestPsychLua.ps1 -CheckConverters
+          xvfb-run -a pwsh -NoProfile -File tools/tests/TestPsychLua.ps1 -CheckEditor
+          tar -C export/release/linux/bin -czf export/release/LuaSlice-linux-x64.tar.gz .
+
+      - name: Build iOS native libraries and simulator release
+        if: matrix.target == 'ios' && (inputs.target == 'all' || inputs.target == 'ios')
+        run: |
+          haxelib run lime rebuild mac -release
+          haxelib run lime rebuild ios -release -simulator -64
+          haxelib run lime update ios -release -simulator -64
+          xcodebuild -project export/release/ios/LuaSlice.xcodeproj -scheme LuaSlice \
+            -configuration Release -sdk iphonesimulator -arch x86_64 \
+            SYMROOT="$PWD/export/release/ios/build" CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+
+      - name: Test iOS simulator startup
+        if: matrix.target == 'ios' && (inputs.target == 'all' || inputs.target == 'ios')
+        run: |
+          task_app="$PWD/export/release/ios/build/Release-iphonesimulator/LuaSlice.app"
+          test -d "$task_app"
+          task_device_info=$(xcrun simctl list devices available --json | python3 -c 'import json,sys; devices=json.load(sys.stdin)["devices"]; phones=[d for runtime,entries in devices.items() if ".iOS-" in runtime for d in entries if d["name"].startswith("iPhone")]; assert phones, "No available iPhone simulator"; print(phones[0]["udid"], phones[0]["state"])')
+          read -r task_device task_state <<< "$task_device_info"
+          if [[ "$task_state" != Booted ]]; then xcrun simctl boot "$task_device"; fi
+          xcrun simctl bootstatus "$task_device" -b
+          xcrun simctl install "$task_device" "$task_app"
+          mkdir -p .work/ios-smoke
+          xcrun simctl launch --console-pty "$task_device" me.luaslice > .work/ios-smoke/startup.log 2>&1 &
+          task_process=$!
+          trap 'kill "$task_process" 2>/dev/null || true' EXIT
+          task_ready=false
+          for ((task_attempt=0; task_attempt<180; task_attempt++)); do
+            kill -0 "$task_process"
+            if grep -Eq 'Fatal Uncaught|Null Object Reference|Loading failed:' .work/ios-smoke/startup.log; then
+              cat .work/ios-smoke/startup.log
+              exit 1
+            fi
+            if grep -q 'Opening Attract state in' .work/ios-smoke/startup.log; then
+              task_ready=true
+              break
+            fi
+            sleep 1
+          done
+          [[ "$task_ready" == true ]]
+          sleep 15
+          kill -0 "$task_process"
+          if grep -Eq 'Fatal Uncaught|Null Object Reference|Loading failed:' .work/ios-smoke/startup.log; then
+            cat .work/ios-smoke/startup.log
+            exit 1
+          fi
+          xcrun simctl io "$task_device" screenshot .work/ios-smoke/title.png
+          ditto -c -k --keepParent "$task_app" export/release/LuaSlice-ios-simulator.zip
+
+      - name: Build unsigned iOS device app
+        if: matrix.target == 'ios' && (inputs.target == 'all' || inputs.target == 'ios')
+        run: |
+          haxelib run lime rebuild ios -release
+          haxelib run lime update ios -release
+          xcodebuild -project export/release/ios/LuaSlice.xcodeproj -scheme LuaSlice \
+            -configuration Release -sdk iphoneos SYMROOT="$PWD/export/release/ios/build" CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+          task_stage=$(mktemp -d "$RUNNER_TEMP/luaslice-ios.XXXXXX")
+          mkdir "$task_stage/Payload"
+          ditto export/release/ios/build/Release-iphoneos/LuaSlice.app "$task_stage/Payload/LuaSlice.app"
+          ditto -c -k --keepParent "$task_stage/Payload" export/release/LuaSlice-ios-unsigned.ipa
+
+      - name: Upload tested build artifacts
+        if: success() && (inputs.target == 'all' || inputs.target == matrix.target)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: LuaSlice-${{ matrix.target }}-${{ github.sha }}
+          path: |
+            export/release/LuaSlice-linux-x64.tar.gz
+            export/release/LuaSlice-ios-simulator.zip
+            export/release/LuaSlice-ios-unsigned.ipa
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Upload test logs
+        if: always() && (inputs.target == 'all' || inputs.target == matrix.target)
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: LuaSlice-${{ matrix.target }}-test-logs-${{ github.sha }}
+          path: |
+            .work/psych-tests/**/stdout.log
+            .work/psych-tests/**/stderr.log
+            .work/psych-tests/**/crash/**
+            .work/ios-smoke/**
+          if-no-files-found: warn
+          retention-days: 7

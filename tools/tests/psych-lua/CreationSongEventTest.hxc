@@ -1,0 +1,165 @@
+import funkin.play.event.SongEvent;
+import funkin.play.PlayState;
+import funkin.modding.module.Module;
+import funkin.data.song.SongData.SongEventDataRaw;
+import funkin.modding.events.ScriptEvent.CustomScriptEvent;
+import funkin.modding.events.ScriptEvent.NoteScriptEvent;
+import funkin.modding.events.ScriptEvent.HoldNoteScriptEvent;
+import funkin.data.character.CharacterData.CharacterDataParser;
+import funkin.play.character.SparrowCharacter;
+
+class CreationSongEventTest extends SongEvent
+{
+    var lastGame = null;
+
+    public function new(id)
+    {
+        super("creation-event-test");
+    }
+
+    override function onCreate(event)
+    {
+        if (lastGame == PlayState.instance) throw "Song event initialized twice for one PlayState";
+        lastGame = PlayState.instance;
+        trace("SONG_EVENT_CREATE_REGRESSION_OK");
+    }
+
+    override function handleEvent(data)
+    {
+        if (data.eventKind != "creation-event-test" || data.time != 1000) throw "Creation event received unexpected chart data";
+        trace("SONG_EVENT_HANDLE_REGRESSION_OK");
+    }
+}
+
+class CreationEventFixtureLoader extends Module
+{
+    public function new()
+    {
+        super("creation-event-fixture");
+    }
+
+    override function onSongLoaded(event)
+    {
+        if (event.id != "tutorial") return;
+        for (data in event.events) if (data.eventKind == "creation-event-test") return;
+        event.events.push(new SongEventDataRaw(1000, "creation-event-test", {}));
+    }
+}
+
+class CustomEventRegression extends Module
+{
+    var checked = false;
+
+    public function new()
+    {
+        super("custom-event-regression", 5);
+    }
+
+    override function onCustom(event)
+    {
+        if (event.id == "test:cancel") event.cancel();
+        if (event.id == "test:stop") event.stopPropagation();
+    }
+
+    override function onUpdate(event)
+    {
+        if (checked || PlayState.instance == null) return;
+        checked = true;
+        var game = PlayState.instance;
+        var canceled = new CustomScriptEvent("test:cancel");
+        game.dispatchEvent(canceled);
+        if (!canceled.eventCanceled || !canceled.shouldPropagate) throw "Custom cancellation was lost";
+        var immutable = new CustomScriptEvent("test:cancel", false);
+        game.dispatchEvent(immutable);
+        if (immutable.eventCanceled) throw "Noncancelable custom event was canceled";
+        var stopped = new CustomScriptEvent("test:stop");
+        game.dispatchEvent(stopped);
+        if (stopped.shouldPropagate || stopped.data.exists("observer")) throw "Custom propagation was not stopped";
+        var legacy = new CustomScriptEvent("test:lua-cancel");
+        game.dispatchEvent(legacy);
+        if (!legacy.eventCanceled) throw "LuaSlice Lua did not cancel its native event";
+        var luaStopped = new CustomScriptEvent("test:lua-stop");
+        game.dispatchEvent(luaStopped);
+        if (luaStopped.shouldPropagate) throw "LuaSlice Lua did not stop native event propagation";
+        var psych = new CustomScriptEvent("test:psych-cancel");
+        game.dispatchEvent(psych);
+        if (!psych.eventCanceled) throw "Psych Lua did not cancel its native event";
+        var shared = new CustomScriptEvent("test:data");
+        shared.data.set("answer", 42);
+        shared.data.set("nested", ["text" => "UTF-8: ł"]);
+        game.dispatchEvent(shared);
+        if (shared.data.get("observer") != true || shared.data.get("ss") != true || shared.data.get("nx") != true)
+            throw "Custom data did not reach every native/SScript/NxScript handler";
+        trace("CUSTOM_EVENT_REGRESSION_OK");
+        var note = game.playerStrumline.buildNoteSprite(game.currentChart.notes[2].clone());
+        game.dispatchEvent(new NoteScriptEvent("NOTE_INCOMING", note, 0, 0, false));
+        note.kill();
+        var holdData = game.currentChart.notes[2].clone();
+        holdData.data = 0;
+        holdData.kind = "";
+        holdData.length = 500;
+        var hold = game.playerStrumline.buildHoldNoteSprite(holdData);
+        game.dispatchEvent(new HoldNoteScriptEvent("NOTE_HOLD_DROP", hold, 0, 0, false, 0, true));
+        hold.kill();
+        var character = CharacterDataParser.fetchCharacter("scripted-character-test");
+        if (character == null || character.assetReads == 0 || character.animationReads == 0 || character.scale.x != 3)
+            throw "Scripted character render getters were not used";
+        if (!character.hasAnimation("getterTest") || character.getHealthIconId() != "bf")
+            throw "Scripted character animation/icon overrides were ignored";
+        character.destroy();
+        trace("CHARACTER_GETTER_REGRESSION_OK");
+    }
+}
+
+class CustomEventObserver extends Module
+{
+    public function new()
+    {
+        super("custom-event-observer", 6);
+    }
+
+    override function onScriptEvent(event)
+    {
+        if (event.type == "CUSTOM" && event.id == "test:stop") throw "Stopped event reached the next generic handler";
+    }
+
+    override function onCustom(event)
+    {
+        event.data.set("observer", true);
+    }
+}
+
+class GetterCharacterFixture extends SparrowCharacter
+{
+    public var assetReads = 0;
+    public var animationReads = 0;
+
+    public function new(id)
+    {
+        super("scripted-character-test");
+    }
+
+    override function getAssetPath()
+    {
+        assetReads++;
+        return super.getAssetPath();
+    }
+
+    override function getCharacterAnimations()
+    {
+        animationReads++;
+        var animations = super.getCharacterAnimations().copy();
+        animations.push({name: "getterTest", prefix: "Senpai Idle instance 10", offsets: [0, 0]});
+        return animations;
+    }
+
+    override function getBaseScale()
+    {
+        return 3;
+    }
+
+    override function getHealthIconData()
+    {
+        return {id: "bf", isPixel: false};
+    }
+}

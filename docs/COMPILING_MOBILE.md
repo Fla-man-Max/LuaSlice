@@ -71,6 +71,21 @@ Check [COMPILING.md](./COMPILING.md) if you haven’t done that yet.
 ## iOS
 Note that you can only build the game for iOS on a computer running macOS.
 
+LuaSlice does not use the Funkin' Crew's signing team. For signed device builds, set `IOS_TEAM_ID` to your own Apple development team ID before building, or choose your team in Xcode. For example, in a macOS terminal:
+
+```bash
+export IOS_TEAM_ID="YOUR_TEAM_ID"
+haxelib run lime build ios -release
+```
+
+The simulator does not need a signing team:
+
+```bash
+haxelib run lime test ios -release -simulator
+```
+
+A macOS CI runner can build the simulator version without owning a Mac. It still needs the pinned dependencies and their iOS native libraries. Windows can prepare source files, but cannot compile or run this native iOS target. An unsigned device build is not an installable, signed release.
+
 0. Build the game for desktop to make sure everything works. Check [COMPILING.md](./COMPILING.md).
 1. Get Xcode from the app store on your macOS Machine.
 2. Download the iPhone SDK (First thing that pops up in Xcode)
@@ -89,7 +104,7 @@ Open Xcode, press CMD+, to open Settings, select Accounts, add an Apple ID.
 
 - error: No Account for Team "Z7G7AVNGSH". Add a new account in Accounts settings or verify that your accounts have valid credentials.
 
-Open `project.hxp` and change `IOS_TEAM_ID` to your personal team's ID.
+Set the `IOS_TEAM_ID` environment variable to your personal team's ID, then regenerate the project, or select your own team in Xcode.
 
 - error: Failed Registering Bundle Identifier: The app identifier "me.funkin.fnf" cannot be registered to your development team because it is not available.
 

@@ -282,6 +282,8 @@ class Save implements ConsoleClass
   public var chartEditorDownscroll:SaveProperty<Bool>;
   @:saveProperty(data.optionsChartEditor.doubleClickDelete, true)
   public var chartEditorDoubleClickDelete:SaveProperty<Bool>;
+  @:saveProperty(data.optionsChartEditor.longPressDuration, 1.5)
+  public var chartEditorLongPressDuration:SaveProperty<Float>;
   @:saveProperty(data.optionsChartEditor.vortex, false)
   public var chartEditorVortex:SaveProperty<Bool>;
   @:saveProperty(data.optionsChartEditor.autoSaveMinutes, 5)
@@ -926,7 +928,7 @@ class Save implements ConsoleClass
 
   public function updateVersionToLatest():Void
   {
-    this.data.version = Save.SAVE_DATA_VERSION;
+    this.data.version = thx.Dynamics.clone(Save.SAVE_DATA_VERSION);
   }
 
   public function debug_dumpSaveJsonSave():Void
@@ -1443,6 +1445,8 @@ typedef SaveDataChartEditorOptions =
    * @default `3`
    */
   var ?noteQuant:Int;
+
+  var ?longPressDuration:Float;
 
   /**
    * Live input style in the Chart Editor.

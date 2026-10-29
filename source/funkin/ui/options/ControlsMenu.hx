@@ -431,9 +431,10 @@ class ControlsMenu extends Page<OptionsState.OptionsMenuPageName>
     var item = controlGrid.selectedItem;
     var leftItem = controlGrid.members[controlGrid.selectedIndex - 1];
     var rightItem = controlGrid.members[controlGrid.selectedIndex + 1];
+    var otherItem = controlGrid.selectedIndex % COLUMNS == 1 ? leftItem : rightItem;
 
     // check if all keybinds are being removed and this is a UI control, prevent removing last keybind for this
-    if (input == FlxKey.NONE && controlGrid.selectedIndex != 1 && rightItem.input == FlxKey.NONE)
+    if (input == FlxKey.NONE && otherItem != null && otherItem.input == FlxKey.NONE)
     {
       for (group in itemGroups)
       {

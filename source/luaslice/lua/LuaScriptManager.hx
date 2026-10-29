@@ -60,6 +60,8 @@ class LuaScriptManager
   var optionManager:LuaOptionManager;
   var menuManager:LuaMenuManager;
   var shaderManager:LuaShaderManager;
+  var mobileAPI:LuaMobileAPI = new LuaMobileAPI();
+  var mobileCallbacks:Map<String, Dynamic> = [];
   var disabledHooks:Map<String, Bool> = [];
   var scriptPriorities:Map<String, Int> = [];
   var scriptPriorityDirty:Bool = false;
@@ -260,6 +262,7 @@ class LuaScriptManager
 
     for (scriptPath in loadedScripts)
     {
+      if (currentEvent != null && !currentEvent.shouldPropagate) break;
       if (scriptGlobalModes.get(scriptPath) == true) continue;
       try
       {
@@ -334,6 +337,7 @@ class LuaScriptManager
       if (scriptHooks == null || !scriptHooks.exists(name)) continue;
       capturedHookCount++;
       callGlobalScriptHook(scriptPath, name, args);
+      if (currentEvent != null && !currentEvent.shouldPropagate) break;
     }
 
     if (capturedHookCount > 0) return;
@@ -453,14 +457,21 @@ class LuaScriptManager
     return result;
   }
 
-  public function callEvent(event:ScriptEvent):Void
+  public function callEvent(event:ScriptEvent, includeTimedHooks:Bool = true):Void
   {
+    if (state == null || (event.type == UPDATE && !hasHook('onEvent') && !hasHook('onUpdateEvent'))) return;
     var previousEvent = currentEvent;
     currentEvent = event;
 
     var type = Std.string(event.type);
     var payload = eventToPayload(event);
     callHook('onEvent', [type, payload]);
+    if (!event.shouldPropagate)
+    {
+      currentEvent = previousEvent;
+      return;
+    }
+    Reflect.setField(payload, 'eventCanceled', event.eventCanceled);
 
     switch (type)
     {
@@ -491,9 +502,9 @@ class LuaScriptManager
       case 'GAME_OVER':
         callHook('onGameOver', []);
       case 'SONG_BEAT_HIT':
-        callHook('onBeatHit', [safeField(payload, 'beat'), payload]);
+        if (includeTimedHooks) callHook('onBeatHit', [safeField(payload, 'beat'), payload]);
       case 'SONG_STEP_HIT':
-        callHook('onStepHit', [safeField(payload, 'step'), payload]);
+        if (includeTimedHooks) callHook('onStepHit', [safeField(payload, 'step'), payload]);
       case 'NOTE_INCOMING':
         callHook('onNoteIncoming', [payload]);
       case 'NOTE_HIT':
@@ -528,9 +539,11 @@ class LuaScriptManager
       case 'SUBSTATE_CLOSE_END':
         callHook('onSubStateCloseEnd', [payload]);
       case 'FOCUS_GAINED':
-        callHook('onFocusGained', []);
+        if (includeTimedHooks) callHook('onFocusGained', []);
       case 'FOCUS_LOST':
-        callHook('onFocusLost', []);
+        if (includeTimedHooks) callHook('onFocusLost', []);
+      case 'CUSTOM':
+        callHook('onCustom', [safeField(payload, 'id'), safeField(payload, 'data'), payload]);
       case 'DIALOGUE_START':
         callHook('onDialogueStart', [payload]);
       case 'DIALOGUE_LINE':
@@ -955,7 +968,8 @@ class LuaScriptManager
     Lua.rawgeti(state, Lua.REGISTRYINDEX, envRef);
     for (hookName in LuaHookCatalog.ALL)
     {
-      Lua.getfield(state, -1, hookName);
+      Lua.pushstring(state, hookName);
+      Lua.rawget(state, -2);
       if (Lua.type(state, -1) == Lua.TFUNCTION)
       {
         scriptHooks.set(hookName, LuaL.ref(state, Lua.REGISTRYINDEX));
@@ -1049,6 +1063,8 @@ class LuaScriptManager
 
     menuManager.clear();
     shaderManager.clear();
+    mobileAPI.removeAll();
+    mobileAPI.camera = null;
   }
 
   function configurePackagePath():Void
@@ -1400,6 +1416,12 @@ class LuaScriptManager
     Lua.register(state, 'pathFile', cpp.Callable.fromStaticFunction(lua_pathFile));
     Lua.register(state, 'pathJson', cpp.Callable.fromStaticFunction(lua_pathJson));
 
+    mobileAPI.register((name, callback) -> {
+      mobileCallbacks.set(name, callback);
+      Lua.pushstring(state, name);
+      Lua.pushcclosure(state, cpp.Callable.fromStaticFunction(lua_mobileCallback), 1);
+      Lua.setglobal(state, name);
+    }, resolveCamera);
     registerPsychStyleAliases();
     installSimpleAPI();
   }
@@ -1542,6 +1564,24 @@ class LuaScriptManager
           kind: stringifyNullable(safeGetProperty(value, 'kind'))
         });
       }
+      else if (field == 'holdNote' && value != null)
+      {
+        var holdData = safeGetProperty(value, 'noteData');
+        Reflect.setField(payload, 'holdNote', {
+          strumTime: safeGetProperty(value, 'strumTime'),
+          direction: safeGetProperty(value, 'noteDirection'),
+          sustainLength: safeGetProperty(value, 'sustainLength'),
+          fullSustainLength: safeGetProperty(value, 'fullSustainLength'),
+          noteData: holdData == null ? null : {
+            time: safeField(holdData, 'time'),
+            data: safeField(holdData, 'data'),
+            length: safeField(holdData, 'length'),
+            kind: safeField(holdData, 'kind')
+          },
+          hitNote: safeGetProperty(value, 'hitNote'),
+          missedNote: safeGetProperty(value, 'missedNote')
+        });
+      }
       else if (field == 'eventData' && value != null)
       {
         Reflect.setField(payload, 'eventData', {
@@ -1552,11 +1592,27 @@ class LuaScriptManager
       }
       else if (!Std.isOfType(value, FlxSprite))
       {
-        Reflect.setField(payload, field, value);
+        Reflect.setField(payload, field, eventValue(value));
       }
     }
 
     return payload;
+  }
+
+  function eventValue(value:Dynamic, depth:Int = 0):Dynamic
+  {
+    if (value == null || depth > 16) return null;
+    if (Std.isOfType(value, String) || Std.isOfType(value, Bool) || Std.isOfType(value, Int) || Std.isOfType(value, Float)) return value;
+    if (Std.isOfType(value, Array)) return [for (item in cast(value, Array<Dynamic>)) eventValue(item, depth + 1)];
+    var result:Dynamic = {};
+    if (Std.isOfType(value, haxe.ds.StringMap))
+    {
+      for (key => item in cast(value, Map<String, Dynamic>)) Reflect.setField(result, key, eventValue(item, depth + 1));
+      return result;
+    }
+    if (Type.typeof(value) != TObject) return null;
+    for (field in Reflect.fields(value)) Reflect.setField(result, field, eventValue(Reflect.field(value, field), depth + 1));
+    return result;
   }
 
   static function stringifyNullable(value:Dynamic):Null<String>
@@ -1572,6 +1628,21 @@ class LuaScriptManager
   static function lua_debugPrint(L:cpp.RawPointer<Lua_State>):Int
   {
     return lua_debugLog(L, 'print');
+  }
+
+  static function lua_mobileCallback(L:cpp.RawPointer<Lua_State>):Int
+  {
+    var manager = current();
+    if (manager == null) return 0;
+    var name = Lua.tostring(L, Lua.upvalueindex(1));
+    var callback = manager.mobileCallbacks.get(name);
+    if (callback == null) return manager.pushReturn(L, false);
+    try return manager.pushReturn(L, Reflect.callMethod(null, callback, manager.readArgs(L, 1)))
+    catch (error:Dynamic)
+    {
+      manager.reportLuaWarning('api-error', 'lua-api', name, Std.string(error));
+      return manager.pushReturn(L, false);
+    }
   }
 
   static function lua_debugInfo(L:cpp.RawPointer<Lua_State>):Int
@@ -3830,6 +3901,9 @@ class LuaScriptManager
     var playState = PlayState.instance;
     if (playState != null && playState.cameraFollowPoint != null)
     {
+      playState.clearCameraFollowCharacter();
+      playState.cancelCameraFollowTween();
+      playState.resetCamera(false, false, false);
       playState.cameraFollowPoint.setPosition(readFloat(L, 1, playState.cameraFollowPoint.x), readFloat(L, 2, playState.cameraFollowPoint.y));
     }
     return 0;

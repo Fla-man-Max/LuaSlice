@@ -1,0 +1,170 @@
+import flixel.FlxG;
+import funkin.modding.module.Module;
+import funkin.play.PlayState;
+import funkin.play.event.FocusCameraSongEvent;
+import funkin.play.notes.notekind.NoteKindManager;
+import funkin.data.song.SongData.SongEventDataRaw;
+import funkin.data.song.SongData.NoteParamData;
+import funkin.modding.events.ScriptEvent.HitNoteScriptEvent;
+
+class DynamicCameraAnimationRegression extends Module
+{
+    var checked = false;
+
+    public function new()
+    {
+        super("dynamic-camera-animation-regression", 100);
+    }
+
+    override function onUpdate(event)
+    {
+        var game = PlayState.instance;
+        if (checked || game == null || game.currentStage == null || game.playerStrumline == null) return;
+        checked = true;
+        try
+        {
+        var player = game.currentStage.getBoyfriend();
+        if (player == null) throw "Camera fixture requires a player character";
+        var cameraEvent = new FocusCameraSongEvent();
+        var oldX = player.x;
+        var oldY = player.y;
+        var startX = FlxG.camera.scroll.x;
+        var startY = FlxG.camera.scroll.y;
+        cameraEvent.handleEvent(new SongEventDataRaw(0, "FocusCamera", {char: 0, followCharacter: true, x: 37, y: -23, ease: "linear", duration: 8}));
+        var tween = game.cameraFollowTween;
+        player.x += 140;
+        player.y -= 80;
+        tween.update(tween.duration * 0.5);
+        var expectedX = (startX + player.cameraFocusPoint.x + 37 - FlxG.camera.width * 0.5) * 0.5;
+        var expectedY = (startY + player.cameraFocusPoint.y - 23 - FlxG.camera.height * 0.5) * 0.5;
+        if (Math.abs(FlxG.camera.scroll.x - expectedX) > 0.1 || Math.abs(FlxG.camera.scroll.y - expectedY) > 0.1)
+            throw "Dynamic camera tween retained a stale character endpoint";
+        if (!game.changeCharacter(0, player.characterId)) throw "Could not replace camera fixture character";
+        player = game.currentStage.getBoyfriend();
+        player.x = oldX + 220;
+        player.y = oldY + 120;
+        tween.update(tween.duration * 0.25);
+        expectedX = startX + (player.cameraFocusPoint.x + 37 - FlxG.camera.width * 0.5 - startX) * 0.75;
+        expectedY = startY + (player.cameraFocusPoint.y - 23 - FlxG.camera.height * 0.5 - startY) * 0.75;
+        if (game.cameraFollowCharacter != player || Math.abs(FlxG.camera.scroll.x - expectedX) > 0.1 || Math.abs(FlxG.camera.scroll.y - expectedY) > 0.1)
+            throw "Dynamic camera did not reacquire a swapped character";
+        tween.update(tween.duration * 0.25);
+        if (Math.abs(game.cameraFollowPoint.x - player.cameraFocusPoint.x - 37) > 0.1)
+            throw "Dynamic camera lost character offsets at tween completion";
+        cameraEvent.handleEvent(new SongEventDataRaw(0, "FocusCamera", {char: -1, followCharacter: false, x: 120, y: 240, ease: "CLASSIC"}));
+        player.x += 60;
+        if (game.cameraFollowCharacter != null || game.cameraFollowPoint.x != 120 || game.cameraFollowPoint.y != 240)
+            throw "Static focus retained the dynamic character target";
+        cameraEvent.handleEvent(new SongEventDataRaw(0, "FocusCamera", {char: 0, followCharacter: true, ease: "CLASSIC"}));
+        game.tweenCameraToPosition(300, 200, 0);
+        if (game.cameraFollowCharacter != null || game.cameraFollowPoint.x != 300 || game.cameraFollowPoint.y != 200)
+            throw "Scripted camera movement did not replace character tracking";
+        cameraEvent.handleEvent(new SongEventDataRaw(0, "FocusCamera", {char: 0, followCharacter: true, ease: "linear", duration: 8}));
+        var validTween = game.cameraFollowTween;
+        cameraEvent.handleEvent(new SongEventDataRaw(0, "FocusCamera", {char: 1, followCharacter: false, ease: "__invalid_ease__", duration: 8}));
+        if (game.cameraFollowTween != validTween || !validTween.active || game.cameraFollowCharacter != player)
+            throw "Invalid camera ease detached an active camera transition";
+        game.clearCameraFollowCharacter();
+        if (game.cameraFollowTween != null || FlxG.camera.target != game.cameraFollowPoint)
+            throw "Clearing character tracking left the camera detached";
+        game.tweenCameraToPosition(400, 250, 1);
+        game.setCameraFollowCharacter(player, 10, 20);
+        if (game.cameraFollowTween != null || FlxG.camera.target != game.cameraFollowPoint)
+            throw "Direct character tracking did not replace the active camera tween";
+        game.clearCameraFollowCharacter();
+        player.x = oldX;
+        player.y = oldY;
+        FlxG.camera.scroll.set(startX, startY);
+        trace("DYNAMIC_CAMERA_REGRESSION_OK");
+        }
+        catch (error:Dynamic)
+        {
+            trace("COMMUNITY_REGRESSION_FAILED: " + error);
+        }
+    }
+}
+
+class PlayAnimationNoteRegression extends Module
+{
+    var checked = false;
+
+    public function new()
+    {
+        super("play-animation-note-regression", 101);
+    }
+
+    override function onUpdate(event)
+    {
+        var game = PlayState.instance;
+        if (checked || game == null || game.currentStage == null || game.playerStrumline == null) return;
+        checked = true;
+        try
+        {
+        var player = game.currentStage.getBoyfriend();
+        var kind = NoteKindManager.getNoteKind("play_animation");
+        if (kind == null) throw "Missing Play Animation note kind";
+        var data = game.currentChart.notes[0].clone();
+        data.kind = "play_animation";
+        data.data = 0;
+        data.params = [new NoteParamData("target", "player"), new NoteParamData("animation", "idle"), new NoteParamData("force", true)];
+        var note = game.playerStrumline.buildNoteSprite(data);
+        player.canPlayOtherAnims = true;
+        player.playAnimation("singLEFT", true);
+        player.canPlayOtherAnims = false;
+        kind.onNoteHit(new HitNoteScriptEvent(note, 0, 0, "sick", false));
+        if (player.getCurrentAnimation() != "idle") throw "Forced animation could not interrupt an animation lock";
+        note.params[1].value = "hey";
+        note.params[2].value = false;
+        kind.onNoteHit(new HitNoteScriptEvent(note, 0, 0, "sick", false));
+        if (player.getCurrentAnimation() != "idle") throw "Non-forced animation bypassed character animation priority";
+        note.params[2].value = "false";
+        kind.onNoteHit(new HitNoteScriptEvent(note, 0, 0, "sick", false));
+        if (player.getCurrentAnimation() != "idle") throw "String false force bypassed character animation priority";
+        note.params[1].value = "__missing_animation_regression__";
+        note.params[2].value = 1;
+        kind.onNoteHit(new HitNoteScriptEvent(note, 0, 0, "sick", false));
+        if (player.getCurrentAnimation() != "idle") throw "Missing animation changed the active animation";
+        note.params[1].value = "singRIGHT";
+        var canceled = new HitNoteScriptEvent(note, 0, 250, "sick", false);
+        canceled.cancel();
+        kind.onNoteHit(canceled);
+        if (player.getCurrentAnimation() != "idle") throw "Canceled note still changed the animation";
+        for (animation in player.getCharacterAnimations())
+        {
+            if (animation.name == "idle" && animation.prefix != null && animation.prefix != "idle")
+            {
+                player.canPlayOtherAnims = true;
+                player.playAnimation("singLEFT", true);
+                note.params[1].value = animation.prefix;
+                kind.onNoteHit(new HitNoteScriptEvent(note, 0, 0, "sick", false));
+                if (player.getCurrentAnimation() != "idle") throw "Exact character animation prefix was not resolved";
+                if (player.animation.getNameList().contains(animation.prefix)) throw "Prefix lookup created a raw atlas animation without character offsets";
+            }
+        }
+        note.params[1].value = "singRIGHT";
+        var priorOffsets = player.animationOffsets.get("singRIGHT");
+        player.animationOffsets.remove("singRIGHT");
+        kind.onNoteHit(new HitNoteScriptEvent(note, 0, 0, "sick", false));
+        if (player.getCurrentAnimation() != "singRIGHT") throw "Registered animation without offsets could not play";
+        var defaultOffsets = player.animationOffsets.get("singRIGHT");
+        if (defaultOffsets == null || defaultOffsets[0] != 0 || defaultOffsets[1] != 0) throw "Missing offsets did not use safe defaults";
+        if (priorOffsets != null) player.animationOffsets.set("singRIGHT", priorOffsets);
+        var scored = new HitNoteScriptEvent(note, 0.04, 350, "sick", false);
+        game.dispatchEvent(scored);
+        if (player.getCurrentAnimation() != "singRIGHT") throw "Directional singing replaced the animation note";
+        if (scored.eventCanceled || scored.score != 350 || scored.healthChange != 0.04) throw "Animation note modified normal scoring";
+        player.canPlayOtherAnims = false;
+        note.params[1].value = "singLEFT";
+        note.params[2].value = false;
+        kind.onNoteHit(new HitNoteScriptEvent(note, 0, 0, "sick", false));
+        if (player.getCurrentAnimation() != "singLEFT") throw "Non-forced animation ignored the character's allowed priority exceptions";
+        player.canPlayOtherAnims = true;
+        note.kill();
+        trace("PLAY_ANIMATION_NOTE_REGRESSION_OK");
+        }
+        catch (error:Dynamic)
+        {
+            trace("COMMUNITY_REGRESSION_FAILED: " + error);
+        }
+    }
+}

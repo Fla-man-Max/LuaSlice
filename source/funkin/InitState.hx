@@ -70,6 +70,16 @@ class InitState extends FlxState
    */
   override public function create():Void
   {
+    if (funkin.modding.PolymodHandler.hasPendingVisualWarning())
+    {
+      Preferences.init();
+      PlayerSettings.init();
+      FlxG.switchState(() -> new funkin.ui.options.ModPhotosensitivityWarningState(() -> {
+        funkin.modding.PolymodHandler.resumeAfterVisualWarning();
+        FlxG.switchState(() -> new InitState());
+      }));
+      return;
+    }
     var startupStart:Float = haxe.Timer.stamp();
     // Setup a bunch of important Flixel stuff.
     setupShit();

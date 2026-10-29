@@ -1,0 +1,69 @@
+import funkin.modding.module.Module;
+import funkin.data.stage.StageRegistry;
+import funkin.play.stage.StageProp;
+import StringTools;
+
+class PhillyStageRegression extends Module
+{
+  var checked = false;
+
+  public function new()
+  {
+    super('philly-stage-regression');
+  }
+
+  override function onUpdate(event)
+  {
+    if (checked) return;
+    checked = true;
+    try
+    {
+      if (!StringTools.endsWith('philly_lightmap', '_lightmap') || StringTools.endsWith('philly_lightmap_extra', '_lightmap'))
+        throw 'Default StringTools import did not resolve the standard suffix helper';
+      for (id in ['phillyStreets', 'phillyStreetsErect'])
+      {
+        var stage = StageRegistry.instance.fetchEntry(id);
+        if (stage == null) throw 'Missing scripted stage: ' + id;
+        var ordinary = new StageProp();
+        stage.addProp(ordinary, 'philly-regression-ordinary');
+        if (stage.getNamedProp('philly-regression-ordinary') != ordinary || ordinary.alpha != 1)
+          throw id + ': ordinary props were changed or not registered';
+        var lightmap = new StageProp();
+        stage.addProp(lightmap, 'philly-regression_lightmap');
+        if (lightmap.alpha != 0.6 || lightmap.blend != 0)
+          throw id + ': lightmap blending was not applied';
+        var unnamed = new StageProp();
+        stage.addProp(unnamed);
+        if (!stage.members.contains(unnamed) || unnamed.alpha != 1)
+          throw id + ': unnamed prop was changed or not added';
+        var shortName = new StageProp();
+        stage.addProp(shortName, 'map');
+        if (shortName.alpha != 1) throw id + ': short prop names matched a lightmap';
+        var notSuffix = new StageProp();
+        stage.addProp(notSuffix, 'philly_lightmap_extra');
+        if (notSuffix.alpha != 1) throw id + ': non-suffix lightmap names matched';
+        if (id == 'phillyStreets')
+        {
+          var puddle = new StageProp();
+          puddle.y = 120;
+          stage.addProp(puddle, 'puddle');
+          if (stage.scriptGet('rainShader').puddleY != 200 || stage.scriptGet('rainShader').puddleScaleY != 0.3)
+            throw id + ': puddle shader configuration was lost';
+        }
+        else
+        {
+          var grey1 = new StageProp();
+          stage.addProp(grey1, 'grey1');
+          var grey2 = new StageProp();
+          stage.addProp(grey2, 'grey2');
+          if (grey1.blend != 0 || grey2.blend != 9) throw id + ': grey layer blending was lost';
+        }
+      }
+      trace('PHILLY_STAGE_REGRESSION_OK');
+    }
+    catch (error:Dynamic)
+    {
+      trace('PHILLY_STAGE_REGRESSION_FAILED: ' + error);
+    }
+  }
+}

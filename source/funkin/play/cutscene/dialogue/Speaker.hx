@@ -302,6 +302,10 @@ class Speaker extends FlxSprite implements IDialogueScriptedClass implements IRe
     this.kill();
   }
 
+  public function onCustom(event:CustomScriptEvent):Void
+  {
+  }
+
   public function onScriptEvent(event:ScriptEvent):Void
   {
   }

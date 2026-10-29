@@ -14,8 +14,9 @@ import sys.thread.Thread;
 @:build(funkin.util.macro.EnvironmentMacro.build()) @:nullSafety
 class DiscordClient
 {
-  @:envField
+  @:envField({warnIfMissing: false})
   static final DISCORD_CLIENT_ID:Null<String>;
+  static final APPLICATION_ID:String = DISCORD_CLIENT_ID == null || DISCORD_CLIENT_ID == '' ? '1536073548047851570' : DISCORD_CLIENT_ID;
 
   /**
    * The current instance of the singleton Discord client.
@@ -61,7 +62,7 @@ class DiscordClient
 
     @:nullSafety(Off)
     {
-      Discord.Initialize(DISCORD_CLIENT_ID, cpp.RawPointer.addressOf(handlers), false, '');
+      Discord.Initialize(APPLICATION_ID, cpp.RawPointer.addressOf(handlers), false, '');
     }
 
     createDaemon();
@@ -72,7 +73,7 @@ class DiscordClient
    */
   static function hasValidCredentials():Bool
   {
-    return !(DISCORD_CLIENT_ID == null || DISCORD_CLIENT_ID == '' || (DISCORD_CLIENT_ID != null && DISCORD_CLIENT_ID.contains(' ')));
+    return APPLICATION_ID != '' && !APPLICATION_ID.contains(' ');
   }
 
   var daemon:Null<Thread> = null;

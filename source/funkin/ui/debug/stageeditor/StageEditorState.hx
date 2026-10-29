@@ -429,26 +429,7 @@ class StageEditorState extends UIState
     // Some callbacks.
     findObjDialog = new FindObjDialog(this, selectedSprite == null ? '' : selectedSprite.name);
 
-    FlxG.stage.window.onDropFile.add(function(path:String, state:String, x:Float, y:Float):Void
-    {
-      if (!allowInput || welcomeDialog != null) return;
-
-      var data:Bytes = FileUtil.readBytesFromPath(path);
-
-      if (data != null)
-      {
-        objNameDialog = new NewObjDialog(this, data);
-        objNameDialog.bitmapName = new haxe.io.Path(path).file;
-        objNameDialog.showDialog();
-
-        objNameDialog.onDialogClosed = function(_)
-        {
-          objNameDialog = null;
-        }
-
-        return;
-      }
-    });
+    FlxG.stage.window.onDropFile.add(onDropFile);
 
     if (params?.targetStageId != null && StageRegistry.instance.hasEntry(params?.targetStageId))
     {
@@ -1655,12 +1636,24 @@ class StageEditorState extends UIState
 
   override function destroy():Void
   {
+    FlxG.stage.window.onDropFile.remove(onDropFile);
     super.destroy();
 
     // Reset the sounds used by some playables.
     funkin.play.GameOverSubState.reset();
     funkin.play.PauseSubState.reset();
     funkin.play.Countdown.reset();
+  }
+
+  function onDropFile(path:String, state:String, x:Float, y:Float):Void
+  {
+    if (!allowInput || welcomeDialog != null) return;
+    final data = FileUtil.readBytesFromPath(path);
+    if (data == null) return;
+    objNameDialog = new NewObjDialog(this, data);
+    objNameDialog.bitmapName = new haxe.io.Path(path).file;
+    objNameDialog.showDialog();
+    objNameDialog.onDialogClosed = _ -> objNameDialog = null;
   }
 
   public function notifyChange(change:String, notif:String, isError:Bool = false)

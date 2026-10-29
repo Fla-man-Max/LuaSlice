@@ -526,6 +526,25 @@ class Stage extends FlxSpriteGroup implements IPlayStateScriptedClass implements
     return new FlxPoint(_data.characters.dad.position[0], _data.characters.dad.position[1]);
   }
 
+  public inline function getGirlfriendScroll():FlxPoint
+  {
+    return FlxPoint.weak(_data.characters.gf.scroll[0], _data.characters.gf.scroll[1]);
+  }
+
+  public inline function getBoyfriendScroll():FlxPoint
+  {
+    return FlxPoint.weak(_data.characters.bf.scroll[0], _data.characters.bf.scroll[1]);
+  }
+
+  public inline function getDadScroll():FlxPoint
+  {
+    return FlxPoint.weak(_data.characters.dad.scroll[0], _data.characters.dad.scroll[1]);
+  }
+
+  public inline function getGirlfriendIndex():Int { return _data.characters.gf.zIndex; }
+  public inline function getBoyfriendIndex():Int { return _data.characters.bf.zIndex; }
+  public inline function getDadIndex():Int { return _data.characters.dad.zIndex; }
+
   /**
    * Retrieves a given character from the stage.
    */
@@ -863,6 +882,10 @@ class Stage extends FlxSpriteGroup implements IPlayStateScriptedClass implements
    * frame buffers.
    */
   function frameBuffersUpdated():Void
+  {
+  }
+
+  public function onCustom(event:CustomScriptEvent):Void
   {
   }
 

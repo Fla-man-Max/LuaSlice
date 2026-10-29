@@ -14,6 +14,7 @@ import funkin.play.notes.NoteDirection;
 import funkin.util.FlxGamepadUtil;
 import haxe.Int64;
 import lime.ui.GamepadButton as LimeGamepadButton;
+import lime.ui.GamepadAxis as LimeGamepadAxis;
 import lime.ui.KeyCode;
 import lime.ui.KeyModifier;
 import openfl.events.KeyboardEvent;
@@ -74,7 +75,8 @@ class PreciseInputManager extends FlxKeyManager<FlxKey, PreciseInputList>
   var _deviceBinds:Map<FlxGamepad,
     {
       onButtonDown:LimeGamepadButton->Int64->Void,
-      onButtonUp:LimeGamepadButton->Int64->Void
+      onButtonUp:LimeGamepadButton->Int64->Void,
+      onAxisMove:LimeGamepadAxis->Float->Int64->Void
     }>;
 
   public function new()
@@ -194,10 +196,13 @@ class PreciseInputManager extends FlxKeyManager<FlxKey, PreciseInputList>
     var limeGamepad = FlxGamepadUtil.getLimeGamepad(gamepad);
     var callbacks = {
       onButtonDown: handleButtonDown.bind(gamepad),
-      onButtonUp: handleButtonUp.bind(gamepad)
+      onButtonUp: handleButtonUp.bind(gamepad),
+      onAxisMove: handleAxisMove.bind(gamepad)
     };
     limeGamepad.onButtonDownPrecise.add(callbacks.onButtonDown);
     limeGamepad.onButtonUpPrecise.add(callbacks.onButtonUp);
+    limeGamepad.onAxisMovePrecise.add(callbacks.onAxisMove);
+    _deviceBinds.set(gamepad, callbacks);
 
     for (noteDirection in DIRECTIONS)
     {
@@ -362,6 +367,30 @@ class PreciseInputManager extends FlxKeyManager<FlxKey, PreciseInputList>
     }
   }
 
+  function handleAxisMove(gamepad:FlxGamepad, axis:LimeGamepadAxis, value:Float, timestamp:Int64):Void
+  {
+    final buttonId:FlxGamepadInputID = switch (axis)
+    {
+      case TRIGGER_LEFT: LEFT_TRIGGER;
+      case TRIGGER_RIGHT: RIGHT_TRIGGER;
+      default: return;
+    };
+    final bindings = _buttonList.get(gamepad.id);
+    if (bindings == null || bindings.indexOf(buttonId) == -1) return;
+    updateButtonStates(gamepad, buttonId, value > gamepad.deadZone);
+    final direction = getDirectionForButton(gamepad, buttonId);
+    if (getInputByButton(gamepad, buttonId)?.justPressed ?? false)
+    {
+      onInputPressed.dispatch({noteDirection: direction, timestamp: timestamp, keyCode: -1 - axis});
+      _dirPressTimestamps.set(direction, timestamp);
+    }
+    else if (getInputByButton(gamepad, buttonId)?.justReleased ?? false)
+    {
+      onInputReleased.dispatch({noteDirection: direction, timestamp: timestamp, keyCode: -1 - axis});
+      _dirReleaseTimestamps.set(direction, timestamp);
+    }
+  }
+
   static function convertKeyCode(input:KeyCode):FlxKey
   {
     @:privateAccess
@@ -372,6 +401,7 @@ class PreciseInputManager extends FlxKeyManager<FlxKey, PreciseInputList>
 
   function clearKeys():Void
   {
+    _keyList = [];
     _keyListArray = [];
     _keyListMap.clear();
     _keyListDir.clear();
@@ -379,6 +409,8 @@ class PreciseInputManager extends FlxKeyManager<FlxKey, PreciseInputList>
 
   function clearButtons():Void
   {
+    _buttonList.clear();
+    _buttonListMap.clear();
     _buttonListArray = [];
     _buttonListDir.clear();
 
@@ -388,6 +420,7 @@ class PreciseInputManager extends FlxKeyManager<FlxKey, PreciseInputList>
       var limeGamepad = FlxGamepadUtil.getLimeGamepad(gamepad);
       limeGamepad.onButtonDownPrecise.remove(callbacks.onButtonDown);
       limeGamepad.onButtonUpPrecise.remove(callbacks.onButtonUp);
+      limeGamepad.onAxisMovePrecise.remove(callbacks.onAxisMove);
     }
     _deviceBinds.clear();
   }

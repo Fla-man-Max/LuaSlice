@@ -1,0 +1,75 @@
+import flixel.FlxG;
+import funkin.modding.module.Module;
+import luaslice.lua.LuaScriptManager;
+import funkin.ui.MusicBeatState;
+import Reflect;
+
+class PR15MobileRegression extends Module
+{
+  var checked = false;
+  var switchManager = null;
+  var switchMobile = null;
+  var switchButton = null;
+  public function new() { super('pr15-mobile-regression', 500); }
+
+  override function onUpdate(event)
+  {
+    if (checked || FlxG.state == null) return;
+    checked = true;
+    var manager = null;
+    try
+    {
+      manager = new LuaScriptManager();
+      if (!manager.loadScript('mods/psych-lua-test/PR15MobileRegression.lua')) throw 'Lua mobile/prelude regression failed';
+      var mobile = Reflect.field(manager, 'mobileAPI');
+      if (mobile == null || !mobile.exists('pr15-cleanup')) throw 'Legacy manager did not own the created button';
+      var button = mobile.buttons.get('pr15-cleanup');
+      if (FlxG.state.members.indexOf(button) < 0) throw 'Button was not added to its host state';
+      if (mobile.createButton('', 0, 0) || mobile.createButton(null, 0, 0)) throw 'Invalid button tag accepted';
+      if (!mobile.setAlpha('pr15-cleanup', 5) || button.alpha != 1) throw 'Button alpha not clamped';
+      if (!mobile.setSize('pr15-cleanup', 0, -1) || button.width != 1 || button.height != 1) throw 'Button size not clamped';
+      if (!manager.reloadScripts()) throw 'Legacy reload failed';
+      if (button.exists || FlxG.state.members.indexOf(button) >= 0 || !mobile.exists('pr15-cleanup')) throw 'Reload leaked its old mobile button';
+      button = mobile.buttons.get('pr15-cleanup');
+      manager.destroy();
+      manager = null;
+      if (mobile.exists('pr15-cleanup') || button.exists || FlxG.state.members.indexOf(button) >= 0) throw 'Manager destruction leaked a mobile button';
+      switchManager = new LuaScriptManager();
+      switchMobile = Reflect.field(switchManager, 'mobileAPI');
+      if (mobile == switchMobile || mobile.buttons == switchMobile.buttons) throw 'Managers share mobile storage';
+      switchMobile.camera = FlxG.camera;
+      if (!switchMobile.createButton('pr15-state', 0, 0)) throw 'State cleanup fixture could not create button';
+      switchButton = switchMobile.buttons.get('pr15-state');
+      FlxG.switchState(function() return new PR15MobileProbeState());
+    }
+    catch (error:Dynamic)
+    {
+      if (manager != null) manager.destroy();
+      trace('PR15_MOBILE_REGRESSION_FAILED: ' + error);
+    }
+  }
+
+  override function onStateChangeEnd(event)
+  {
+    if (switchMobile == null) return;
+    try
+    {
+      if (switchMobile.exists('pr15-state') || switchButton.exists || switchMobile.camera != null) throw 'State transition leaked mobile resources';
+      switchManager.destroy();
+      switchMobile = null;
+      switchManager = null;
+      trace('PR15_MOBILE_NATIVE_OK');
+    }
+    catch (error:Dynamic)
+    {
+      if (switchManager != null) switchManager.destroy();
+      switchMobile = null;
+      trace('PR15_MOBILE_REGRESSION_FAILED: ' + error);
+    }
+  }
+}
+
+class PR15MobileProbeState extends MusicBeatState
+{
+  public function new() { super(); }
+}

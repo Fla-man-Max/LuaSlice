@@ -123,6 +123,7 @@ class ChartEditorFreeplayToolbox extends ChartEditorBaseToolbox
 
   function onClose(event:UIEvent)
   {
+    stopAudioPreview();
     chartEditorState.menubarItemToggleToolboxFreeplay.selected = false;
   }
 
@@ -473,6 +474,7 @@ class ChartEditorFreeplayToolbox extends ChartEditorBaseToolbox
 
   public function stopAudioPreview():Void
   {
+    if (audioPreviewTracks == null) return;
     if (isPerformingPreview) stopPerformingPreview();
 
     audioPreviewTracks.stop();

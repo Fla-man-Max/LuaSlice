@@ -206,6 +206,10 @@ class BackingCard extends FlxSpriteGroup implements IBPMSyncedScriptedClass impl
     alsoOrangeLOL.visible = false;
   }
 
+  public function onCustom(event:CustomScriptEvent):Void
+  {
+  }
+
   public function onScriptEvent(event:ScriptEvent):Void
   {
   }

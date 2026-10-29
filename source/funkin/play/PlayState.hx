@@ -312,6 +312,18 @@ class PlayState extends MusicBeatSubState
 
   var cameraFollowCharacterOffsetY:Float = 0.0;
 
+  var cameraFollowCharacterRole:Int = -1;
+
+  var cameraFollowCharacterStage:Null<Stage>;
+
+  var cameraFollowTweenProgress:Float = 0.0;
+
+  var cameraFollowTweenStartX:Float = 0.0;
+
+  var cameraFollowTweenStartY:Float = 0.0;
+
+  var cameraFollowTweenTracksCharacter:Bool = false;
+
   /**
    * An FlxTween that tweens the camera to the follow point.
    * Only used when tweening the camera manually, rather than tweening via follow.
@@ -992,6 +1004,10 @@ class PlayState extends MusicBeatSubState
     // Do this last to prevent beatHit from being called before create() is done.
     super.create();
 
+    final creationEvent = new ScriptEvent(CREATE, false);
+    if (songEvents != null && songEvents.length > 0) SongEventRegistry.callEvent(creationEvent);
+    NoteKindManager.callEvent(creationEvent);
+
     leftWatermarkText.cameras = [camHUD];
     rightWatermarkText.cameras = [camHUD];
 
@@ -1117,7 +1133,6 @@ class PlayState extends MusicBeatSubState
       }
     }
 
-    updateCameraFollowCharacter();
     #if FEATURE_PSYCH_LUA
     psychLua?.update(elapsed);
     #end
@@ -1149,6 +1164,7 @@ class PlayState extends MusicBeatSubState
 
       previousDifficulty = currentDifficulty;
 
+      clearCameraFollowCharacter();
       currentStage?.resetStage();
 
       dispatchEvent(retryEvent);
@@ -1441,6 +1457,7 @@ class PlayState extends MusicBeatSubState
     #if FEATURE_PSYCH_LUA
     psychLua?.postUpdate(elapsed);
     #end
+    updateCameraFollowCharacter();
     #if !mobile
     if (Preferences.autoPause) FlxG.autoPause = !mayPauseGame;
     #end
@@ -1649,6 +1666,12 @@ class PlayState extends MusicBeatSubState
 
     // Dispatch event to character script(s).
     if (currentStage != null) currentStage.dispatchToCharacters(event);
+    #if FEATURE_LUA_SCRIPTS
+    if (event.shouldPropagate) luaScriptManager?.callEvent(event, false);
+    #end
+    #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
+    if (event.shouldPropagate && event.type == CUSTOM) scriptRuntimeManager?.callCustomEvent(cast event);
+    #end
     #if FEATURE_PSYCH_LUA
     if (event.shouldPropagate) psychLua?.event(event);
     #end
@@ -2996,7 +3019,7 @@ class PlayState extends MusicBeatSubState
       vocals.play();
     }
 
-    FlxG.sound.music.play();
+    FlxG.sound.music.play(false, startTimestamp);
 
     #if FEATURE_DISCORD_RPC
     // Updating Discord Rich Presence (with Time Left)
@@ -3454,6 +3477,8 @@ class PlayState extends MusicBeatSubState
       case 'shit':
         healthChange = Constants.HEALTH_SHIT_BONUS;
         isComboBreak = Constants.JUDGEMENT_SHIT_COMBO_BREAK;
+      default:
+        return;
     }
 
     // Send the note hit event.
@@ -4043,6 +4068,8 @@ class PlayState extends MusicBeatSubState
     if (cleanupPerformed) return;
     cleanupPerformed = true;
 
+    clearCameraFollowCharacter();
+
     // If the camera is being tweened, stop it.
     cancelAllCameraTweens();
 
@@ -4295,34 +4322,99 @@ class PlayState extends MusicBeatSubState
     if (snap) FlxG.camera.focusOn(cameraFollowPoint.getPosition());
   }
 
-  public function setCameraFollowCharacter(character:Null<BaseCharacter>, offsetX:Float = 0.0, offsetY:Float = 0.0):Void
+  public function setCameraFollowCharacter(character:Null<BaseCharacter>, offsetX:Float = 0.0, offsetY:Float = 0.0, ?role:Int):Void
   {
+    var restoreFollow = cameraFollowTween != null;
+    cancelCameraFollowTween();
     cameraFollowCharacter = character;
+    cameraFollowCharacterStage = currentStage;
+    cameraFollowCharacterRole = role ?? -1;
+    if (role == null && character != null && currentStage != null)
+    {
+      if (character == currentStage.getBoyfriend()) cameraFollowCharacterRole = 0;
+      else if (character == currentStage.getDad()) cameraFollowCharacterRole = 1;
+      else if (character == currentStage.getGirlfriend()) cameraFollowCharacterRole = 2;
+    }
     cameraFollowCharacterOffsetX = offsetX;
     cameraFollowCharacterOffsetY = offsetY;
     updateCameraFollowCharacter();
+    if (restoreFollow)
+    {
+      var followRate = FlxG.camera.followLerp;
+      resetCamera(false, false, false);
+      if (!shouldSubstatePause) FlxG.camera.followLerp = followRate;
+    }
   }
 
   public function clearCameraFollowCharacter():Void
   {
+    var restoreFollow = cameraFollowTweenTracksCharacter;
+    if (restoreFollow) cancelCameraFollowTween();
     cameraFollowCharacter = null;
+    cameraFollowCharacterRole = -1;
+    cameraFollowCharacterStage = null;
     cameraFollowCharacterOffsetX = 0.0;
     cameraFollowCharacterOffsetY = 0.0;
+    if (restoreFollow && cameraFollowPoint != null)
+    {
+      var followRate = FlxG.camera.followLerp;
+      resetCamera(false, false, false);
+      if (!shouldSubstatePause) FlxG.camera.followLerp = followRate;
+    }
   }
 
   function updateCameraFollowCharacter():Void
   {
-    if (cameraFollowCharacter == null || !cameraFollowCharacter.exists) return;
+    if (cameraFollowCharacter == null && cameraFollowCharacterRole < 0) return;
+    if (shouldSubstatePause || cameraFollowPoint == null) return;
+    #if FEATURE_PSYCH_LUA
+    if (psychLua?.cameraForced == true) return;
+    #end
+    if (currentStage == null)
+    {
+      clearCameraFollowCharacter();
+      return;
+    }
 
-    cameraFollowPoint.setPosition(cameraFollowCharacter.cameraFocusPoint.x + cameraFollowCharacterOffsetX,
-      cameraFollowCharacter.cameraFocusPoint.y + cameraFollowCharacterOffsetY);
+    switch (cameraFollowCharacterRole)
+    {
+      case 0: cameraFollowCharacter = currentStage.getBoyfriend();
+      case 1: cameraFollowCharacter = currentStage.getDad();
+      case 2: cameraFollowCharacter = currentStage.getGirlfriend();
+      default:
+        if (cameraFollowCharacterStage != currentStage)
+        {
+          clearCameraFollowCharacter();
+          return;
+        }
+    }
+
+    var character = cameraFollowCharacter;
+    if (character == null) return;
+    if (!character.exists)
+    {
+      cameraFollowCharacter = null;
+      return;
+    }
+
+    cameraFollowPoint.setPosition(character.cameraFocusPoint.x + cameraFollowCharacterOffsetX,
+      character.cameraFocusPoint.y + cameraFollowCharacterOffsetY);
+
+    if (cameraFollowTweenTracksCharacter)
+    {
+      var targetX = cameraFollowPoint.x - FlxG.camera.width * 0.5;
+      var targetY = cameraFollowPoint.y - FlxG.camera.height * 0.5;
+      FlxG.camera.scroll.set(cameraFollowTweenStartX + (targetX - cameraFollowTweenStartX) * cameraFollowTweenProgress,
+        cameraFollowTweenStartY + (targetY - cameraFollowTweenStartY) * cameraFollowTweenProgress);
+    }
   }
 
   /**
      * Sets the camera follow point's position and tweens the camera there.
      */
-  public function tweenCameraToPosition(x:Float = 0, y:Float = 0, duration:Float = 0, ?ease:Null<Float->Float>):Void
+  public function tweenCameraToPosition(x:Float = 0, y:Float = 0, duration:Float = 0, ?ease:Null<Float->Float>, preserveCharacter:Bool = false):Void
   {
+    if (!preserveCharacter) clearCameraFollowCharacter();
     cameraFollowPoint.setPosition(x, y);
     tweenCameraToFollowPoint(duration, ease);
   }
@@ -4348,15 +4440,41 @@ class PlayState extends MusicBeatSubState
 
       var adjustedDuration:Float = duration / playbackRate;
 
-      // Follow tween! Caching it so we can cancel/pause it later if needed.
-      var followPos:FlxPoint = cameraFollowPoint.getPosition() - FlxPoint.weak(FlxG.camera.width * 0.5, FlxG.camera.height * 0.5);
-      cameraFollowTween = FlxTween.tween(FlxG.camera.scroll, {x: followPos.x, y: followPos.y}, adjustedDuration, {
-        ease: ease,
-        onComplete: function(_)
+      if (cameraFollowCharacter != null || cameraFollowCharacterRole >= 0)
+      {
+        cameraFollowTweenTracksCharacter = true;
+        cameraFollowTweenProgress = 0.0;
+        cameraFollowTweenStartX = FlxG.camera.scroll.x;
+        cameraFollowTweenStartY = FlxG.camera.scroll.y;
+        cameraFollowTween = FlxTween.num(0, 1, adjustedDuration, {
+          ease: ease,
+          onComplete: function(_)
+          {
+            cameraFollowTweenProgress = 1.0;
+            updateCameraFollowCharacter();
+            cameraFollowTweenTracksCharacter = false;
+            cameraFollowTween = null;
+            resetCamera(false, false);
+          }
+        }, function(progress:Float)
         {
-          resetCamera(false, false); // Re-enable camera following when the tween is complete.
-        }
-      });
+          cameraFollowTweenProgress = progress;
+          updateCameraFollowCharacter();
+        });
+      }
+      else
+      {
+        var followPos:FlxPoint = cameraFollowPoint.getPosition() - FlxPoint.weak(FlxG.camera.width * 0.5, FlxG.camera.height * 0.5);
+        cameraFollowTween = FlxTween.tween(FlxG.camera.scroll, {x: followPos.x, y: followPos.y}, adjustedDuration, {
+          ease: ease,
+          onComplete: function(_)
+          {
+            cameraFollowTween = null;
+            resetCamera(false, false);
+          }
+        });
+        followPos.put();
+      }
 
       if (shouldSubstatePause)
       {
@@ -4370,8 +4488,11 @@ class PlayState extends MusicBeatSubState
   {
     if (cameraFollowTween != null)
     {
+      cameraTweensPausedBySubState.remove(cameraFollowTween);
       cameraFollowTween.cancel();
+      cameraFollowTween = null;
     }
+    cameraFollowTweenTracksCharacter = false;
   }
 
   /**

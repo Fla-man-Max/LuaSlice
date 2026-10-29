@@ -3,6 +3,14 @@ var tweenFinished = false;
 var testTween = null;
 var seconds = 0.0;
 
+function onCustom(event):Void
+{
+    if (event.id != "test:data") return;
+    if (event.data.get("answer") != 42) throw "SScript custom data was lost";
+    event.data.set("ss", true);
+    trace("SSCRIPT_CUSTOM_EVENT_OK");
+}
+
 function onCreate():Void
 {
     sample.counter = 7;

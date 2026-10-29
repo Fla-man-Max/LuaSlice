@@ -437,6 +437,10 @@ class DialogueBox extends FlxSpriteGroup implements IDialogueScriptedClass imple
     this.kill();
   }
 
+  public function onCustom(event:CustomScriptEvent):Void
+  {
+  }
+
   public function onScriptEvent(event:ScriptEvent):Void
   {
   }

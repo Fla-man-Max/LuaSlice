@@ -2,6 +2,47 @@
 
 Changes to LuaSlice's Psych Lua API. The script folders, examples, and compatibility notes are below the changelog.
 
+## [0.2.0] - 2026-10-26
+
+### Added
+
+- `addHScript`, `removeHScript`, `callOnHScript`, and `setOnHScript`. Loaded HScript files receive gameplay hooks, and `callOnScripts` and `setOnScripts` reach them too.
+- `addToGroup` and `removeFromGroup`.
+- Adobe Animate atlas functions: `makeFlxAnimateSprite`, `loadAnimateAtlas`, `addAnimationBySymbol`, and `addAnimationBySymbolIndices`.
+- `loadMultipleFrames`, `insertToCustomSubstate`, `exitSong`, `loadSong`, `getModSetting`, `startVideo`, `startDialogue`, and `updateScoreText`.
+- Rating setters, `onRecalculateRating`, and the rating, miss, hit, combo, botplay, and practice globals from Psych 1.0.4.
+
+### Compatibility
+
+- `setTimeBarColors` is accepted but has no effect: V-Slice does not have Psych's time bar.
+- `startDialogue` uses V-Slice conversations, not Psych dialogue JSON. A path uses its file name as the conversation id.
+- `getModSetting` reads saved values or defaults from the mod's `data/settings.json`.
+- `loadSong` uses V-Slice song ids; spaces become dashes and names are lowercased.
+- File-based HScript keeps LuaSlice's existing import restrictions and error reporting.
+- Animate atlases use the standard `Animation.json` and spritemap filenames. Custom JSON filenames are not supported.
+- Videos use the engine's skippable, non-looping cutscene playback. Unsupported video options report an error rather than being silently ignored.
+
+## [0.1.5] - 2026-10-22
+
+### Added
+
+- LuaSlice custom script events call `onCustom(id, data)`. Return `Function_Stop` to cancel a cancelable event. This is a LuaSlice extension, separate from Psych chart events.
+- Haxe string-keyed Maps, including nested custom-event data, convert to Lua tables.
+- Sparrow hold bodies and end caps convert to continuous trails, preserving frame trim offsets, proportions and downscroll.
+
+### Fixed
+
+- Closing or unloading a script inside a callback waits until that callback returns before closing its Lua state.
+- Failed initialization and reload validation release their Lua states instead of leaving them registered.
+- Reloading clears old note overrides and owned splash sprites, and restores native note graphics.
+- Custom note-type scripts load in a consistent order.
+- Generated hold textures are reused by matching notes and released after their final user is gone during reload or song cleanup.
+- `onSpawnNote` receives the note's strum time as its fifth argument, matching Psych 1.0.4.
+
+### Changed
+
+- Script errors include the runtime, mod path, callback and Lua traceback. Identical errors are reported once per script instance.
+
 ## [0.1.0] - 2026-09-28
 
 ### Added
@@ -16,6 +57,32 @@ Changes to LuaSlice's Psych Lua API. The script folders, examples, and compatibi
 - LuaSlice's existing `.lua` and `.luag` scripts still use their own API.
 
 ## API guide
+
+### LuaSlice custom script events
+
+HScript can dispatch a custom event through the current state:
+
+```haxe
+import funkin.modding.events.ScriptEvent.CustomScriptEvent;
+import funkin.play.PlayState;
+
+var event = new CustomScriptEvent("my-mod:phase", true);
+event.data.set("phase", 2);
+PlayState.instance.dispatchEvent(event);
+trace(event.eventCanceled);
+```
+
+Receive it from a `.luap` or `.luapg` script:
+
+```lua
+function onCustom(id, data)
+    if id == 'my-mod:phase' and data.phase == 2 then
+        return Function_Stop
+    end
+end
+```
+
+Lua receives a snapshot of the data, not a live Haxe Map. HScript, SScript and NxScript receive the event itself and can edit its Map, call `cancel()` or `stopPropagation()`. Cancellation prevents the sender's associated behavior only when the sender checks `eventCanceled`; it does not stop propagation. Ordinary chart events still use `onEvent`.
 
 Requires LuaSlice v0.1.0 or newer. This port follows Psych Engine 1.0.4, but runs on FNF v0.8.6. Some things work differently because LuaSlice still uses V-Slice's gameplay and asset formats.
 
@@ -47,7 +114,7 @@ Match your folder and file names to the chart IDs, including capitalization. Thi
 
 Assets go in `images/`, `sounds/`, `music/`, `fonts/`, and `shaders/` inside your mod. Leave off the extension when using image and sound helpers. `require` can load Lua modules from your mod too.
 
-Only run mods you trust. Scripts can use Lua's standard libraries and execute Haxe code; they aren't sandboxed.
+Only run mods you trust. Lua's standard libraries are still available, so this is not a security sandbox for an entire mod. Haxe imports and reflection through the Psych bridge now respect LuaSlice's existing class and field restrictions; filesystem, process-launching and interpreter internals are not exposed through that bridge.
 
 To try the included example, copy `example_mods/psych-lua-test` into `mods`, enable it, and play Tutorial. Its `scripts/api-test.luapg` also runs in other songs.
 
@@ -160,9 +227,25 @@ function onCreate()
 end
 ```
 
-In Haxe code, `game` is the current PlayState. `FlxG`, `FlxSprite`, `FlxText`, `FlxCamera`, `FlxTween`, `FlxEase`, `FlxTimer`, `Paths`, `PlayState`, `Conductor`, `ShaderFilter`, and `FlxRuntimeShader` are already available.
+In Haxe code, `game` is the current PlayState. `FlxG`, `FlxSprite`, `FlxText`, `FlxCamera`, `FlxTween`, `FlxEase`, `FlxTimer`, `Paths`, `PlayState`, `Conductor`, `ShaderFilter`, and `FlxRuntimeShader` are already available. The bridge also includes `Assets`, `Preferences`, `Constants`, `FunkinSprite`, `FlxObject`, `FlxMath`, `FlxPoint`, `StringMap`, `IntMap`, `Json` and `Lambda`. `Reflect` and `Type` use the engine's safe reflection helpers.
 
-Use `addHaxeLibrary('TypeName', 'package.name')` for another class compiled into the game. It doesn't install libraries. If you add an object directly with `game.add()`, remove it yourself when reloading. Objects made through the Lua helpers are cleaned up automatically.
+Use `addHaxeLibrary('TypeName', 'package.name')` for another permitted class compiled into the game. It returns false for a missing or blocked class; it doesn't install libraries. Optional missing imports produce a diagnostic and let the rest of the snippet run. Parse and runtime failures report the script path and snippet line, returning nil so another call can recover. Existing `.hx` and `.hxc` scripts still use Polymod; no extra interpreter is required.
+
+Use `setVar`, `getVar` and `removeVar` to share values with Lua. `createCallback` exposes an HScript function to its owning Lua script:
+
+```lua
+function onCreatePost()
+    runHaxeCode([[
+        setVar('extraPoints', 25);
+        createCallback('addExtraPoints', function(points) {
+            return points + getVar('extraPoints', 0);
+        });
+    ]])
+    debugPrint(addExtraPoints(100))
+end
+```
+
+If you add an object directly with `game.add()`, remove it yourself when reloading. Objects made through the Lua helpers are cleaned up automatically.
 
 ### Custom pause overlay
 
@@ -194,7 +277,7 @@ Closing isn't immediate. Use `onCustomSubstateDestroy` to run code when it close
 
 ## Callbacks and globals
 
-Callbacks: `onCreate`, `onCreatePost`, `onDestroy`, `onReload`, `onUpdate(elapsed)`, `onUpdatePost(elapsed)`, `onStartCountdown`, `onCountdownTick(index)`, `onSongStart`, `onEndSong`, `onPause`, `onResume`, `onGameOver`, `onSongRetry`, `onBeatHit`, `onStepHit`, `onSectionHit`, `onMoveCamera(target)`, `onSpawnNote(id, direction, kind, isSustainNote)`, `goodNoteHit`, `opponentNoteHit`, `noteMiss`, `noteMissPress(direction)`, `onEvent(name, value1, value2, time)`, `onTimerCompleted`, `onTweenCompleted`, `onSoundFinished`, and the custom-substate callbacks shown above plus `onCustomSubstateCreatePost`, `onCustomSubstateUpdatePost`, and `onCustomSubstateDestroy`.
+Callbacks: `onCreate`, `onCreatePost`, `onDestroy`, `onReload`, `onUpdate(elapsed)`, `onUpdatePost(elapsed)`, `onStartCountdown`, `onCountdownTick(index)`, `onSongStart`, `onEndSong`, `onPause`, `onResume`, `onGameOver`, `onSongRetry`, `onBeatHit`, `onStepHit`, `onSectionHit`, `onMoveCamera(target)`, `onSpawnNote(id, direction, kind, isSustainNote, strumTime)`, `goodNoteHit`, `opponentNoteHit`, `noteMiss`, `noteMissPress(direction)`, `onEvent(name, value1, value2, time)`, `onTimerCompleted`, `onTweenCompleted`, `onSoundFinished`, and the custom-substate callbacks shown above plus `onCustomSubstateCreatePost`, `onCustomSubstateUpdatePost`, and `onCustomSubstateDestroy`.
 
 `Function_Continue`, `Function_Stop`, `Function_StopLua`, and `Function_StopAll` are available. Stop/StopAll can cancel game events that support cancellation. They can't undo callbacks that already ran.
 
@@ -216,7 +299,7 @@ Adding the Lua API doesn't make a whole Psych mod work unchanged. Songs, charact
 - Holds use continuous trails, not separate sustain sprites. While a hold is being hit, note callbacks run at step intervals with `isSustainNote = true`.
 - `texture`, `noteSplashTexture`, `antialiasing`, `ignoreNote`, `hitCausesMiss`, `missHealth`, `hitHealth`, and `noteSplashDisabled` work with the group/property helpers. Settings made before a note spawns are applied to its sprite, without carrying over to other notes when that sprite is reused.
 - `ignoreNote` removes miss and dropped-hold penalties. Players can still hit the note, but botplay skips it. `hitCausesMiss` takes away the amount in `missHealth` when hit; zero is allowed.
-- Custom note heads use Sparrow atlases. For the `pixel` note style, Psych pixel sheets go in `images/pixelUI`: four columns and five rows for the notes, four columns and two rows for `nameENDS.png`. Pixel tails are converted to continuous holds. Non-pixel custom hold atlases aren't converted yet, so those use the normal V-Slice hold style.
+- Custom note heads use Sparrow atlases. Hold frames use `<color> hold piece` and `<color> hold end` prefixes; purple also accepts Psych's legacy `pruple end hold` name. The first numerically sorted frame is used for each body and cap; animated hold textures are not supported. Trimmed frames keep their offsets, and missing hold frames leave the native trail in place. For the `pixel` note style, Psych pixel sheets go in `images/pixelUI`: four columns and five rows for the notes, four columns and two rows for `nameENDS.png`. Both formats convert to continuous holds without changing V-Slice's hold timing or scoring.
 - `noteSplashTexture` supports legacy Psych Sparrow splash atlases, with names such as `note splash purple1`. If the atlas is missing, the game keeps the normal splash and logs a warning. Advanced Psych 1.0 splash settings aren't converted.
 - `triggerVSliceEvent` takes a V-Slice event's values as an object. `triggerEvent` passes Psych's `value1` and `value2` to Lua callbacks. Not every built-in Psych event has an implementation.
 - `.hxc` modules still use FNF's HScript system. `runHaxeCode` uses Iris separately for each Lua script. Lua cross-script calls don't call `.hxc` modules.

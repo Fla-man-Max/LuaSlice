@@ -1411,7 +1411,7 @@ abstract SongNoteData(SongNoteDataRaw) from SongNoteDataRaw to SongNoteDataRaw
 
   public function clone():SongNoteData
   {
-    return new SongNoteData(this.time, this.data, this.length, this.kind, this.params);
+    return new SongNoteData(this.time, this.data, this.length, this.kind, this.cloneParams());
   }
 
   /**

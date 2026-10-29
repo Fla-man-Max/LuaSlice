@@ -88,10 +88,24 @@ class FocusCameraSongEvent extends SongEvent
     var easeDir:String = data.getString('easeDir') ?? SongEvent.DEFAULT_EASE_DIR;
     if (SongEvent.EASE_TYPE_DIR_REGEX.match(ease) || ease == 'linear') easeDir = '';
 
+    var easeFunction:Null<Float->Float> = null;
+    if (ease != 'CLASSIC' && ease != 'INSTANT')
+    {
+      var easeFunctionName = '$ease$easeDir';
+      easeFunction = Reflect.field(FlxEase, easeFunctionName);
+      if (easeFunction == null)
+      {
+        trace('Invalid ease function: $easeFunctionName');
+        return;
+      }
+    }
+
     var currentStage = PlayState.instance.currentStage;
 
     var followCharacter:Bool = data.getBool('followCharacter') ?? false;
     var targetCharacter:Null<funkin.play.character.BaseCharacter> = null;
+    PlayState.instance.clearCameraFollowCharacter();
+    PlayState.instance.cancelCameraFollowTween();
 
     // Get target position based on char.
     var targetX:Float = posX;
@@ -106,6 +120,8 @@ class FocusCameraSongEvent extends SongEvent
         if (currentStage.getBoyfriend() == null)
         {
           trace('No BF to focus on.');
+          if (followCharacter) PlayState.instance.setCameraFollowCharacter(null, posX, posY, 0);
+          PlayState.instance.resetCamera(false, false, false);
           return;
         }
         trace('Focusing camera on player.');
@@ -118,6 +134,8 @@ class FocusCameraSongEvent extends SongEvent
         if (currentStage.getDad() == null)
         {
           trace('No dad to focus on.');
+          if (followCharacter) PlayState.instance.setCameraFollowCharacter(null, posX, posY, 1);
+          PlayState.instance.resetCamera(false, false, false);
           return;
         }
         trace('Focusing camera on opponent.');
@@ -130,6 +148,8 @@ class FocusCameraSongEvent extends SongEvent
         if (currentStage.getGirlfriend() == null)
         {
           trace('No GF to focus on.');
+          if (followCharacter) PlayState.instance.setCameraFollowCharacter(null, posX, posY, 2);
+          PlayState.instance.resetCamera(false, false, false);
           return;
         }
         trace('Focusing camera on girlfriend.');
@@ -140,11 +160,13 @@ class FocusCameraSongEvent extends SongEvent
 
       default:
         trace('Unknown camera focus: ' + data);
+        PlayState.instance.resetCamera(false, false, false);
+        return;
     }
 
     if (followCharacter && targetCharacter != null)
     {
-      PlayState.instance.setCameraFollowCharacter(targetCharacter, posX, posY);
+      PlayState.instance.setCameraFollowCharacter(targetCharacter, posX, posY, char);
     }
     else
     {
@@ -159,17 +181,10 @@ class FocusCameraSongEvent extends SongEvent
         PlayState.instance.cancelCameraFollowTween();
         PlayState.instance.cameraFollowPoint.setPosition(targetX, targetY);
       case 'INSTANT': // Instant ease. Duration is automatically 0.
-        PlayState.instance.tweenCameraToPosition(targetX, targetY, 0);
+        PlayState.instance.tweenCameraToPosition(targetX, targetY, 0, null, followCharacter && targetCharacter != null);
       default:
         var durSeconds = Conductor.instance.stepLengthMs * duration / Constants.MS_PER_SEC;
-        var easeFunctionName = '$ease$easeDir';
-        var easeFunction:Null<Float->Float> = Reflect.field(FlxEase, easeFunctionName);
-        if (easeFunction == null)
-        {
-          trace('Invalid ease function: $easeFunctionName');
-          return;
-        }
-        PlayState.instance.tweenCameraToPosition(targetX, targetY, durSeconds, easeFunction);
+        PlayState.instance.tweenCameraToPosition(targetX, targetY, durSeconds, easeFunction, followCharacter && targetCharacter != null);
     }
   }
 

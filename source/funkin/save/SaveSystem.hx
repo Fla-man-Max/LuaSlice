@@ -26,7 +26,7 @@ class SaveSystem
     }
 
     FlxG.save.bind(Constants.SAVE_NAME + Constants.BASE_SAVE_SLOT, Constants.SAVE_PATH);
-    FlxG.save.mergeData(data, true);
+    if (!FlxG.save.mergeData(data, true)) trace('[SAVE] Could not persist the current save to disk.');
   }
 
   public function clearSlot(slot:Int):Save
@@ -83,7 +83,7 @@ class SaveSystem
     }
 
     trace('[SAVE] Writing data to slot ${slot}...');
-    targetSaveData.mergeData(data, true);
+    if (!targetSaveData.mergeData(data, true)) throw 'Could not persist recovery save in slot ${slot}; original save was not erased.';
 
     trace('[SAVE] Data written to slot ${slot}!');
     return slot;

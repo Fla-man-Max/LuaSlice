@@ -2,6 +2,8 @@ local elapsedTotal = 0
 local phase = 0
 local substateElapsed = 0
 local substateClosed = false
+local inheritedChecked = false
+local saveVerified = false
 privateValue = 'root'
 
 function onCreate()
@@ -27,6 +29,184 @@ function onCreatePost()
         return
     end
     assert(privateValue == 'root')
+    if luaSliceVersion ~= nil then
+        addHaxeLibrary('PsychLuaScript', 'funkin.modding.psychlua')
+        runHaxeCode([[
+            var probe = new PsychLuaScript(game.psychLua, 'lifecycle-probe.luap', testModRoot);
+            probe.register('disposeDuringCallback', function() {
+                probe.destroy();
+                if (probe.isDisposed) throw 'Lua state closed inside its executing callback';
+                return true;
+            });
+            if (!probe.execute('assert(disposeDuringCallback())', 'deferred-dispose')) throw 'Deferred disposal callback failed';
+            if (!probe.isDisposed || probe.depth != 0) throw 'Deferred Lua state leaked after callback return';
+            probe.destroy();
+            var closing = new PsychLuaScript(game.psychLua, 'close-probe.luap', testModRoot);
+            if (!closing.execute('close()', 'self-close')) throw 'Self close failed';
+            if (!closing.isDisposed || closing.depth != 0) throw 'Self-closed Lua state leaked';
+            closing.destroy();
+            var conversion = new PsychLuaScript(game.psychLua, 'conversion-probe.luap', testModRoot);
+            conversion.register('roundTrip', function(value) { return value; });
+            if (!conversion.execute('local cycle = {}; cycle.self = cycle; local ok = pcall(function() roundTrip(cycle) end); assert(not ok); assert(roundTrip({42})[1] == 42)', 'conversion-recovery')) throw 'Native conversion stack recovery failed';
+            conversion.destroy();
+        ]], {testModRoot = modFolder})
+        debugPrint('PSYCH_LIFECYCLE_SAFE_OK')
+        addHaxeLibrary('Strumline', 'funkin.play.notes')
+        addHaxeLibrary('NoteKind', 'funkin.play.notes.notekind')
+        addHaxeLibrary('NoteKindManager', 'funkin.play.notes.notekind')
+        addHaxeLibrary('NoteStyle', 'funkin.play.notes.notestyle')
+        addHaxeLibrary('Save', 'funkin.save')
+        addHaxeLibrary('FlxSave', 'flixel.util')
+        local saveRequest = runHaxeCode([[
+            var poolStyle = new NoteStyle(game.playerStrumline.noteStyle.id);
+            if (poolStyle._data == game.playerStrumline.noteStyle._data) throw 'Fixture must not modify the live note style';
+            poolStyle._data.assets.note.offsets = [13.0, -7.0];
+            poolStyle._data.assets.holdNote.offsets = [9.0, 11.0];
+            var pool = new Strumline(poolStyle, true);
+            var kind = new NoteKind('pool-regression');
+            kind.scoreable = false;
+            NoteKindManager.noteKinds.set(kind.noteKind, kind);
+            var data = game.currentChart.notes[0].clone();
+            data.kind = kind.noteKind;
+            data.length = 2000;
+            var note = pool.buildNoteSprite(data);
+            var hold = pool.buildHoldNoteSprite(data);
+            if (note.scoreable || hold.scoreable) throw 'Unscoreable kind was ignored';
+            if (Math.abs(note.offset.x - (-0.5 * (note.width - note.frameWidth) + 13)) > 0.01) throw 'Hitbox update lost horizontal note offset: offset=' + note.offset.x + ', width=' + note.width + ', frame=' + note.frameWidth;
+            if (Math.abs(note.offset.y - (-0.5 * (note.height - note.frameHeight) - 7)) > 0.01) throw 'Hitbox update lost vertical note offset: offset=' + note.offset.y + ', height=' + note.height + ', frame=' + note.frameHeight;
+            if (hold.noteStyleOffsets[0] != 9 || hold.noteStyleOffsets[1] != 11) throw 'Hold offsets were not applied';
+            note.kill();
+            hold.kill();
+            var ordinary = data.clone();
+            ordinary.kind = '';
+            poolStyle._data.assets.holdNote.offsets = [-3.0, 6.0];
+            var recycled = pool.buildNoteSprite(ordinary);
+            var recycledHold = pool.buildHoldNoteSprite(ordinary);
+            if (recycled != note || recycledHold != hold) throw 'Fixture did not exercise the recycled sprite pool';
+            if (!recycled.scoreable || !recycledHold.scoreable) throw 'A normal note inherited unscoreable state';
+            if (recycledHold.noteStyleOffsets[0] != -3 || recycledHold.noteStyleOffsets[1] != 6) throw 'Recycled hold retained the old style offsets';
+            var firstOffsetX = recycled.offset.x;
+            var firstOffsetY = recycled.offset.y;
+            recycled.kill();
+            recycled = pool.buildNoteSprite(ordinary);
+            if (recycled.offset.x != firstOffsetX || recycled.offset.y != firstOffsetY) throw 'Offsets accumulated across recycling';
+            pool.destroy();
+            NoteKindManager.noteKinds.remove(kind.noteKind);
+            var save = Save.instance;
+            if (save == null) throw 'Save.instance was unavailable';
+            if (save.options == null) throw 'Active save options were unavailable';
+            var priorDownscroll = save.options.downscroll;
+            save.options.downscroll = !priorDownscroll;
+            save.flush();
+            var saveName = Constants.SAVE_NAME + Constants.BASE_SAVE_SLOT;
+            var saveFolder = Constants.SAVE_PATH;
+            if (saveName == null || saveFolder == null) throw 'Active save binding was unavailable';
+            var persisted = new FlxSave();
+            if (!persisted.bind(saveName, saveFolder)) throw 'Could not bind isolated save';
+            if (persisted.data.options == null) throw 'Rebound save options were unavailable';
+            if (persisted.data.options.downscroll != !priorDownscroll) throw 'Preference was not saved';
+            persisted.destroy();
+            setVar('persistencePriorDownscroll', priorDownscroll);
+            return Json.stringify({name: saveName, path: saveFolder, downscroll: !priorDownscroll});
+        ]])
+        assert(type(saveRequest) == 'string', 'Save preparation or note pool regression failed')
+        assert(saveFile('save-persistence-request-' .. tostring(getVar('launchCount')) .. '.json', saveRequest))
+        addHaxeLibrary('Preferences', 'funkin')
+        assert(runHaxeCode([[
+            var previousTextures = game.psychLua.variables.get('atlasHoldTextures');
+            if (previousTextures != null)
+                for (texture in previousTextures) if (!texture.isDestroyed) throw 'Reload retained unused packed hold textures';
+            var atlasTextures = [];
+            var rgb = [0xAA1100, 0x11AA00, 0x0011AA, 0xAA00AA];
+            var style = new NoteStyle(game.playerStrumline.noteStyle.id);
+            var pool = new Strumline(style, true);
+            var options = game.psychLua.noteOptions;
+            var previousStyle = game.currentChart.noteStyle;
+            game.currentChart.noteStyle = 'funkin';
+            var previousScroll = Preferences.downscroll;
+            for (scroll in [false, true])
+            {
+                Preferences.downscroll = scroll;
+                for (direction in 0...4)
+                {
+                    var data = game.currentChart.notes[0].clone();
+                    data.kind = '';
+                    data.data = direction;
+                    data.length = 2000;
+                    var note = pool.buildNoteSprite(data);
+                    var hold = pool.buildHoldNoteSprite(data);
+                    note.holdNoteSprite = hold;
+                    var nativeTexture = hold.graphic;
+                    var center = hold.x + hold.width / 2;
+                    var noteWidth = note.width;
+                    options.write(data, 'texture', 'atlas-hold-test', atlasTestRoot);
+                    options.apply(note);
+                    if (hold.graphic == nativeTexture || hold.graphic.width != 80 || hold.graphic.height != 8) throw 'Sparrow hold was not packed';
+                    if (hold.isPixel || !hold.antialiasing || hold.flipY != scroll) throw 'Sparrow hold scroll or filtering changed';
+                    if (Math.abs(hold.width - 10 * note.scale.x) > 0.01 || Math.abs(note.width - noteWidth) > 0.01) throw 'Atlas scaling changed note or hold proportions';
+                    if (Math.abs(hold.x + hold.width / 2 - center) > 0.01) throw 'Atlas hold lost its horizontal center';
+                    if (hold.graphic.bitmap.getPixel(direction * 20 + 3, 1) != rgb[direction]) throw 'Trimmed body offsets or numeric frame ordering lost';
+                    if (hold.graphic.bitmap.getPixel(direction * 20 + 3, 5) != rgb[direction]) throw 'Body tiling left a seam';
+                    if (hold.graphic.bitmap.getPixel(direction * 20 + 12, 1) != rgb[direction]) throw 'Trimmed cap offsets lost';
+                    if (hold.graphic.bitmap.getPixel32(direction * 20 + 12, 0) != 0) throw 'Cap trim padding lost';
+                    if (hold.endOffset != 0.75 || hold.bottomClip != 0.75) throw 'Atlas cap was stretched';
+                    var packed = hold.graphic;
+                    if (atlasTextures.indexOf(packed) == -1) atlasTextures.push(packed);
+                    options.apply(note);
+                    if (hold.graphic != packed || Math.abs(hold.x + hold.width / 2 - center) > 0.01) throw 'Repeated texture application drifted or allocated another texture';
+                    options.write(data, 'antialiasing', false, atlasTestRoot);
+                    options.apply(note);
+                    if (note.antialiasing || hold.antialiasing) throw 'Explicit antialiasing override was lost';
+                    for (remaining in [2000, 15, 0])
+                    {
+                        hold.updateClipping(hold.strumTime + 2000 - remaining);
+                        if (hold.visible != (remaining > 0)) throw 'Atlas hold did not clip at its end';
+                        for (value in hold.vertices) if (!Math.isFinite(value)) throw 'Invalid atlas hold geometry';
+                    }
+                    hold.kill();
+                    note.kill();
+                    var ordinary = game.currentChart.notes[0].clone();
+                    ordinary.kind = '';
+                    ordinary.length = 1000;
+                    var reused = pool.buildHoldNoteSprite(ordinary);
+                    if (reused != hold || reused.graphic == packed) throw 'Atlas hold texture leaked through recycling';
+                    if (reused.endOffset == 0.75 || reused.bottomClip == 0.75) throw 'Atlas cap settings leaked through recycling';
+                    reused.kill();
+                }
+            }
+            Preferences.downscroll = previousScroll;
+            game.currentChart.noteStyle = previousStyle;
+            pool.destroy();
+            game.psychLua.variables.set('atlasHoldTextures', atlasTextures);
+            return 'passed';
+        ]], {atlasTestRoot = modFolder}) == 'passed', 'Sparrow hold regression failed')
+        debugPrint('PSYCH_ATLAS_HOLD_REGRESSION_OK')
+        addHaxeLibrary('SongDataUtils', 'funkin.data.song')
+        addHaxeLibrary('SongNoteDataRaw', 'funkin.data.song')
+        addHaxeLibrary('NoteParamData', 'funkin.data.song')
+        addHaxeLibrary('PreciseInputManager', 'funkin.input')
+        addHaxeLibrary('Highscore', 'funkin')
+        assert(runHaxeCode([[
+            var original = new SongNoteDataRaw(100, 0, 500, 'play-animation', [new NoteParamData('animation', 'hey')]);
+            var shifted = SongDataUtils.offsetSongNoteData([original], 250)[0];
+            if (shifted.time != 350 || shifted.length != 500 || shifted.kind != 'play-animation') throw 'Copy/paste changed note data';
+            if (shifted.params.length != 1 || shifted.params[0].name != 'animation' || shifted.params[0].value != 'hey') throw 'Copy/paste lost custom note parameters';
+            if (shifted.params == original.params || shifted.params[0] == original.params[0]) throw 'Pasted parameters were not cloned';
+            shifted.params[0].value = 'idle';
+            if (original.params[0].value != 'hey') throw 'Editing a pasted note changed its source';
+            var data = game.currentChart.notes[0].clone();
+            data.kind = '';
+            data.length = 0;
+            var note = game.playerStrumline.buildNoteSprite(data);
+            var hits = Highscore.tallies.totalNotesHit;
+            var health = game.health;
+            game.goodNoteHit(note, {noteDirection: note.direction, timestamp: PreciseInputManager.getCurrentTimestamp(), keyCode: 0, position: data.time + 1000});
+            if (!note.alive || note.hasBeenHit || Highscore.tallies.totalNotesHit != hits || game.health != health) throw 'An out-of-window input was processed as a hit';
+            note.kill();
+            return 'passed';
+        ]]) == 'passed', 'Upstream gameplay/editor regression failed')
+        debugPrint('NOTE_COPY_AND_JUDGEMENT_REGRESSION_OK')
+    end
     assert(getVar('folderLoaded') == true)
     assert(getVar('songLoaded') == true)
     assert(getVar('unrelatedLoaded') == nil)
@@ -61,6 +241,21 @@ end
 
 function onUpdate(elapsed)
     if songPath ~= 'tutorial' then return end
+    if luaSliceVersion ~= nil and not saveVerified then
+        local verifiedPath = 'save-persistence-request-' .. tostring(getVar('launchCount')) .. '.json.verified'
+        if not checkFileExists(verifiedPath) then return end
+        assert(runHaxeCode([[
+            Save.instance.options.downscroll = getVar('persistencePriorDownscroll');
+            Save.instance.flush();
+            return true;
+        ]]) == true, 'Could not restore save after disk verification')
+        saveVerified = true
+        debugPrint('NOTE_POOL_AND_SAVE_REGRESSION_OK')
+    end
+    if luaSliceVersion ~= nil and not inheritedChecked then
+        inheritedChecked = true
+        runHaxeCode("game.luaScriptManager.callHook('onLuaPauseMenuAccept', ['inherited-hook-regression']);")
+    end
     elapsedTotal = elapsedTotal + elapsed
     if phase == 0 and elapsedTotal > 2 then
         local status = getTextString('luaTestStatus')
@@ -101,4 +296,11 @@ end
 
 function onDestroy()
     debugPrint('PSYCH_RUNTIME_DESTROY_OK')
+end
+
+function onCustom(id, data)
+    if id == 'test:psych-cancel' then return Function_Stop end
+    if id ~= 'test:data' then return end
+    assert(data.answer == 42 and data.nested.text == 'UTF-8: ł')
+    debugPrint('PSYCH_CUSTOM_EVENT_OK')
 end

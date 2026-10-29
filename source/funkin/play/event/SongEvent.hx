@@ -102,6 +102,10 @@ class SongEvent implements IPlayStateScriptedClass
     return 'SongEvent(${this.id})';
   }
 
+  public function onCustom(event:CustomScriptEvent):Void
+  {
+  }
+
   public function onScriptEvent(event:ScriptEvent)
   {
   }

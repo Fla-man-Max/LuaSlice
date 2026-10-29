@@ -112,6 +112,7 @@ class ReflectUtil
     {
       throw 'Attempted to delete blacklisted field "${name}"';
     };
+    if (isInlineConstant(obj, name)) throw 'Cannot delete read-only inline constant "${name}"';
     return Reflect.deleteField(obj, name);
   }
 
@@ -153,7 +154,7 @@ class ReflectUtil
       throw 'Attempted to retrieve blacklisted field "${name}"';
     };
 
-    return Reflect.field(getReflectionParent(obj), name);
+    return isInlineConstant(obj, name) ? getInlineConstant(name) : Reflect.field(getReflectionParent(obj), name);
   }
 
   /**
@@ -185,7 +186,12 @@ class ReflectUtil
    */
   public static function getAnonymousFieldsOf(obj:Any):Array<String>
   {
-    return Reflect.fields(obj);
+    var parent = getReflectionParent(obj);
+    var result = Reflect.fields(parent);
+    if (parent == funkin.util.Constants)
+      for (name in inlineConstants.keys())
+        if (!result.contains(name)) result.push(name);
+    return result;
   }
 
   /**
@@ -204,7 +210,7 @@ class ReflectUtil
       throw 'Attempted to retrieve blacklisted field "${name}"';
     };
 
-    return Reflect.getProperty(getReflectionParent(obj), name);
+    return isInlineConstant(obj, name) ? getInlineConstant(name) : Reflect.getProperty(getReflectionParent(obj), name);
   }
 
   /**
@@ -232,7 +238,7 @@ class ReflectUtil
       return false;
     }
 
-    return Reflect.hasField(getReflectionParent(obj), name);
+    return isInlineConstant(obj, name) || Reflect.hasField(getReflectionParent(obj), name);
   }
 
   /**
@@ -290,6 +296,7 @@ class ReflectUtil
     {
       throw 'Attempted to set blacklisted field "${name}"';
     };
+    if (isInlineConstant(obj, name)) throw 'Cannot modify read-only inline constant "${name}"';
     return Reflect.setField(getReflectionParent(obj), name, value);
   }
 
@@ -308,6 +315,7 @@ class ReflectUtil
     {
       throw 'Attempted to set blacklisted field "${name}"';
     };
+    if (isInlineConstant(obj, name)) throw 'Cannot modify read-only inline constant "${name}"';
     return Reflect.setProperty(getReflectionParent(obj), name, value);
   }
 
@@ -468,6 +476,35 @@ class ReflectUtil
   public static function makeVarArgs(f:Array<Dynamic>->Dynamic):Dynamic
   {
     return Reflect.makeVarArgs(f);
+  }
+
+  @:unreflective
+  static final inlineConstants:Map<String, Dynamic> = [
+    'DEFAULT_VIBRATION_PERIOD' => funkin.util.Constants.DEFAULT_VIBRATION_PERIOD,
+    'DEFAULT_VIBRATION_DURATION' => funkin.util.Constants.DEFAULT_VIBRATION_DURATION,
+    'MIN_VIBRATION_AMPLITUDE' => funkin.util.Constants.MIN_VIBRATION_AMPLITUDE,
+    'DEFAULT_VIBRATION_AMPLITUDE' => funkin.util.Constants.DEFAULT_VIBRATION_AMPLITUDE,
+    'MAX_VIBRATION_AMPLITUDE' => funkin.util.Constants.MAX_VIBRATION_AMPLITUDE,
+    'DEFAULT_VIBRATION_SHARPNESS' => funkin.util.Constants.DEFAULT_VIBRATION_SHARPNESS,
+    'SAVE_PATH' => funkin.util.Constants.SAVE_PATH,
+    'SAVE_NAME' => funkin.util.Constants.SAVE_NAME,
+    'SAVE_PATH_LEGACY' => funkin.util.Constants.SAVE_PATH_LEGACY,
+    'SAVE_NAME_LEGACY' => funkin.util.Constants.SAVE_NAME_LEGACY,
+    'BASE_SAVE_SLOT' => funkin.util.Constants.BASE_SAVE_SLOT
+  ];
+
+  @:unreflective
+  static function isInlineConstant(obj:Any, name:String):Bool
+  {
+    return obj == funkin.util.Constants && inlineConstants.exists(name);
+  }
+
+  @:unreflective
+  static function getInlineConstant(name:String):Any
+  {
+    var value = inlineConstants.get(name);
+    if (value == null) throw 'Inline constant "${name}" is unavailable';
+    return value;
   }
 
   @:unreflective

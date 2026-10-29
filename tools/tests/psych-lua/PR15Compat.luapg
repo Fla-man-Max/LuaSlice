@@ -1,0 +1,176 @@
+local function check(value, message)
+    assert(value, 'PR15_COMPAT_FAILED: ' .. message)
+end
+
+local stopRating = false
+local ratingCalls = 0
+function onRecalculateRating()
+    ratingCalls = ratingCalls + 1
+    if stopRating then
+        setRatingPercent(0.5)
+        return Function_Stop
+    end
+end
+
+function pr15LuaValue()
+    return 17
+end
+
+local function checkCreatePost()
+    if songPath ~= 'tutorial' then return end
+    check(type(addToGroup) == 'function', 'group compatibility is missing')
+    check(type(rating) == 'number' and type(ratingName) == 'string', 'rating globals are missing')
+    makeLuaSprite('pr15Sprite')
+    makeGraphic('pr15Sprite', 8, 8, 'FF0000')
+    runHaxeCode([[setVar('pr15Group', new flixel.group.FlxTypedGroup());]])
+    check(addToGroup('pr15Group', 'pr15Sprite'), 'group add failed')
+    check(getProperty('pr15Group.length') == 1, 'group does not contain sprite')
+    check(removeFromGroup('pr15Group', 0, nil, false), 'group detach failed')
+    check(luaSpriteExists('pr15Sprite'), 'detach unexpectedly destroyed sprite')
+    check(addToGroup('pr15Group', 'pr15Sprite'), 'group re-add failed')
+    check(removeFromGroup('pr15Group', -1, 'pr15Sprite', true), 'group destroy failed')
+    check(not luaSpriteExists('pr15Sprite'), 'destroyed sprite remains registered')
+    check(createInstance('pr15OwnedGroup', 'flixel.group.FlxTypedGroup'), 'owned group creation failed')
+    check(createInstance('pr15NestedGroup', 'flixel.group.FlxTypedGroup'), 'nested group creation failed')
+    makeLuaSprite('pr15OwnedChild')
+    makeGraphic('pr15OwnedChild', 4, 4, 'FFFFFF')
+    check(addToGroup('pr15OwnedGroup', 'pr15NestedGroup'), 'nested group insertion failed')
+    check(addToGroup('pr15NestedGroup', 'pr15OwnedChild'), 'nested child insertion failed')
+    removeLuaSprite('pr15OwnedGroup')
+    check(not luaSpriteExists('pr15OwnedChild'), 'destroying a group left its child registered')
+    check(getProperty('pr15NestedGroup') == nil, 'destroying a group left its nested group registered')
+    removeLuaSprite('pr15OwnedChild')
+    removeLuaSprite('pr15NestedGroup')
+    makeLuaSprite('pr15Frames')
+    check(loadMultipleFrames('pr15Frames', {'atlas-hold-test', 'atlas-hold-test'}), 'multiple frames failed')
+    check(getProperty('pr15Frames.frames.numFrames') == 16, 'multiple frames corrupted shared atlas')
+    check(loadMultipleFrames('pr15Frames', {'atlas-hold-test', 'PR15Frames'}), 'distinct frame merge failed')
+    check(getProperty('pr15Frames.frames.numFrames') == 17, 'distinct frame merge dropped frames')
+    makeAnimatedLuaSprite('pr15Shared', 'atlas-hold-test')
+    check(getProperty('pr15Shared.frames.numFrames') == 16, 'frame merge modified cached source atlas')
+    removeLuaSprite('pr15Shared')
+    removeLuaSprite('pr15Frames')
+    check(makeFlxAnimateSprite('pr15Animate', 0, 0, 'PR15Animate'), 'Animate sprite load failed')
+    check(addAnimationBySymbol('pr15Animate', 'idle', 'GF Dancing Beat', 24, false, 2, 3), 'Animate symbol registration failed')
+    check(getProperty('pr15Animate.offset.x') == 2 and getProperty('pr15Animate.offset.y') == 3, 'Animate offsets were discarded')
+    check(loadAnimateAtlas('pr15Animate', 'PR15Animate'), 'Animate atlas reload failed')
+    check(addAnimationBySymbolIndices('pr15Animate', 'slice', 'GF Dancing Beat', {1, 0}), 'Animate symbol indices failed')
+    playAnim('pr15Animate', 'slice', true)
+    check(getProperty('pr15Animate.animation.curAnim.numFrames') == 2, 'Animate frame indices were discarded')
+    addOffset('pr15Animate', 'slice', 4, 5)
+    playAnim('pr15Animate', 'slice', true)
+    check(getProperty('pr15Animate.offset.x') == 4 and getProperty('pr15Animate.offset.y') == 5, 'Animate addOffset failed')
+    removeLuaSprite('pr15Animate')
+    check(makeFlxAnimateSprite('pr15LibraryAnimate', 0, 0, 'shared:characters/gf'), 'native library Animate sprite failed')
+    check(addAnimationBySymbol('pr15LibraryAnimate', 'idle', 'GF Dancing Beat'), 'native library Animate symbol failed')
+    removeLuaSprite('pr15LibraryAnimate')
+    saveFile('data/settings.json', '[{"save":"pr15Value","type":"bool","value":false}]')
+    check(getModSetting('pr15Value') == false, 'false settings value was discarded')
+    check(not pcall(getModSetting, 'pr15Value', '../outside'), 'settings escaped mod directory')
+    saveFile('PR15File.hx', [[
+        var count = 0;
+        createCallback('pr15Callback', function(value) { return value * 2; });
+        createGlobalCallback('pr15GlobalCallback', function(value) { return value + 1; });
+        function onCreate() { setVar('pr15Created', true); }
+        function pr15Add(value) { count += value; return count; }
+        function pr15Read() { return sharedValue; }
+        function pr15Boolean() { return true; }
+        function pr15Object() { return {value: 8}; }
+        function onDestroy() { setVar('pr15Destroyed', true); }
+    ]])
+    check(addHScript('PR15File'), 'HScript load failed')
+    check(pr15Callback(3) == 6 and pr15GlobalCallback(5) == 6, 'HScript callback registration failed')
+    check(getVar('pr15Created') == true, 'HScript onCreate did not run')
+    check(not addHScript('PR15File'), 'HScript duplicate was loaded')
+    check(callOnHScript('pr15Add', {3}) == 3, 'HScript call failed')
+    local mixed = callOnScripts('pr15Add', {2})
+    check(type(mixed) == 'number' and mixed == 5, 'mixed script result lost value/type: ' .. tostring(mixed) .. ' (' .. type(mixed) .. ')')
+    check(callOnScripts('pr15Boolean') == true, 'mixed script call coerced boolean result')
+    local object = callOnScripts('pr15Object')
+    check(type(object) == 'table' and object.value == 8, 'mixed script call coerced object result')
+    check(callOnLuas('pr15LuaValue', {}, false, false) == 17, 'Lua broadcast coerced numeric result')
+    setOnScripts('sharedValue', 42)
+    check(callOnHScript('pr15Read') == 42, 'mixed script setter skipped HScript')
+    setOnHScript('sharedValue', 43)
+    check(callOnHScript('pr15Read') == 43, 'HScript setter failed')
+    check(removeHScript('PR15File'), 'HScript unload failed')
+    check(getVar('pr15Destroyed') == true, 'HScript onDestroy did not run')
+    check(not removeHScript('PR15File'), 'removed HScript remained loaded')
+    saveFile('PR15Stop.hx', [[function pr15Stop() { return Function_StopHScript; }]])
+    saveFile('PR15AfterStop.hx', [[function pr15Stop() { setVar('pr15AfterStop', true); return 7; }]])
+    check(addHScript('PR15Stop') and addHScript('PR15AfterStop'), 'HScript stop fixtures did not load')
+    check(callOnHScript('pr15Stop') == Function_StopHScript, 'HScript stop result was discarded')
+    check(getVar('pr15AfterStop') == nil, 'HScript stop did not stop dispatch')
+    check(callOnHScript('pr15Stop', {}, true) == 7 and getVar('pr15AfterStop'), 'ignoreStops did not continue dispatch')
+    check(removeHScript('PR15Stop') and removeHScript('PR15AfterStop'), 'HScript stop fixtures did not unload')
+    saveFile('PR15Invalid.hx', 'function invalid( {')
+    check(not addHScript('PR15Invalid'), 'invalid HScript incorrectly reported success')
+    runHaxeCode([[
+        import funkin.Highscore;
+        var tallies = Highscore.tallies;
+        setVar('pr15Tallies', [tallies.sick, tallies.good, tallies.bad, tallies.shit, tallies.missed]);
+        tallies.sick = 1; tallies.good = 1; tallies.bad = 0; tallies.shit = 0; tallies.missed = 0;
+        game.psychLua.refreshRating();
+    ]])
+    check(math.abs(rating - 0.835) < 0.00001 and ratingName == 'Great' and ratingFC == 'GFC', 'weighted rating calculation failed')
+    check(ratingCalls == 1, 'rating hook did not run exactly once')
+    runHaxeCode([[game.psychLua.refreshRating();]])
+    check(ratingCalls == 1, 'unchanged tallies recalculated rating')
+    stopRating = true
+    runHaxeCode([[
+        import funkin.Highscore;
+        Highscore.tallies.good = 0;
+        game.psychLua.refreshRating();
+    ]])
+    check(rating == 0.5 and ratingCalls == 2, 'Function_Stop did not preserve custom rating')
+    stopRating = false
+    runHaxeCode([[
+        import funkin.Highscore;
+        var original = getVar('pr15Tallies');
+        var tallies = Highscore.tallies;
+        tallies.sick = original[0]; tallies.good = original[1]; tallies.bad = original[2]; tallies.shit = original[3]; tallies.missed = original[4];
+        game.psychLua.refreshRating();
+        removeVar('pr15Tallies');
+    ]])
+    setRatingPercent(0.75)
+    setRatingName('PR15 Rating')
+    setRatingFC('PR15 FC')
+    check(rating == 0.75 and ratingName == 'PR15 Rating' and ratingFC == 'PR15 FC', 'rating setters did not synchronize globals')
+    check(updateScoreText(), 'score update failed')
+    check(not setTimeBarColors('FF0000', '0000FF'), 'unsupported time bar reported success')
+    for _, name in ipairs({'exitSong', 'loadSong', 'startVideo', 'startDialogue', 'makeFlxAnimateSprite', 'loadAnimateAtlas', 'addAnimationBySymbol', 'addAnimationBySymbolIndices', 'insertToCustomSubstate'}) do
+        check(isLuaFunctionSupported(name), name .. ' is not registered')
+    end
+    runHaxeCode([[getVar('pr15Group').destroy(); removeVar('pr15Group');]])
+    saveFile('PR15Update.hx', [[function onUpdate(elapsed) { setVar('pr15Updated', elapsed >= 0); }]])
+    check(addHScript('PR15Update'), 'automatic HScript hook fixture did not load')
+    setVar('pr15Ready', true)
+end
+
+local function checkUpdatePost()
+    if not getVar('pr15Ready') then return end
+    check(getVar('pr15Updated') == true, 'external HScript did not receive engine update hook')
+    check(rating == 0.75 and ratingName == 'PR15 Rating' and ratingFC == 'PR15 FC', 'custom rating did not survive unchanged tallies')
+    check(removeHScript('PR15Update'), 'automatic HScript hook fixture did not unload')
+    setVar('pr15Ready', false)
+    saveFile('PR15-pass.txt', 'passed')
+    debugPrint('PR15_COMPAT_OK')
+end
+
+local failed = false
+local function runChecked(callback)
+    if failed then return end
+    local ok, message = pcall(callback)
+    if not ok then
+        failed = true
+        debugPrint('PR15_COMPAT_FAILED: ' .. tostring(message))
+    end
+end
+
+function onCreatePost()
+    runChecked(checkCreatePost)
+end
+
+function onUpdatePost()
+    runChecked(checkUpdatePost)
+end

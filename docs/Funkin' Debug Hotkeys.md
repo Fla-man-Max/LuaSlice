@@ -43,3 +43,11 @@ Most of this functionality is only available on debug builds of the game!
 - `CTRL-ALT-SHIFT-P`: ***CHARACTER UNLOCK SCREEN***: Forces the Character Select screen to play Pico's unlocking animation. Only available on debug builds.
 - `CTRL-ALT-SHIFT-N`: ***CHARACTER NOT SEEN***: Marks all characters as not seen and enables BF's new character unlocked animation in Freeplay. Only available on debug builds.
 - `CTRL-ALT-SHIFT-E`: ***DUMP SAVE DATA***: Prompts the user to save their save data as a JSON file, so its contents can be viewed. Only available on debug builds.
+
+## Android Chart Editor
+
+Hold a note, hold body, event, selection, empty grid cell, or the note preview to open its touch actions. Copy, Cut, Paste, Delete, selection controls, properties, character previews, Undo and Redo use the same commands as the desktop editor. Paste uses the touched grid time; outside the grid it uses the playhead.
+
+Set **File > Preferences > Long-Press Duration** from 1.0 to 2.0 seconds in 0.1-second steps. The default is 1.5 seconds. Changes apply immediately and are saved with the other editor preferences.
+
+Moving the finger starts the ordinary editing gesture instead of opening the menu. Scrolling, multiple fingers, and losing app focus cancel a pending long press. Double-tap deletion still follows its separate preference. The menu has a Cancel button; opening it does not edit the chart. Copied chart objects remain available internally if the system clipboard cannot be read.

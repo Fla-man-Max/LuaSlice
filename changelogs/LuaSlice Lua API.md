@@ -1,5 +1,56 @@
 # LuaSlice Lua API
 
+## Scripting events — 2026-10-20
+
+Gameplay and menu events reach the original Lua API through `onEvent(type, payload)` and their named hooks, including note, song, countdown, pause and dialogue callbacks. Beat, step and focus hooks retain their existing arguments and are not dispatched twice. Payloads contain plain data rather than live scene objects; arrays and string-keyed Maps are copied, and cyclic/deep values are limited.
+
+`onNoteHoldDrop(payload)` includes `payload.holdNote` with `strumTime`, numeric `direction`, `sustainLength`, `fullSustainLength`, `hitNote` and `missedNote`. It is a snapshot, not the live sustain sprite.
+
+HScript can send a custom event:
+
+```haxe
+import funkin.modding.events.ScriptEvent.CustomScriptEvent;
+import funkin.play.PlayState;
+
+var event = new CustomScriptEvent("my-mod:phase", true);
+event.data.set("phase", 2);
+PlayState.instance.dispatchEvent(event);
+trace(event.eventCanceled);
+```
+
+Receive it in `.lua` or `.luag`:
+
+```lua
+function onCustom(id, data, payload)
+    if id == 'my-mod:phase' and data.phase == 2 then
+        cancelEvent()
+    end
+end
+```
+
+`stopEventPropagation()` stops later event recipients. Cancellation alone does not. Lua data is a snapshot; use existing event helpers to change or cancel the native event. Psych scripts use the separate `onCustom(id, data)` hook and return `Function_Stop` to cancel.
+
+SScript and NxScript receive `onCustom(event)` with the native event and its mutable `data` Map. HScript subclasses override `onCustom(event)` in the same way.
+
+Scripted characters may override `getAssetPath()`, `getCharacterAnimations()`, `getBaseScale()` and `getHealthIconData()` without replacing the shared character configuration. These hooks are used by Sparrow, Packer, Animate Atlas, Multi-Sparrow and Multi-Animate renderers. For example:
+
+```haxe
+import funkin.play.character.SparrowCharacter;
+
+class SmallSenpai extends SparrowCharacter
+{
+    public function new(id)
+    {
+        super("senpai");
+    }
+
+    override function getBaseScale()
+    {
+        return 3;
+    }
+}
+```
+
 ## Native scripting update — 2026-09-28
 
 Windows and Android use LuaJIT through `hxluajit` and `hxluajit-wrapper`. The old/raw API, Psych-style aliases, and LuaSlice helpers remain supported. Helpers do not require a new language or rewritten scripts. `.lua` stays isolated, `.luag` keeps its shared environment, and the separate Psych `.luap`/`.luapg` loader keeps its existing rules. NxScript is unchanged.
@@ -387,6 +438,20 @@ end
 - `ScrollSpeed` with optional `returnToOriginal`
 
 These are normal Chart Editor events. File fields use explicit paths and start at `assets/` by default. Character targets use BF, Dad, or GF choices and named stage objects use the Object target. Play Dialogue lists available conversation JSON files, preloads their music, speakers, and dialogue boxes, then releases them when the conversation closes. F5 and song retries remove active event effects before the song is restored. Change Character reloads the character script when the same slot changes more than once. The removed Shader chart event is not part of this list; Lua shader APIs remain available to scripts.
+
+### Following a moving character
+
+In a Focus Camera event, enable **Camera Follow Character** and choose Player, Opponent, or Girlfriend. The camera keeps the character's camera offsets and follows position changes from scripts and tweens, including while the event's camera transition is running. Leaving the checkbox off keeps the fixed-focus behavior used by older charts.
+
+Another Focus Camera event replaces the target. Explicit scripted camera positioning takes over from character tracking.
+
+### Play Animation notes
+
+Choose `play_animation` in Note Data. Set Character Target, the exact Animation Name (or its configured atlas prefix), and Force Animation. Auto targets the owner of the note; Player, Opponent, and Girlfriend select a particular character. Existing named-prop targets in charts are still supported.
+
+Force Animation restarts the requested animation immediately. With it off, the character's normal interruption rules apply. The note keeps normal scoring and does not also trigger the usual directional singing animation. Missing characters or animations are logged without stopping the song. Holds trigger the animation on the initial hit, not on each hold segment.
+
+Saved parameter names remain `target`, `animation`, and `force`. Older charts using numeric force values still load.
 
 ## Script Folder Rules
 - `scripts/lua` loads `.lua` only.
