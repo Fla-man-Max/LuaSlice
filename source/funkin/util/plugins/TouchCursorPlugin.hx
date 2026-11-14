@@ -96,6 +96,14 @@ class TouchCursorPlugin extends FlxTypedSpriteGroup<TouchCursor>
     pointerCamera.setPosition(0, 0);
   }
 
+  public static function refreshOverlay():Void
+  {
+    initialize();
+    syncPointerCameraSize();
+    if (!FlxG.cameras.list.contains(pointerCamera)) FlxG.cameras.add(pointerCamera, false);
+    else FlxG.cameras.sortCameras();
+  }
+
   override public function update(elapsed:Float):Void
   {
     super.update(elapsed);
@@ -103,8 +111,6 @@ class TouchCursorPlugin extends FlxTypedSpriteGroup<TouchCursor>
     for (touch in FlxG.touches.list)
     {
       if (touch == null) continue;
-
-      if (touch.justPressed) removeAll(true);
 
       var pointer:TouchCursor = findPointerByTouchId(touch.touchPointID);
 
@@ -120,7 +126,7 @@ class TouchCursorPlugin extends FlxTypedSpriteGroup<TouchCursor>
 
     for (pointer in members)
     {
-      if (pointer == null || touchExists(pointer.touchId)) continue;
+      if (pointer == null || !pointer.alive || touchExists(pointer.touchId)) continue;
       if (pointer.touchId != -2)
       {
         pointer.alpha = 0.8;
@@ -130,7 +136,7 @@ class TouchCursorPlugin extends FlxTypedSpriteGroup<TouchCursor>
           ease: FlxEase.cubeIn,
           onComplete: function(_)
           {
-            remove(pointer, true);
+            pointer.kill();
           }
         });
         pointer.touchId = -2;
@@ -255,6 +261,7 @@ class TouchCursor extends FlxSprite
   public function initialize(touchId:Int):Void
   {
     this.touchId = touchId;
+    alpha = 1;
     moving = false;
     loadGraphic('assets/ui/cursor/mobile/michael.png');
   }

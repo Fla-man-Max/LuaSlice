@@ -605,7 +605,7 @@ class ChartEditorNoteDisplayHandler
     var target:Null<FlxSprite> = null;
     var options:Null<haxe.ui.tooltips.ToolTipOptions> = null;
 
-    if (state.gridTiledSprite != null && !state.isCursorOverHaxeUI && !state.isHaxeUIDialogOpen && FlxG.mouse.overlaps(state.gridTiledSprite))
+    if (!state.isCursorOverHaxeUI && !state.isHaxeUIDialogOpen && state.isOverChartGrid(state.cursorPointer.viewX, state.cursorPointer.viewY))
     {
       for (eventSprite in state.renderedEvents.members)
       {

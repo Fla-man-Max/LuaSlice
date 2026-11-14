@@ -48,6 +48,7 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
   /** touchBuddy over here helps with the touch input! Because overlap for touch does not account for the graphic, only the hitbox.
    * And, `FlxG.pixelPerfectOverlap` uses two FlxSprites, so we can't use the `FlxTouch` object */
   public var touchBuddy:FlxSprite;
+  public var blocksTouchSelection:Null<Void->Bool>;
 
   // #end
 
@@ -153,7 +154,7 @@ class MenuTypedList<T:MenuListItem> extends FlxTypedGroup<T>
       FunkinSound.playOnce(Paths.sound('ui/main-menu/scroll-menu'), 0.4);
       selectItem(newIndex);
     }
-    if (TouchUtil.pressed || TouchUtil.justReleased)
+    if ((TouchUtil.pressed || TouchUtil.justReleased) && (blocksTouchSelection == null || !blocksTouchSelection()))
     {
       for (i in 0...members.length)
       {

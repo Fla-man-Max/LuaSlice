@@ -136,8 +136,10 @@ class ChartEditorWaveformSprite extends FlxSprite
   {
     if (!visible) return;
 
-    var viewTop:Float = ChartEditorState.MENU_BAR_HEIGHT - gridY;
-    var viewBottom:Float = FlxG.height - ChartEditorState.PLAYBAR_HEIGHT - gridY;
+    final first = chartEditorState.transformChartY(ChartEditorState.MENU_BAR_HEIGHT, 0) - gridY;
+    final last = chartEditorState.transformChartY(FlxG.height - ChartEditorState.PLAYBAR_HEIGHT, 0) - gridY;
+    var viewTop:Float = Math.min(first, last);
+    var viewBottom:Float = Math.max(first, last);
     if (viewTop < chunkTop || viewBottom > chunkBottom)
     {
       // Half a view of margin on each side keeps the vertex count down while scrolling still rarely rebuilds.

@@ -78,7 +78,7 @@ class ChartEditorCursorHandler
 
     if (state.gridTiledSprite == null) throw 'ERROR: Tried to handle cursor, but gridTiledSprite is null! Check ChartEditorState.buildGrid()';
 
-    var overlapsGrid:Bool = state.cursorPointer.overlaps(state.gridTiledSprite);
+    var overlapsGrid:Bool = state.isOverChartGrid(state.cursorPointer.viewX, state.cursorPointer.viewY);
 
     var overlapsRenderedNotes:Bool = true;
     var overlapsRenderedEvents:Bool = true;

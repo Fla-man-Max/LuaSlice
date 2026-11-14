@@ -2,11 +2,10 @@ import funkin.data.character.CharacterRegistry;
 import funkin.graphics.shaders.TextureSwap;
 import flixel.util.FlxColor;
 import funkin.graphics.shaders.AdjustColorShader;
-import funkin.play.character.NeneBaseCharacter;
 import funkin.assets.Assets.AssetType;
 import funkin.assets.Paths as NewPaths;
 
-class NeneDarkCharacter extends NeneBaseCharacter
+class NeneDarkCharacter extends funkin.play.character.NeneBaseCharacter
 {
   public function new()
   {

@@ -1,9 +1,8 @@
 import funkin.graphics.FunkinSprite;
 import funkin.graphics.shaders.AdjustColorShader;
-import funkin.play.character.NeneBaseCharacter;
 import funkin.assets.Paths as NewPaths;
 
-class NeneTankmenCharacter extends NeneBaseCharacter
+class NeneTankmenCharacter extends funkin.play.character.NeneBaseCharacter
 {
   public function new()
   {

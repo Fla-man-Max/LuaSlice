@@ -797,6 +797,75 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
   var touchCursorPress:Bool = false;
   var touchCursorRelease:Bool = false;
   var touchCursorActive:Bool = false;
+  var touchUiFinger:Null<Int>;
+  var touchUiX:Float = 0;
+  var touchUiY:Float = 0;
+  var lastUiMouseDown:Null<openfl.events.MouseEvent>;
+  var lastUiMouseDownTime:Float = -1;
+
+  function noteChartMouseDown(event:openfl.events.MouseEvent):Void
+  {
+    lastUiMouseDown = event;
+    lastUiMouseDownTime = haxe.Timer.stamp();
+  }
+
+  function beginChartTouchUI(event:openfl.events.TouchEvent):Void
+  {
+    if (!event.isPrimaryTouchPoint || isPlaytesting || touchUiFinger != null) return;
+    final x = event.stageX;
+    final y = event.stageY;
+    final mouseDown = lastUiMouseDown;
+    lastUiMouseDown = null;
+    if (mouseDown != null && haxe.Timer.stamp() - lastUiMouseDownTime < 0.15
+        && Math.abs(mouseDown.stageX - x) < 4 && Math.abs(mouseDown.stageY - y) < 4) return;
+    final uiX = (x - FlxG.scaleMode.offset.x) / (FlxG.scaleMode.scale.x * haxe.ui.Toolkit.scaleX);
+    final uiY = (y - FlxG.scaleMode.offset.y) / (FlxG.scaleMode.scale.y * haxe.ui.Toolkit.scaleY);
+    if (!Screen.instance.hasSolidComponentUnderPoint(uiX, uiY)) return;
+    touchUiFinger = event.touchPointID;
+    touchUiX = x;
+    touchUiY = y;
+    @:privateAccess haxe.ui.backend.flixel.MouseHelper.onMouse(haxe.ui.events.MouseEvent.MOUSE_DOWN, x, y, true);
+  }
+
+  function moveChartTouchUI(event:openfl.events.TouchEvent):Void
+  {
+    if (event.touchPointID != touchUiFinger) return;
+    touchUiX = event.stageX;
+    touchUiY = event.stageY;
+    @:privateAccess haxe.ui.backend.flixel.MouseHelper.onMouse(haxe.ui.events.MouseEvent.MOUSE_MOVE, touchUiX, touchUiY, true);
+  }
+
+  function endChartTouchUI(event:openfl.events.TouchEvent):Void
+  {
+    if (event.touchPointID != touchUiFinger) return;
+    touchUiFinger = null;
+    @:privateAccess haxe.ui.backend.flixel.MouseHelper.onMouse(haxe.ui.events.MouseEvent.MOUSE_UP, event.stageX, event.stageY);
+  }
+
+  function releaseChartTouchUI():Void
+  {
+    if (touchUiFinger == null) return;
+    touchUiFinger = null;
+    @:privateAccess haxe.ui.backend.flixel.MouseHelper._mouseDownLeft = null;
+    @:privateAccess haxe.ui.backend.flixel.MouseHelper.onMouse(haxe.ui.events.MouseEvent.MOUSE_UP, touchUiX, touchUiY);
+  }
+
+  function bindChartTouchUI():Void
+  {
+    FlxG.stage.addEventListener(openfl.events.MouseEvent.MOUSE_DOWN, noteChartMouseDown);
+    FlxG.stage.addEventListener(openfl.events.TouchEvent.TOUCH_BEGIN, beginChartTouchUI);
+    FlxG.stage.addEventListener(openfl.events.TouchEvent.TOUCH_MOVE, moveChartTouchUI);
+    FlxG.stage.addEventListener(openfl.events.TouchEvent.TOUCH_END, endChartTouchUI);
+  }
+
+  function unbindChartTouchUI():Void
+  {
+    FlxG.stage.removeEventListener(openfl.events.MouseEvent.MOUSE_DOWN, noteChartMouseDown);
+    FlxG.stage.removeEventListener(openfl.events.TouchEvent.TOUCH_BEGIN, beginChartTouchUI);
+    FlxG.stage.removeEventListener(openfl.events.TouchEvent.TOUCH_MOVE, moveChartTouchUI);
+    FlxG.stage.removeEventListener(openfl.events.TouchEvent.TOUCH_END, endChartTouchUI);
+    releaseChartTouchUI();
+  }
   var touchPointer = new flixel.input.FlxPointer();
   var touchPressPointer = new flixel.input.FlxPointer();
   var touchScrollPosition:Float = 0;
@@ -816,9 +885,17 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
   }
 
   /** Convert a screen Y to song-grid pixels, before applying zoom or time scaling. */
-  function gridYToChartY(screenY:Float):Float
+  public function gridYToChartY(screenY:Float):Float
   {
-    return (isViewDownscroll ? transformChartY(screenY, 0) : screenY) - gridTiledSprite.y;
+    return transformChartY(screenY, 0) - gridTiledSprite.y;
+  }
+
+  function isOverChartGrid(x:Float, y:Float):Bool
+  {
+    if (gridTiledSprite == null || y < MENU_BAR_HEIGHT || y >= FlxG.height - PLAYBAR_HEIGHT) return false;
+    final chartY = gridYToChartY(y);
+    return x >= gridTiledSprite.x && x < gridTiledSprite.x + gridTiledSprite.width
+      && chartY >= 0 && chartY <= gridTiledSprite.height;
   }
 
   var cursorPointer(get, never):flixel.input.FlxPointer;
@@ -868,6 +945,11 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     notePreviewViewportBoundsDirty = true;
     gridLinesDirty = true;
     waveformsDirty = true;
+    if (gridTiledSprite != null)
+    {
+      gridLines?.refresh(true);
+      for (waveform in audioWaveforms.members) waveform?.refresh(gridTiledSprite.y);
+    }
     if (measureTicks != null) measureTicks.updateMeasureNumbers(true);
     if (gridPlayhead != null) playheadPositionInPixels = playheadPositionInPixels;
     this.scrollPositionInPixels = this.scrollPositionInPixels;
@@ -1128,7 +1210,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
 
   function get_isCursorOverHaxeUI():Bool
   {
-    return Screen.instance.hasSolidComponentUnderPoint(cursorPointer.viewX, cursorPointer.viewY);
+    return Screen.instance.hasSolidComponentUnderPoint(cursorPointer.gameX / haxe.ui.Toolkit.scaleX, cursorPointer.gameY / haxe.ui.Toolkit.scaleY);
   }
 
   /**
@@ -3282,6 +3364,9 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
 
     uiCamera = new FunkinCamera('chartEditorUI');
     FlxG.cameras.reset(uiCamera);
+    #if FEATURE_TOUCH_CONTROLS
+    funkin.util.plugins.TouchCursorPlugin.refreshOverlay();
+    #end
 
     buildDefaultSongData();
 
@@ -3303,6 +3388,9 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
     // Setup the onClick listeners for the UI after it's been created.
     this.setupUIListeners();
     this.setupLuaSliceEditorUI();
+    #if FEATURE_TOUCH_CONTROLS
+    this.bindChartTouchUI();
+    #end
     this.setupTurboKeyHandlers();
 
     this.setupAutoSave();
@@ -3612,7 +3700,7 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
       ChartEditorScaleMode.apply(uiScale);
     }
 
-    Preferences.debugDisplay == DebugDisplayMode.Off ? menubar.paddingLeft = null : menubar.paddingLeft = 256;
+    this.centerChartMenubar();
 
     // These ones happen even if the modal dialog is open.
     this.handleMusicPlayback(elapsed);
@@ -4208,6 +4296,9 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
   @:nullSafety(Off)
   override function destroy():Void
   {
+    #if FEATURE_TOUCH_CONTROLS
+    this.unbindChartTouchUI();
+    #end
     this.resetLuaSliceTouch();
     if (!criticalFailure) this.flushEditorPreferences();
     trace('Destroying ChartEditorState...');

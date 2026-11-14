@@ -1043,6 +1043,27 @@ class ChartEditorUIHandler
    * Handles passive behavior of the menu bar, such as updating labels or enabled/disabled status.
    * Does not handle onClick ACTIONS of the menubar.
    */
+  public static function centerChartMenubar(state:ChartEditorState):Void
+  {
+    final bar = state.menubar;
+    if (bar == null || bar.width <= 0) return;
+    var width:Float = 0;
+    var count = 0;
+    for (child in bar.childComponents)
+    {
+      if (!child.includeInLayout) continue;
+      #if FEATURE_TOUCH_CONTROLS
+      if (child.height < ChartEditorState.MENU_BAR_HEIGHT) child.height = ChartEditorState.MENU_BAR_HEIGHT;
+      #end
+      width += child.width;
+      count++;
+    }
+    if (width <= 0) return;
+    width += Math.max(0, count - 1) * bar.layout.horizontalSpacing;
+    final padding = Math.max(0, (bar.width - width) / 2);
+    if (bar.paddingLeft != padding) bar.paddingLeft = padding;
+  }
+
   public static function handleMenubar(state:ChartEditorState):Void
   {
     if (state.commandHistoryDirty)

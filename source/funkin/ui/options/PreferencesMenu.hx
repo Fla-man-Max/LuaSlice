@@ -36,6 +36,9 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
   var menuCamera:FlxCamera;
   var hudCamera:FlxCamera;
   var camFollow:FlxObject;
+  #if FEATURE_TOUCH_CONTROLS
+  var backButton:FunkinBackButton;
+  #end
 
   public function new()
   {
@@ -78,8 +81,10 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     });
 
     #if FEATURE_TOUCH_CONTROLS
-    var backButton:FunkinBackButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, exit, 1.0);
+    backButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, exit, 1.0);
     add(backButton);
+    backButton.cameras = [hudCamera];
+    items.blocksTouchSelection = () -> backButton.confirming || TouchUtil.overlaps(backButton, hudCamera);
     #end
   }
 

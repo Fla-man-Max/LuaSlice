@@ -178,12 +178,13 @@ class ChartEditorLuaSliceHandler
       state.touchGesture.reset();
       return true;
     }
-    var inGrid = finger != null && state.gridTiledSprite != null && finger.overlaps(state.gridTiledSprite);
+    var inGrid = finger != null && state.isOverChartGrid(finger.viewX, finger.viewY);
     var inPreview = finger != null && ((state.notePreview != null && finger.overlaps(state.notePreview))
       || (state.healthIconBF != null && finger.overlaps(state.healthIconBF)) || (state.healthIconDad != null && finger.overlaps(state.healthIconDad)));
     var x = finger?.viewX ?? FlxG.mouse.viewX;
     var y = finger?.viewY ?? FlxG.mouse.viewY;
-    var overUI = Screen.instance.hasSolidComponentUnderPoint(x, y);
+    var overUI = Screen.instance.hasSolidComponentUnderPoint((finger?.gameX ?? FlxG.mouse.gameX) / haxe.ui.Toolkit.scaleX,
+      (finger?.gameY ?? FlxG.mouse.gameY) / haxe.ui.Toolkit.scaleY);
     if (finger != null)
       state.touchPointer.setRawPositionUnsafe(finger.gameX * FlxG.scaleMode.scale.x, finger.gameY * FlxG.scaleMode.scale.y);
     if (finger?.justPressed == true)
@@ -239,13 +240,13 @@ class ChartEditorLuaSliceHandler
     if (note != null && !selected) events = [];
     if (songEvent != null && !selected) notes = [];
     var hasItems = notes.length > 0 || events.length > 0;
-    var atGrid = state.gridTiledSprite != null && finger.overlaps(state.gridTiledSprite);
+    var atGrid = state.isOverChartGrid(x, y);
     var time = state.scrollPositionInMs + state.playheadPositionInMs;
     if (atGrid)
     {
       var cursorY = state.gridYToChartY(y);
       var fractionalStep = ChartEditorTimeScale.pixelsToStep(cursorY) / state.noteSnapRatio;
-      var step = (state.isViewDownscroll ? Math.ceil(fractionalStep) : Math.floor(fractionalStep)) * state.noteSnapRatio;
+      var step = Math.floor(fractionalStep) * state.noteSnapRatio;
       time = Math.max(0, Conductor.instance.getStepTimeInMs(step));
     }
     var actions:Array<funkin.ui.debug.charting.dialogs.ChartEditorTouchContextMenu.ChartTouchMenuAction> = [];
@@ -373,6 +374,7 @@ class ChartEditorLuaSliceHandler
   public static function resetLuaSliceTouch(state:ChartEditorState):Void
   {
     #if FEATURE_TOUCH_CONTROLS
+    state.releaseChartTouchUI();
     state.touchGesture.reset();
     state.touchCursorActive = false;
     state.touchCursorPress = false;

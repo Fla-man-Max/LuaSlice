@@ -645,7 +645,7 @@ class DebugBoundingState extends FlxState
   {
     final control = new Button();
     control.text = text;
-    control.height = 36;
+    control.height = 39;
     control.onClick = _ -> run();
     parent.addComponent(control);
   }
@@ -662,7 +662,7 @@ class DebugBoundingState extends FlxState
   {
     final control = new CheckBox();
     control.text = text;
-    control.height = 32;
+    control.height = 35;
     control.selected = selected;
     control.onChange = _ -> change(control.selected);
     parent.addComponent(control);

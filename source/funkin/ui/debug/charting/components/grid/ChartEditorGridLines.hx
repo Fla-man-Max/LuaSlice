@@ -177,8 +177,10 @@ class ChartEditorGridLines
     subBeats.setPosition(grid.x, grid.y);
     markers.setPosition(grid.x, grid.y);
 
-    var viewTop:Float = viewTopScreen - grid.y;
-    var viewBottom:Float = viewBottomScreen - grid.y;
+    final first = chartEditorState.gridYToChartY(viewTopScreen);
+    final last = chartEditorState.gridYToChartY(viewBottomScreen);
+    var viewTop:Float = Math.min(first, last);
+    var viewBottom:Float = Math.max(first, last);
     if (force || viewTop < builtTop || viewBottom > builtBottom)
     {
       var margin:Float = FlxG.height * 0.5;

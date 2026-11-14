@@ -68,9 +68,9 @@ class ChartEditorSubBeatHandler
    */
   public static function toggleSubBeatAtCursor(state:ChartEditorState):Void
   {
-    if (state.gridTiledSprite == null || state.isCursorOverHaxeUI || !FlxG.mouse.overlaps(state.gridTiledSprite)) return;
+    if (state.isCursorOverHaxeUI || !state.isOverChartGrid(state.cursorPointer.viewX, state.cursorPointer.viewY)) return;
 
-    var mouseY:Float = FlxG.mouse.viewY - state.gridTiledSprite.y;
+    var mouseY:Float = state.gridYToChartY(state.cursorPointer.viewY);
     for (existing in currentSubBeats(state))
     {
       if (Math.abs(ChartEditorTimeScale.msToPixels(existing) - mouseY) <= SUB_BEAT_REMOVE_PIXELS)

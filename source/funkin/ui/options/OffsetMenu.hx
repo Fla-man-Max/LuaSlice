@@ -781,7 +781,7 @@ class OffsetMenu extends Page<OptionsState.OptionsMenuPageName>
       var tapBeats:Array<Float> = [];
 
       #if FEATURE_TOUCH_CONTROLS
-      if (TouchUtil.justPressed)
+      if (TouchUtil.justPressed && !TouchUtil.overlaps(backButton, backButton.camera))
       {
         tapBeats.push(b);
       }
