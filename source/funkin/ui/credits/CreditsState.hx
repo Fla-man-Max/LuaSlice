@@ -9,6 +9,9 @@ import flixel.group.FlxSpriteGroup;
 import funkin.util.TouchUtil;
 import funkin.ui.credits.CreditsData.CreditsDataRole;
 import funkin.ui.credits.CreditsData.CreditsDataMember;
+import funkin.assets.Paths;
+import funkin.assets.Assets;
+import funkin.ui.transition.Transition;
 
 /**
  * The state used to display the credits scroll.
@@ -31,19 +34,6 @@ class CreditsState extends MusicBeatState
    * Make this an instanced variable so it gets set by the constructor.
    */
   final FULL_WIDTH = FlxG.width - (SCREEN_PAD * 2);
-
-  /**
-   * The font to use to display the text.
-   * To use a font from the `assets` folder, use `Paths.font(...)`.
-   * Choose something that will render Unicode properly.
-   */
-  #if windows
-  static final CREDITS_FONT = 'Consolas';
-  #elseif mac
-  static final CREDITS_FONT = 'Menlo';
-  #else
-  static final CREDITS_FONT = "Courier New";
-  #end
 
   /**
    * The size of the font.
@@ -97,7 +87,7 @@ class CreditsState extends MusicBeatState
 
     #if ios
     var fix = new FlxText();
-    fix.font = CREDITS_FONT;
+    fix.font = funkin.assets.Paths.font('ui/fonts/Inconsolata Black');
     fix.draw();
     #end
 
@@ -116,19 +106,6 @@ class CreditsState extends MusicBeatState
       });
     }
 
-    // Background
-    var bg = new FlxSprite(Paths.image('menuDesat'));
-    bg.scrollFactor.x = 0;
-    bg.scrollFactor.y = 0;
-    bg.setGraphicSize(Std.int(FlxG.width));
-    bg.updateHitbox();
-    bg.x = 0;
-    bg.y = 0;
-    bg.alpha = 0.1;
-    bg.visible = true;
-    bg.color = 0xFFB57EDC; // Lavender
-    // add(bg);
-
     // TODO: Once we need to display Kickstarter backers,
     // make this use a recycled pool so we don't kill performance.
     creditsGroup = new FlxSpriteGroup();
@@ -138,7 +115,7 @@ class CreditsState extends MusicBeatState
     add(creditsGroup);
 
     // Music
-    FunkinSound.playMusic('freeplayRandom', {
+    FunkinSound.playMusic('ui/freeplay/freeplay-random/freeplay-random', {
       startingVolume: 0.0,
       overrideExisting: true,
       restartTrack: true,
@@ -146,7 +123,7 @@ class CreditsState extends MusicBeatState
     });
     FlxG.sound.music.fadeIn(6, 0, 0.8);
 
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
     addBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, exit, 0.7);
     #end
   }
@@ -192,7 +169,10 @@ class CreditsState extends MusicBeatState
     }
   }
 
-  function buildCreditsLine(text:String, yPos:Float, header:Bool, side:CreditsSide = CreditsSide.Center):FlxText
+  function buildCreditsLine(text:String,
+    yPos:Float,
+    header:Bool,
+    side:CreditsSide = CreditsSide.Center):FlxText
   {
     // CreditsSide.Center: Full screen width
     // CreditsSide.Left: Left half of screen
@@ -209,7 +189,15 @@ class CreditsState extends MusicBeatState
     creditsLine.fieldWidth = width;
     creditsLine.text = text;
     creditsLine.bold = header;
-    creditsLine.setFormat(CREDITS_FONT, size, CREDITS_FONT_COLOR, FlxTextAlign.LEFT, FlxTextBorderStyle.OUTLINE, CREDITS_FONT_STROKE_COLOR, true);
+    creditsLine.setFormat(
+      funkin.assets.Paths.font('ui/fonts/Inconsolata Black'),
+      size,
+      CREDITS_FONT_COLOR,
+      FlxTextAlign.LEFT,
+      FlxTextBorderStyle.OUTLINE,
+      CREDITS_FONT_STROKE_COLOR,
+      true
+    );
 
     return creditsLine;
   }
@@ -264,7 +252,7 @@ class CreditsState extends MusicBeatState
     if (!scrollPaused)
     {
       // TODO: Replace with whatever the special note button is.
-      if (FlxG.keys.pressed.ENTER || FlxG.keys.pressed.SPACE #if mobile || TouchUtil.pressed && !TouchUtil.overlaps(backButton) #end)
+      if (FlxG.keys.pressed.ENTER || FlxG.keys.pressed.SPACE #if FEATURE_TOUCH_CONTROLS || TouchUtil.pressed && !TouchUtil.overlaps(backButton) #end)
       {
         // Move the whole group by the base scroll speed.
         creditsGroup.y -= CREDITS_SCROLL_FAST_SPEED * elapsed;
@@ -294,12 +282,35 @@ class CreditsState extends MusicBeatState
   function exit():Void
   {
     FlxG.keys.enabled = false;
-    FlxG.switchState(() -> new MainMenuState());
+    Transition.switchState(() -> new MainMenuState(), {
+      assetQuery: MainMenuState.queryAssets,
+      transition: BlackScreen(None, None)
+    });
+    FunkinSound.playOnce(Paths.sound('ui/main-menu/cancel-menu').toFlxSoundAsset());
   }
 
   override public function destroy():Void
   {
     super.destroy();
+  }
+
+  public static function queryAssets(type:AssetType):Array<AssetPath>
+  {
+    var results:Array<AssetPath> = [];
+
+    switch (type)
+    {
+      case SOUND:
+        results.pushUnique(Paths.music('ui/freeplay/freeplay-random').audio());
+
+      case JSON:
+        results.pushUnique(Paths.music('ui/freeplay/freeplay-random').metadata());
+
+      default:
+        // Nothing
+    }
+
+    return results;
   }
 }
 

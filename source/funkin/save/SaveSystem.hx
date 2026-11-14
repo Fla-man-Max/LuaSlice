@@ -73,19 +73,23 @@ class SaveSystem
     trace('[SAVE] Finding slot to write data to (starting with ${slot})...');
 
     var targetSaveData:FlxSave = new FlxSave();
-    targetSaveData.bind(Constants.SAVE_NAME + slot, Constants.SAVE_PATH);
-    while (!targetSaveData.isEmpty())
+    while (hasSaveDataAtSlot(slot))
     {
       // Keep trying to bind to slots until we find an empty slot.
       trace('[SAVE] Slot ${slot} is taken, continuing...');
       slot++;
-      targetSaveData.bind(Constants.SAVE_NAME + slot, Constants.SAVE_PATH);
     }
+    targetSaveData.bind(Constants.SAVE_NAME + slot, Constants.SAVE_PATH);
 
     trace('[SAVE] Writing data to slot ${slot}...');
     if (!targetSaveData.mergeData(data, true)) throw 'Could not persist recovery save in slot ${slot}; original save was not erased.';
 
     trace('[SAVE] Data written to slot ${slot}!');
     return slot;
+  }
+
+  function hasSaveDataAtSlot(slot:Int):Bool
+  {
+    return flixel.util.FlxSave.exists(Constants.SAVE_NAME + slot, Constants.SAVE_PATH);
   }
 }

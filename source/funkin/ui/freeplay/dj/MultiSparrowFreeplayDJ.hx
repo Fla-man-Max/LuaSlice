@@ -4,15 +4,9 @@ import flixel.graphics.frames.FlxFramesCollection;
 import flixel.graphics.frames.FlxAtlasFrames;
 import funkin.util.assets.FlxAnimationUtil;
 import funkin.data.freeplay.player.PlayerRegistry;
-
-/**
- * A script that can be tied to a MultiSparrowFreeplayDJ.
- * Create a scripted class that extends MultiSparrowFreeplayDJ to use this.
- */
-@:hscriptClass
-class ScriptedMultiSparrowFreeplayDJ extends MultiSparrowFreeplayDJ implements polymod.hscript.HScriptedClass
-{
-}
+import funkin.assets.Assets;
+import funkin.assets.Paths;
+import funkin.data.freeplay.player.PlayerData;
 
 /**
  * For some Freeplay DJs which use Sparrow atlases, the spritesheets need to be split
@@ -23,6 +17,41 @@ class ScriptedMultiSparrowFreeplayDJ extends MultiSparrowFreeplayDJ implements p
  */
 class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
 {
+  public static function queryAssets(type:funkin.assets.Assets.AssetType,
+    characterId:String):Array<funkin.assets.Paths.AssetPath>
+  {
+    var playableChar = PlayerRegistry.instance.fetchEntry(characterId);
+    if (playableChar == null) return [];
+    var playableCharData:Null<PlayerFreeplayDJData> = playableChar.getFreeplayDJData();
+
+    if (playableCharData == null)
+    {
+      return [];
+    }
+
+    var results:Array<AssetPath> = [];
+    switch (type)
+    {
+      case IMAGE:
+        results.pushUnique(Paths.image(playableCharData.getAtlasPath()));
+
+        for (anim in playableCharData.getAnimationsList())
+        {
+          if (anim.assetPath != null) results.pushUnique(Paths.image(anim.assetPath));
+        }
+      case XML:
+        results.pushUnique(Paths.xml(playableCharData.getAtlasPath()));
+
+        for (anim in playableCharData.getAnimationsList())
+        {
+          if (anim.assetPath != null) results.pushUnique(Paths.xml(anim.assetPath));
+        }
+      default:
+        // Nothing
+    }
+    return results;
+  }
+
   public function new(x:Float, y:Float, characterId:String)
   {
     super(x, y, characterId);
@@ -30,8 +59,7 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
     loadFrames();
     loadAnimations();
 
-    animation.onFinish.add(onFinishAnim);
-    animation.onLoop.add(onFinishAnim);
+    currentState = Intro;
   }
 
   public function loadFrames():Void
@@ -44,7 +72,12 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
       if (anim.assetPath != null && !assetList.contains(anim.assetPath)) assetList.push(anim.assetPath);
     }
 
-    var texture:FlxAtlasFrames = Paths.getSparrowAtlas(playableCharData.getAssetPath());
+    var assetPath:String = funkin.assets.Paths.formatRelative(
+      playableCharData.getAssetPath(),
+      'gameplay/playable-characters/$characterId',
+      Constants.EXT_IMAGE
+    );
+    var texture:FlxAtlasFrames = Paths.getSparrowAtlas(assetPath);
 
     if (texture == null)
     {
@@ -59,13 +92,16 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
 
     for (asset in assetList)
     {
-      final subTexture:FlxAtlasFrames = Paths.getSparrowAtlas(asset);
+      var animPath:String = funkin.assets.Paths.formatRelative(asset, 'gameplay/playable-characters/$characterId', Constants.EXT_IMAGE);
+      final subTexture:FlxAtlasFrames = Paths.getSparrowAtlas(animPath);
+
       if (subTexture == null) log('Multi-Sparrow atlas could not load subtexture: ${asset}');
       else
       {
         log('Concatenating multi-sparrow atlas: ${asset}');
         subTexture.parent.destroyOnNoUse = false;
-        FunkinMemory.cacheTexture(Paths.image(asset));
+
+        funkin.assets.Assets.cacheFlxGraphic(funkin.assets.Paths.image(asset));
       }
       texture.addAtlas(subTexture);
     }
@@ -81,190 +117,6 @@ class MultiSparrowFreeplayDJ extends BaseFreeplayDJ
 
     var animationList:Array<String> = this.animation.getNameList();
     log('[MULTISPARROWDJ] Successfully loaded ${animationList.length} animations for ${characterId}');
-  }
-
-  override public function update(elapsed:Float):Void
-  {
-    switch (currentState)
-    {
-      case Intro:
-        // Play the intro animation then leave this state immediately.
-        var animPrefix = playableCharData?.getAnimationPrefix('intro');
-        if (animPrefix != null && (getCurrentAnimation() != animPrefix))
-        {
-          playFlashAnimation(animPrefix, true);
-        }
-        timeIdling = 0;
-      case Idle:
-        // We are in this state the majority of the time.
-        var animPrefix = playableCharData?.getAnimationPrefix('idle');
-        if (animPrefix != null && getCurrentAnimation() != animPrefix)
-        {
-          playFlashAnimation(animPrefix, true, false, true);
-        }
-        timeIdling += elapsed;
-      case NewUnlock:
-        var animPrefix = playableCharData?.getAnimationPrefix('newUnlock');
-        if (animPrefix != null && !hasAnimation(animPrefix))
-        {
-          currentState = Idle;
-        }
-        if (animPrefix != null && getCurrentAnimation() != animPrefix)
-        {
-          playFlashAnimation(animPrefix, true, false, true);
-        }
-      case Confirm:
-        var animPrefix = playableCharData?.getAnimationPrefix('confirm');
-        if (animPrefix != null && getCurrentAnimation() != animPrefix) playFlashAnimation(animPrefix, false);
-        timeIdling = 0;
-      case FistPumpIntro:
-        var animPrefixA = playableCharData?.getAnimationPrefix('fistPump');
-        var animPrefixB = playableCharData?.getAnimationPrefix('loss');
-
-        if (getCurrentAnimation() == animPrefixA)
-        {
-          var endFrame = playableCharData?.getFistPumpIntroEndFrame() ?? 0;
-          if (endFrame > -1 && anim.curAnim.curFrame >= endFrame)
-          {
-            playFlashAnimation(animPrefixA, true, false, false, playableCharData?.getFistPumpIntroStartFrame());
-          }
-        }
-        else if (getCurrentAnimation() == animPrefixB)
-        {
-          var endFrame = playableCharData?.getFistPumpIntroBadEndFrame() ?? 0;
-          if (endFrame > -1 && anim.curAnim.curFrame >= endFrame)
-          {
-            playFlashAnimation(animPrefixB, true, false, false, playableCharData?.getFistPumpIntroBadStartFrame());
-          }
-        }
-        else
-        {
-          FlxG.log.warn('Unrecognized animation in FistPumpIntro: ' + getCurrentAnimation());
-        }
-
-      case FistPump:
-        var animPrefixA = playableCharData?.getAnimationPrefix('fistPump');
-        var animPrefixB = playableCharData?.getAnimationPrefix('loss');
-
-        if (getCurrentAnimation() == animPrefixA)
-        {
-          var endFrame = playableCharData?.getFistPumpLoopEndFrame() ?? 0;
-          if (endFrame > -1 && anim.curAnim.curFrame >= endFrame)
-          {
-            playFlashAnimation(animPrefixA, true, false, false, playableCharData?.getFistPumpLoopStartFrame());
-          }
-        }
-        else if (getCurrentAnimation() == animPrefixB)
-        {
-          var endFrame = playableCharData?.getFistPumpLoopBadEndFrame() ?? 0;
-          if (endFrame > -1 && anim.curAnim.curFrame >= endFrame)
-          {
-            playFlashAnimation(animPrefixB, true, false, false, playableCharData?.getFistPumpLoopBadStartFrame());
-          }
-        }
-        else
-        {
-          FlxG.log.warn('Unrecognized animation in FistPump: ' + getCurrentAnimation());
-        }
-
-      case IdleEasterEgg:
-        var animPrefix = playableCharData?.getAnimationPrefix('idleEasterEgg');
-        if (animPrefix != null && getCurrentAnimation() != animPrefix)
-        {
-          onIdleEasterEgg.dispatch();
-          playFlashAnimation(animPrefix, false);
-          seenIdleEasterEgg = true;
-        }
-        timeIdling = 0;
-      case Cartoon:
-        var animPrefix = playableCharData?.getAnimationPrefix('cartoon');
-        if (animPrefix == null)
-        {
-          currentState = IdleEasterEgg;
-        }
-        else
-        {
-          if (getCurrentAnimation() != animPrefix) playFlashAnimation(animPrefix, true);
-          timeIdling = 0;
-        }
-      default:
-        // I shit myself.
-    }
-
-    // Call the superclass function AFTER updating the current state and playing the next animation.
-    // This ensures that flixel-animate starts rendering the new animation immediately.
-    super.update(elapsed);
-  }
-
-  override function onFinishAnim(name:String):Void
-  {
-    if (name == playableCharData?.getAnimationPrefix('intro'))
-    {
-      if (PlayerRegistry.instance.hasNewCharacter())
-      {
-        currentState = NewUnlock;
-      }
-      else
-      {
-        currentState = Idle;
-      }
-      onIntroDone.dispatch();
-    }
-    else if (name == playableCharData?.getAnimationPrefix('idle'))
-    {
-      // trace('Finished idle');
-
-      if (timeIdling >= IDLE_EGG_PERIOD && !seenIdleEasterEgg)
-      {
-        currentState = IdleEasterEgg;
-      }
-      else if (timeIdling >= IDLE_CARTOON_PERIOD)
-      {
-        currentState = Cartoon;
-      }
-    }
-    else if (name == playableCharData?.getAnimationPrefix('confirm'))
-    {
-      // trace('Finished confirm');
-    }
-    else if (name == playableCharData?.getAnimationPrefix('fistPump'))
-    {
-      // trace('Finished fist pump');
-      currentState = Idle;
-    }
-    else if (name == playableCharData?.getAnimationPrefix('idleEasterEgg'))
-    {
-      // trace('Finished spook');
-      currentState = Idle;
-    }
-    else if (name == playableCharData?.getAnimationPrefix('loss'))
-    {
-      // trace('Finished loss reaction');
-      currentState = Idle;
-    }
-    else if (name == playableCharData?.getAnimationPrefix('newUnlock'))
-    {
-      // Animation should loop.
-    }
-    else if (name == playableCharData?.getAnimationPrefix('charSelect'))
-    {
-      onCharSelectComplete();
-    }
-    else
-    {
-      log('Finished ${name}');
-    }
-  }
-
-  override public function playFlashAnimation(id:String, Force:Bool = false, Reverse:Bool = false, Loop:Bool = false, Frame:Int = 0):Void
-  {
-    animation.play(id, Force, Reverse, Frame);
-
-    if (animation.curAnim != null)
-    {
-      animation.curAnim.looped = Loop;
-    }
-    applyAnimationOffset();
   }
 
   static function log(message:String):Void

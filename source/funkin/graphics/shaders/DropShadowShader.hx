@@ -85,7 +85,10 @@ class DropShadowShader extends FlxShader
    */
   public var attachedSprite(default, set):FunkinSprite;
 
-  @:deprecated('Retained for LuaSlice shader compatibility')
+  /**
+   * The antialiasing amount.
+   */
+  @:deprecated("Not functional with the rewrite, only here for compatibility")
   public var antialiasAmt:Float = 0.0;
 
   /**

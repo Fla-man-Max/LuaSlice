@@ -29,11 +29,26 @@ class CrashHandler
    */
   public static var criticalErrorSignal(default, null):FlxTypedSignal<String->Void> = new FlxTypedSignal<String->Void>();
 
+  public static function installNativeHandler():Void
+  {
+    #if FEATURE_NATIVE_CRASH_HANDLER
+    funkin.external.crash.NativeCrash.install(LOG_FOLDER, 'LuaSlice');
+    #end
+  }
+
+  /**
+   * The stack of an error that was caught and rethrown elsewhere.
+   */
+  public static var pendingStack:Null<Array<haxe.CallStack.StackItem>> = null;
+
   /**
    * Initializes
    */
   public static function initialize():Void
   {
+    // In case it was not installed earlier in startup.
+    installNativeHandler();
+
     trace('[LOG] Enabling standard uncaught error handler...');
     Lib.current.loaderInfo.uncaughtErrorEvents.addEventListener(UncaughtErrorEvent.UNCAUGHT_ERROR, onUncaughtError);
 
@@ -61,6 +76,7 @@ class CrashHandler
     }
 
     handlingCrash = true;
+    trace('[CRASH] Uncaught error: ' + message);
 
     try
     {
@@ -98,11 +114,7 @@ class CrashHandler
       trace('Error while handling crash: ' + e);
     }
 
-    #if sys
-    Sys.sleep(1); // wait a few moments of margin to process.
-    // Exit the game. Since it threw an error, we use a non-zero exit code.
-    openfl.Lib.application.window.close();
-    #end
+    exitAfterCrash();
   }
 
   static function onCriticalError(message:String):Void
@@ -148,10 +160,24 @@ class CrashHandler
       trace('Message: $message');
     }
 
+    exitAfterCrash();
+  }
+  static function exitAfterCrash():Void
+  {
     #if sys
-    Sys.sleep(1); // wait a few moments of margin to process.
-    // Exit the game. Since it threw an error, we use a non-zero exit code.
-    openfl.Lib.application.window.close();
+    Sys.sleep(1);
+
+    try
+    {
+      var window:Null<lime.ui.Window> = openfl.Lib.application?.window;
+      if (window != null) window.close();
+    }
+    catch (e:Dynamic)
+    {
+      trace('Error while closing the window: $e');
+    }
+
+    Sys.exit(1);
     #end
   }
 
@@ -388,12 +414,13 @@ class CrashHandler
     var errorMessage:String = "";
     var callStack:Array<haxe.CallStack.StackItem> = try
     {
-      haxe.CallStack.exceptionStack(true);
+      pendingStack ?? haxe.CallStack.exceptionStack(true);
     }
     catch (stackError:Dynamic)
     {
       [];
     };
+    pendingStack = null;
 
     errorMessage += try
     {
@@ -470,24 +497,10 @@ class CrashHandler
 
   static function renderMethod():String
   {
+    // switch/case resulted in a Null Object Reference when called before Flixel initialized.
     var outputStr:String = 'UNKNOWN';
-    outputStr = try
-    {
-      switch (FlxG.renderMethod)
-      {
-        case FlxRenderMethod.DRAW_TILES:
-          'DRAW_TILES';
-        case FlxRenderMethod.BLITTING:
-          'BLITTING';
-        default:
-          'UNKNOWN';
-      }
-    }
-    catch (e)
-    {
-      'ERROR ON QUERY RENDER METHOD: ${e}';
-    }
-
+    if (FlxG.renderMethod == FlxRenderMethod.DRAW_TILES) outputStr = 'DRAW_TILES';
+    if (FlxG.renderMethod == FlxRenderMethod.BLITTING) outputStr = 'BLITTING';
     return outputStr;
   }
 }

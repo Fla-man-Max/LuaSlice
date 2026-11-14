@@ -4,7 +4,7 @@ package funkin.ui.debug.charting.toolboxes;
 import flixel.addons.display.FlxTiledSprite;
 import flixel.math.FlxMath;
 import funkin.audio.SoundGroup;
-import funkin.ui.debug.charting.commands.SetFreeplayPreviewCommand;
+import funkin.ui.debug.charting.commands.song.SetFreeplayPreviewCommand;
 import funkin.ui.haxeui.components.WaveformPlayer;
 import funkin.ui.freeplay.FreeplayState;
 import haxe.ui.backend.flixel.components.SpriteWrapper;
@@ -21,7 +21,7 @@ import haxe.ui.events.UIEvent;
  * The toolbox which allows modifying information like Song Title, Scroll Speed, Characters/Stages, and starting BPM.
  */
 // @:nullSafety // TODO: Fix null safety when used with HaxeUI build macros.
-@:access(funkin.ui.debug.charting.ChartEditorState) @:build(haxe.ui.ComponentBuilder.build('assets/exclude/data/ui/chart-editor/toolboxes/freeplay.xml'))
+@:access(funkin.ui.debug.charting.ChartEditorState) @:build(haxe.ui.ComponentBuilder.build('assets/exclude/ui/editors/chart-editor/toolboxes/freeplay.xml'))
 class ChartEditorFreeplayToolbox extends ChartEditorBaseToolbox
 {
   var waveformContainer:Absolute;
@@ -102,6 +102,9 @@ class ChartEditorFreeplayToolbox extends ChartEditorBaseToolbox
   var waveformMagicFactor:Float = 1.0;
 
   var audioPreviewTracks:SoundGroup;
+  var previewInstrumental:Null<funkin.audio.FunkinSound>;
+  var previewPlayer:Null<funkin.audio.FunkinSound>;
+  var previewOpponent:Null<funkin.audio.FunkinSound>;
   var tickTiledSprite:FlxTiledSprite;
   var freeplayPreviewVolume(get, null):Float;
 
@@ -124,7 +127,7 @@ class ChartEditorFreeplayToolbox extends ChartEditorBaseToolbox
   function onClose(event:UIEvent)
   {
     stopAudioPreview();
-    chartEditorState.menubarItemToggleToolboxFreeplay.selected = false;
+    if (chartEditorState.menubarItemToggleToolboxFreeplay != null) chartEditorState.menubarItemToggleToolboxFreeplay.selected = false;
   }
 
   function initialize():Void
@@ -255,17 +258,25 @@ class ChartEditorFreeplayToolbox extends ChartEditorBaseToolbox
     else
     {
       audioPreviewTracks.stop();
+      for (track in audioPreviewTracks.members) if (track != null) track.destroy();
       audioPreviewTracks.clear();
     }
 
+    previewInstrumental = null;
+    previewPlayer = null;
+    previewOpponent = null;
+    if (chartEditorState.audioInstTrack == null) return;
     var instTrack = chartEditorState.audioInstTrack.clone();
+    previewInstrumental = instTrack;
     audioPreviewTracks.add(instTrack);
 
     var playerVoice = chartEditorState.audioVocalTrackGroup.getPlayerVoice();
-    if (playerVoice != null) audioPreviewTracks.add(playerVoice.clone());
+    previewPlayer = playerVoice?.clone();
+    if (previewPlayer != null) audioPreviewTracks.add(previewPlayer);
 
     var opponentVoice = chartEditorState.audioVocalTrackGroup.getOpponentVoice();
-    if (opponentVoice != null) audioPreviewTracks.add(opponentVoice.clone());
+    previewOpponent = opponentVoice?.clone();
+    if (previewOpponent != null) audioPreviewTracks.add(previewOpponent);
 
     // Build player waveform.
     // waveformMusic.waveform.forceUpdate = true;
@@ -446,19 +457,19 @@ class ChartEditorFreeplayToolbox extends ChartEditorBaseToolbox
 
   public function addOffsetsToAudioPreview():Void
   {
-    var trackInst = audioPreviewTracks.members[0];
+    var trackInst = previewInstrumental;
     if (trackInst != null)
     {
       trackInst.time -= chartEditorState.currentInstrumentalOffset;
     }
 
-    var trackPlayer = audioPreviewTracks.members[1];
+    var trackPlayer = previewPlayer;
     if (trackPlayer != null)
     {
       trackPlayer.time -= chartEditorState.currentVocalOffsetPlayer;
     }
 
-    var trackOpponent = audioPreviewTracks.members[2];
+    var trackOpponent = previewOpponent;
     if (trackOpponent != null)
     {
       trackOpponent.time -= chartEditorState.currentVocalOffsetOpponent;

@@ -4,6 +4,9 @@ import flixel.tweens.FlxTween;
 import flixel.util.FlxTimer;
 import funkin.audio.FunkinSound;
 import funkin.audio.FunkinSoundscape;
+import funkin.assets.Assets.AssetType;
+import funkin.assets.Assets;
+import funkin.assets.ValidatedPaths as Paths;
 
 /**
  * Handles the mod menu ambience that plays, along with various sound effects that play at random.
@@ -19,7 +22,7 @@ class ModMenuAmbience extends FunkinSoundscape
   /**
    * The path to the PhantomArcade easter egg sound.
    */
-  public static final EASTER_EGG_PATH:String = Paths.sound('ui/mods/sounds/phantomarcade-trapped');
+  public static final EASTER_EGG_PATH:String = Paths.sound('ui/mods/sounds/phantomarcade-trapped', false).toString();
 
   var _easterEgg:Null<FunkinSound> = null;
 
@@ -30,6 +33,7 @@ class ModMenuAmbience extends FunkinSoundscape
 
   override function playRandomSound():Void
   {
+    if (destroyed) return;
     super.playRandomSound();
 
     if (_currentSFX != null)
@@ -40,6 +44,7 @@ class ModMenuAmbience extends FunkinSoundscape
 
       if (usedWeight <= 1)
       {
+        // Easter egg. Can never play again.
         soundList.splice(index, 1);
         weights.splice(index, 1);
       }
@@ -48,7 +53,9 @@ class ModMenuAmbience extends FunkinSoundscape
 
   override function onSoundFadeIn(tween:FlxTween):Void
   {
-    FlxTimer.wait(EASTER_EGG_TIMER, () ->
+    if (destroyed) return;
+    // 180 seconds -> PhantomArcade easter egg
+    scheduleSound(EASTER_EGG_TIMER, () ->
     {
       _easterEgg = FunkinSound.playOnce(EASTER_EGG_PATH);
     });
@@ -63,4 +70,3 @@ class ModMenuAmbience extends FunkinSoundscape
     if (_easterEgg != null) _easterEgg.destroy();
   }
 }
-

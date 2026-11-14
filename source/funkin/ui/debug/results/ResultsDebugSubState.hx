@@ -1,6 +1,6 @@
 package funkin.ui.debug.results;
 
-import funkin.play.ResultState.ResultsStateParams;
+import funkin.play.ResultState;
 import funkin.ui.MenuList.MenuTypedList;
 import funkin.ui.MenuList.MenuTypedItem;
 import flixel.text.FlxText;
@@ -9,6 +9,8 @@ import funkin.ui.freeplay.charselect.PlayableCharacter;
 import funkin.ui.options.items.CheckboxPreferenceItem;
 import flixel.util.FlxTimer;
 import flixel.tweens.FlxTween;
+import funkin.ui.mainmenu.MainMenuState;
+import funkin.ui.transition.Transition;
 
 /**
  * Debug substate to configure the results screen for testing purposes,
@@ -33,6 +35,19 @@ class ResultsDebugSubState extends MusicBeatSubState
     createItems();
   }
 
+  override function update(elapsed:Float):Void
+  {
+    super.update(elapsed);
+
+    if (controls.BACK)
+    {
+      Transition.switchState(() -> new MainMenuState(), {
+        assetQuery: MainMenuState.queryAssets,
+        transition: None,
+      });
+    }
+  }
+
   var returnToDebugScreen:Bool = false;
 
   function createItems():Void
@@ -42,20 +57,28 @@ class ResultsDebugSubState extends MusicBeatSubState
       // I'm being lazy, and putting a timer here so that when you enter result screen you don't immediately press an input
       new FlxTimer().start(0.5, function(_)
       {
-        if (returnToDebugScreen)
-        {
-          var resultState:funkin.play.ResultState = new funkin.play.ResultState(resultsParams);
-          resultState.closeCallback = function()
+        // NOTE: We use () -> new ResultState() to delay the ResultState constructor
+        // until after all queried assets have been loaded. This prevents assets being
+        // requested before they are cached.
+
+        Transition.openSubState(() -> new ResultState(resultsParams), {
+          transition: BlackScreen(None, None),
+          assetQuery: ResultState.queryAssets.bind(_, resultsParams),
+          shouldStopMusic: true,
+          onConstruct: (subState) ->
           {
-            FlxTimer.globalManager.clear();
-            FlxTween.globalManager.clear();
-            FlxG.sound.music?.stop();
-            FlxG.cameras.reset();
-          };
-          openSubState(resultState);
-        }
-        else
-          FlxG.switchState(() -> new funkin.play.ResultState(resultsParams));
+            if (!returnToDebugScreen) return;
+
+            var resultState:ResultState = cast subState;
+            resultState.closeCallback = () ->
+            {
+              FlxTimer.globalManager.clear();
+              FlxTween.globalManager.clear();
+              FlxG.sound.music?.stop();
+              FlxG.cameras.reset();
+            };
+          }
+        });
       });
     });
     createToggleListItem("Character", PlayerRegistry.instance.listEntryIds(), function(result:String)
@@ -72,6 +95,16 @@ class ResultsDebugSubState extends MusicBeatSubState
     {
       resultsParams.scoreData.tallies = DebugTallies.getTallyForRank(result);
     });
+    createToggleListItem("New Highscore", ["True", "False"], function(result:String)
+    {
+      var highscoreEnabled:Bool = true;
+      if (result == "False") highscoreEnabled = false;
+      resultsParams.isNewHighscore = highscoreEnabled;
+    });
+    createToggleListItem("Difficulty", Constants.DEFAULT_DIFFICULTY_LIST_FULL, function(result:String)
+    {
+      resultsParams.difficultyId = result;
+    });
     createToggleListItem("Force Rank Slam (Freeplay Only)", ["No", "Yes"], function(result:String)
     {
       resultsParams.forceRankSlam = result == "Yes";
@@ -82,7 +115,7 @@ class ResultsDebugSubState extends MusicBeatSubState
   {
     var txt:FlxText = new FlxText(0, 0, name);
     txt.antialiasing = false;
-    txt.setFormat(Paths.font('vcr.ttf'), 32);
+    txt.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 32);
 
     var menuItem:MenuTypedItem<FlxText> = new MenuTypedItem<FlxText>(10, 36 * items.length, txt, name, onChange);
     menuItem.setEmptyBackground();
@@ -117,7 +150,7 @@ class ResultsDebugSubState extends MusicBeatSubState
     // We create and call the labelCallback here to initalize it
     var labelCallback:Void->Void = function()
     {
-      menuItem.label.text = name + ":" + toggleList[toggleCounter];
+      menuItem.label.text = name + ": " + toggleList[toggleCounter].charAt(0).toUpperCase() + toggleList[toggleCounter].substr(1);
       onChange(toggleList[toggleCounter]);
     };
     labelCallback();
@@ -154,7 +187,7 @@ class ResultsDebugSubState extends MusicBeatSubState
           combo: 69,
           maxCombo: 69,
           totalNotesHit: 140,
-          totalNotes: 190
+          totalNotes: 190,
         }
       },
     };

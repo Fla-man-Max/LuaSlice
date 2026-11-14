@@ -3,17 +3,18 @@ package funkin.ui.debug.charting.contextmenus;
 #if FEATURE_CHART_EDITOR
 import haxe.ui.containers.menus.MenuItem;
 import haxe.ui.components.NumberStepper;
+import funkin.ui.debug.charting.commands.notes.ExtendNoteLengthCommand;
+import funkin.ui.debug.charting.commands.notes.FlipNotesCommand;
+import funkin.ui.debug.charting.commands.notes.MoveNotesCommand;
+import funkin.ui.debug.charting.commands.notes.RemoveNotesCommand;
 import haxe.ui.components.DropDown;
 import haxe.ui.components.Label;
 import haxe.ui.core.Screen;
 import haxe.ui.events.UIEvent;
 import funkin.data.song.SongData.SongNoteData;
-import funkin.ui.debug.charting.commands.MoveNotesCommand;
-import funkin.ui.debug.charting.commands.FlipNotesCommand;
-import funkin.ui.debug.charting.commands.RemoveNotesCommand;
-import funkin.ui.debug.charting.commands.ExtendNoteLengthCommand;
 
-@:access(funkin.ui.debug.charting.ChartEditorState) @:build(haxe.ui.ComponentBuilder.build("assets/exclude/data/ui/chart-editor/context-menus/hold-note.xml"))
+@:access(funkin.ui.debug.charting.ChartEditorState)
+@:build(haxe.ui.ComponentBuilder.build("assets/exclude/ui/editors/chart-editor/context-menus/hold-note.xml"))
 class ChartEditorHoldNoteContextMenu extends ChartEditorBaseContextMenu
 {
   var contextmenuNoteKind:Label;
@@ -141,8 +142,7 @@ class ChartEditorHoldNoteContextMenu extends ChartEditorBaseContextMenu
       contextmenuPosition.value = data.time;
       contextmenuPosition.resumeEvent(UIEvent.CHANGE, true, true);
     }
-    else if (id == "STEPS"
-      && contextmenuPosition.value != (Math.round(data.getStepTime() / chartEditorState.noteSnapRatio) * chartEditorState.noteSnapRatio))
+    else if (id == "STEPS" && contextmenuPosition.value != (Math.round(data.getStepTime() / chartEditorState.noteSnapRatio) * chartEditorState.noteSnapRatio))
     {
       contextmenuPosition.pauseEvent(UIEvent.CHANGE, true);
       contextmenuPosition.value = Math.round(data.getStepTime() / chartEditorState.noteSnapRatio) * chartEditorState.noteSnapRatio;
@@ -233,8 +233,7 @@ class ChartEditorHoldNoteContextMenu extends ChartEditorBaseContextMenu
       contextmenuLength.value = data.length;
       contextmenuLength.resumeEvent(UIEvent.CHANGE, true, true);
     }
-    else if (id == "STEPS"
-      && contextmenuLength.value != (Math.round(data.getStepLength() / chartEditorState.noteSnapRatio) * chartEditorState.noteSnapRatio))
+    else if (id == "STEPS" && contextmenuLength.value != (Math.round(data.getStepLength() / chartEditorState.noteSnapRatio) * chartEditorState.noteSnapRatio))
     {
       contextmenuLength.pauseEvent(UIEvent.CHANGE, true);
       contextmenuLength.value = Math.round(data.getStepLength() / chartEditorState.noteSnapRatio) * chartEditorState.noteSnapRatio;

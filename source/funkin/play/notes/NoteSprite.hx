@@ -17,8 +17,16 @@ class NoteSprite extends FunkinSprite
    */
   public var holdNoteSprite:SustainTrail;
 
-  var hsvShader:HSVShader;
   var motionBlurFilter:Null<BlurFilter>;
+  var _hsvShader:Null<HSVShader> = null;
+  var hsvShader(get, never):HSVShader;
+
+  function get_hsvShader():HSVShader
+  {
+    if (_hsvShader == null) _hsvShader = new HSVShader();
+
+    return _hsvShader;
+  }
 
   /**
    * The strum time at which the note should be hit, in milliseconds.
@@ -173,12 +181,11 @@ class NoteSprite extends FunkinSprite
     super(0, -9999);
     this.direction = direction;
 
-    this.hsvShader = new HSVShader();
-
     this.alpha = 1;
-
-    setupNoteGraphic(noteStyle);
+    if (noteStyle != null) setupNoteGraphic(noteStyle);
   }
+
+  public var builtNoteStyleId:Null<String> = null;
 
   /**
    * Creates frames and animations
@@ -278,9 +285,13 @@ class NoteSprite extends FunkinSprite
     // The hsvShader should only be applied when it's necessary.
     // Otherwise, it should be turned off to keep note batching.
     this.shader = null;
-    this.hsvShader.hue = 1.0;
-    this.hsvShader.saturation = 1.0;
-    this.hsvShader.value = 1.0;
+
+    if (_hsvShader != null)
+    {
+      _hsvShader.hue = 1.0;
+      _hsvShader.saturation = 1.0;
+      _hsvShader.value = 1.0;
+    }
     updateMotionBlur();
   }
 

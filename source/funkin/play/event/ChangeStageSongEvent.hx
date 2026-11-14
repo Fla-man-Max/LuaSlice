@@ -4,6 +4,8 @@ import funkin.data.event.SongEventSchema;
 import funkin.data.event.SongEventSchema.SongEventFieldType;
 import funkin.data.song.SongData.SongEventData;
 import funkin.data.stage.StageRegistry;
+import funkin.assets.Assets.AssetType;
+import funkin.assets.Paths.AssetPath;
 
 class ChangeStageSongEvent extends SongEvent
 {
@@ -22,6 +24,13 @@ class ChangeStageSongEvent extends SongEvent
     {
       trace(' WARNING '.warning() + ' ChangeStageSongEvent: Could not load stage "${stageId}".');
     }
+  }
+
+  public override function queryAssets(type:AssetType, data:SongEventData):Array<AssetPath>
+  {
+    final id = data.getString('stage') ?? '';
+    if (id == '' || !StageRegistry.instance.hasEntry(id)) return [];
+    return StageRegistry.instance.queryAssets(type, id);
   }
 
   public override function getTitle():String

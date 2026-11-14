@@ -9,6 +9,8 @@ import funkin.graphics.FunkinSprite;
 import funkin.util.SortUtil;
 import funkin.Preferences;
 import flixel.util.FlxColor;
+import funkin.assets.Paths;
+import funkin.assets.Assets;
 
 /**
  * The graphic for the album roll in the FreeplayState.
@@ -34,13 +36,40 @@ class AlbumRoll extends FlxSpriteGroup
     return value;
   }
 
-  final ALBUM_ART_SYMBOL:String = "album art placeholder";
+  final ALBUM_ART_SYMBOL:String = 'album art placeholder';
   var newAlbumArt:FunkinSprite;
   var albumTitle:Null<FunkinSprite> = null;
   var difficultyStars:DifficultyStars;
   var _exitMovers:Null<FreeplayState.ExitMoverData>;
   var _exitMoversCharSel:Null<FreeplayState.ExitMoverData>;
   var albumData:Null<Album> = null;
+
+  /**
+   * Return a list of all AssetPaths that this UI element depends on to load.
+   * NOTE: You don't need to include assets which get fetched asynchronously.
+   * @param type The type of AssetPath to return a list of paths for
+   * @return The list of assets
+   */
+  public static function queryAssets(type:AssetType):Array<funkin.assets.Paths.AssetPath>
+  {
+    var results:Array<funkin.assets.Paths.AssetPath> = [];
+
+    results.append(AlbumRegistry.instance.queryAllAssets(type));
+
+    switch (type)
+    {
+      case IMAGE:
+        results.append(Paths.animateAtlas('ui/freeplay/interface/freeplay-album').image());
+
+      case JSON:
+        results.append(Paths.animateAtlas('ui/freeplay/interface/freeplay-album').json());
+
+      default:
+        // Do nothing.
+    }
+
+    return results;
+  }
 
   public function new()
   {
@@ -49,7 +78,13 @@ class AlbumRoll extends FlxSpriteGroup
     if (Preferences.isLowQualityMinimal())
       newAlbumArt = new FunkinSprite((FlxG.width + -360) - FullScreenScaleMode.gameNotchSize.x, 220).makeSolidColor(1, 1, FlxColor.TRANSPARENT);
     else
-      newAlbumArt = FunkinSprite.createTextureAtlas((FlxG.width + -360) - FullScreenScaleMode.gameNotchSize.x, 220, "freeplay/albumRoll/freeplayAlbum");
+    {
+    newAlbumArt = new FunkinSprite((FlxG.width + -360) - FullScreenScaleMode.gameNotchSize.x, 220).loadTextureAtlas('ui/freeplay/interface/freeplay-album');
+    newAlbumArt.anim.addByFrameLabel('intro', 'intro', 24, false);
+    newAlbumArt.anim.addByFrameLabel('idle', 'idle', 24);
+    newAlbumArt.anim.addByFrameLabel('switch', 'switch', 24, false);
+
+    }
     newAlbumArt.visible = false;
 
     difficultyStars = new DifficultyStars((FlxG.width - 330) - FullScreenScaleMode.gameNotchSize.x, 209);
@@ -58,19 +93,18 @@ class AlbumRoll extends FlxSpriteGroup
     add(newAlbumArt);
     add(difficultyStars);
 
-    if (!Preferences.isLowQualityMinimal()) buildAlbumTitle("freeplay/albumRoll/volume1-text");
+    if (!Preferences.isLowQualityMinimal()) buildAlbumTitle('ui/freeplay/albums/volume1-text');
     if (albumTitle != null) albumTitle.visible = false;
 
-    if (!Preferences.isLowQualityMinimal()) newAlbumArt.anim.onFinish.add(onAlbumFinish);
+    if (!Preferences.isLowQualityMinimal()) newAlbumArt.animation.onFinish.add(onAlbumFinish);
   }
 
   function onAlbumFinish(animName:String):Void
   {
     // Play the idle animation for the current album.
-    if (animName != "idle")
+    if (animName != 'idle')
     {
-      newAlbumArt.anim.play('idle', true);
-      newAlbumArt.anim.curAnim.looped = true;
+      newAlbumArt.animation.play('idle', true);
     }
   }
 
@@ -98,9 +132,11 @@ class AlbumRoll extends FlxSpriteGroup
 
     if (!Preferences.isLowQualityMinimal())
     {
-      var albumGraphic = Paths.image(albumData.getAlbumArtAssetKey());
-      newAlbumArt.replaceSymbolGraphic(ALBUM_ART_SYMBOL, albumGraphic);
-      buildAlbumTitle(albumData.getAlbumTitleAssetKey(), albumData.getAlbumTitleOffsets());
+    // Update the album art.
+    var albumGraphic:String = Paths.image(albumData.getAlbumArtAssetKey()).toFlxGraphicAsset();
+    newAlbumArt.replaceSymbolGraphic(ALBUM_ART_SYMBOL, albumGraphic);
+
+    buildAlbumTitle(albumData.getAlbumTitleAssetKey(), albumData.getAlbumTitleOffsets());
     }
     applyExitMovers();
     refresh();
@@ -115,7 +151,8 @@ class AlbumRoll extends FlxSpriteGroup
    * Apply exit movers for the album roll.
    * @param exitMovers The exit movers to apply.
    */
-  public function applyExitMovers(?exitMovers:FreeplayState.ExitMoverData, ?exitMoversCharSel:FreeplayState.ExitMoverData):Void
+  public function applyExitMovers(?exitMovers:FreeplayState.ExitMoverData,
+    ?exitMoversCharSel:FreeplayState.ExitMoverData):Void
   {
     if (exitMovers == null)
     {
@@ -168,7 +205,7 @@ class AlbumRoll extends FlxSpriteGroup
 
     if (albumTitle != null) albumTitle.visible = false;
     newAlbumArt.visible = true;
-    newAlbumArt.anim.play('intro', true);
+    newAlbumArt.animation.play('intro', true);
 
     difficultyStars.visible = false;
     difficultyStars.flameCheck();
@@ -190,7 +227,7 @@ class AlbumRoll extends FlxSpriteGroup
       return;
     }
     // Weird workaround
-    newAlbumArt.anim.play('switch', true);
+    newAlbumArt.animation.play('switch', true);
     if (albumTitle != null) albumTitle.animation.play('switch');
   }
 
@@ -199,7 +236,8 @@ class AlbumRoll extends FlxSpriteGroup
     if (!Preferences.isLowQualityMinimal() && albumTitle != null && albumTitle.frames != null) albumTitle.visible = true;
   }
 
-  public function buildAlbumTitle(assetKey:String, ?titleOffsets:Null<Array<Float>>):Void
+  public function buildAlbumTitle(assetKey:String,
+    ?titleOffsets:Null<Array<Float>>):Void
   {
     if (albumTitle != null)
     {
@@ -214,7 +252,7 @@ class AlbumRoll extends FlxSpriteGroup
       titleOffsets = [0, 0];
     }
 
-    albumTitle = FunkinSprite.createSparrow((FlxG.width - 355) - FullScreenScaleMode.gameNotchSize.x, 500, assetKey);
+    albumTitle = new FunkinSprite((FlxG.width - 355) - FullScreenScaleMode.gameNotchSize.x, 500).loadSparrow(assetKey);
     albumTitle.visible = this.visible && (albumTitle.frames != null && newAlbumArt.visible) && difficultyStars.visible;
     albumTitle.animation.addByPrefix('idle', 'idle0', 24, true);
     albumTitle.animation.addByPrefix('switch', 'switch0', 24, false);

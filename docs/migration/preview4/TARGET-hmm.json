@@ -1,0 +1,218 @@
+{
+  "dependencies": [
+    {
+      "name": "FlxPartialSound",
+      "type": "git",
+      "ref": "cf4d3d37e309c4594813d7cc06aec5a800cdb090",
+      "url": "https://github.com/FunkinCrew/FlxPartialSound"
+    },
+    {
+      "name": "astc-compressor",
+      "type": "git",
+      "ref": "6c0fa6f46d3547ca58859b6ede87e659018a7ff5",
+      "url": "https://github.com/KarimAkra/astc-compressor"
+    },
+    {
+      "name": "extension-admob",
+      "type": "git",
+      "ref": "c3fea546634c0e799195e6c45d1666e1683ee59d",
+      "url": "https://github.com/FunkinCrew/extension-admob"
+    },
+    {
+      "name": "extension-agesignals",
+      "type": "git",
+      "ref": "26a95f90c39db95d9fab59244f22e612b2295957",
+      "url": "https://github.com/FunkinCrew/extension-agesignals"
+    },
+    {
+      "name": "extension-androidtools",
+      "type": "haxelib",
+      "version": "2.2.2"
+    },
+    {
+      "name": "dox",
+      "type": "haxelib",
+      "version": "1.6.0"
+    },
+    {
+      "name": "extension-haptics",
+      "type": "git",
+      "ref": "8978b34b437f943a0d164bd6b3d8b69bd0025081",
+      "url": "https://github.com/LimeExtensions/extension-haptics"
+    },
+    {
+      "name": "extension-iapcore",
+      "type": "git",
+      "ref": "fd22c391be8bb59ded6c0b3f5fcc5f6358dd8897",
+      "url": "https://github.com/LimeExtensions/extension-iapcore"
+    },
+    {
+      "name": "extension-iarcore",
+      "type": "git",
+      "ref": "a78e49fe69feecef9abcdbcfd08ccc510ed00c6c",
+      "url": "https://github.com/LimeExtensions/extension-iarcore"
+    },
+    {
+      "name": "extension-webviewcore",
+      "type": "git",
+      "ref": "82f84ca88261dbdeca9a5276c594dac5209886ca",
+      "url": "https://github.com/LimeExtensions/extension-webviewcore"
+    },
+    {
+      "name": "flixel",
+      "type": "git",
+      "ref": "9784919e02435f2bc4790d615e4c211652975f29",
+      "url": "https://github.com/FunkinCrew/flixel"
+    },
+    {
+      "name": "flixel-addons",
+      "type": "git",
+      "ref": "7df068dbecefa40328d60a1849126a8318b3c80e",
+      "url": "https://github.com/FunkinCrew/flixel-addons"
+    },
+    {
+      "name": "flixel-animate",
+      "type": "git",
+      "ref": "4547469e87a504e1242ab29ec4ee1ec134b11bea",
+      "url": "https://github.com/FunkinCrew/flixel-animate"
+    },
+    {
+      "name": "format",
+      "type": "haxelib",
+      "version": "3.8.0"
+    },
+    {
+      "name": "svg",
+      "type": "haxelib",
+      "version": "1.1.3"
+    },
+    {
+      "name": "funkin.vis",
+      "type": "git",
+      "ref": "b6717304eb154f7b1201ca56b789c01b6a43439f",
+      "url": "https://github.com/FunkinCrew/funkVis"
+    },
+    {
+      "name": "tink_core",
+      "type": "haxelib",
+      "version": "1.26.0"
+    },
+    {
+      "name": "hamcrest",
+      "type": "haxelib",
+      "version": "3.0.0"
+    },
+    {
+      "name": "haxe-concurrent",
+      "type": "git",
+      "dir": null,
+      "ref": "3624fbd33e315b0684696bf310798a56d524a8f5",
+      "url": "https://github.com/FunkinCrew/haxe-concurrent"
+    },
+    {
+      "name": "haxeui-core",
+      "type": "git",
+      "ref": "30019728717e641cb866ba518141696ed3b4ae0a",
+      "url": "https://github.com/FunkinCrew/haxeui-core"
+    },
+    {
+      "name": "haxeui-flixel",
+      "type": "git",
+      "ref": "0cad69fb43adbf31978ea4f9f8580f83a9fe64bd",
+      "url": "https://github.com/FunkinCrew/haxeui-flixel"
+    },
+    {
+      "name": "hxcpp",
+      "type": "git",
+      "ref": "d5bda40ac13f2823fe1bdcb5476e0eb027f1e7e9",
+      "url": "https://github.com/FunkinCrew/hxcpp"
+    },
+    {
+      "name": "hxcpp-debug-server",
+      "type": "git",
+      "dir": "hxcpp-debug-server",
+      "ref": "7459934666a473a4cc4d066ba4a93ef92f1ce94c",
+      "url": "https://github.com/FunkinCrew/hxcpp-debugger"
+    },
+    {
+      "name": "hxdiscord_rpc",
+      "type": "haxelib",
+      "version": "1.3.0"
+    },
+    {
+      "name": "hxjsonast",
+      "type": "git",
+      "ref": "20e72cc68c823496359775ac1f06500e67f189d5",
+      "url": "https://github.com/nadako/hxjsonast"
+    },
+    {
+      "name": "hxgamemode",
+      "type": "haxelib",
+      "version": "1.0.1"
+    },
+    {
+      "name": "hxp",
+      "type": "haxelib",
+      "version": "1.3.0"
+    },
+    {
+      "name": "hxvlc",
+      "type": "git",
+      "ref": "458d07d89aa22a01282c3d79d12e66702fca70d3",
+      "url": "https://github.com/MAJigsaw77/hxvlc"
+    },
+    {
+      "name": "json2object",
+      "type": "git",
+      "ref": "316eaefbbe6ea4aad9726611662a75605c2f6b20",
+      "url": "https://github.com/FunkinCrew/json2object"
+    },
+    {
+      "name": "jsonpatch",
+      "type": "haxelib",
+      "version": "1.1.0"
+    },
+    {
+      "name": "jsonpath",
+      "type": "git",
+      "ref": "23f5821ed0a5241c10afe2fa12bfb6ae4fb8f17f",
+      "url": "https://github.com/EliteMasterEric/jsonpath"
+    },
+    {
+      "name": "lime",
+      "type": "git",
+      "ref": "8d77f6538d8072e7a8fd172fa40bddb62b9a991f",
+      "url": "https://github.com/FunkinCrew/lime"
+    },
+    {
+      "name": "newgrounds",
+      "type": "git",
+      "ref": "60162762e6ca65da011ffee7a6617f547ea5dff9",
+      "url": "https://github.com/FunkinCrew/Newgrounds"
+    },
+    {
+      "name": "openfl",
+      "type": "git",
+      "ref": "43868e361c6b8dab4efc7326256f59f133e7b4b0",
+      "url": "https://github.com/FunkinCrew/openfl"
+    },
+    {
+      "name": "polymod",
+      "type": "git",
+      "ref": "78d306bcf301141b8591a24b5eb188d33a0417ae",
+      "url": "https://github.com/FunkinCrew/polymod"
+    },
+    {
+      "name": "thx.core",
+      "type": "git",
+      "ref": "2bf2b992e06159510f595554e6b952e47922f128",
+      "url": "https://github.com/fponticelli/thx.core"
+    },
+    {
+      "name": "thx.semver",
+      "type": "git",
+      "ref": "d7ed6011c506130702ef4953a9ec8ecc86b32210",
+      "url": "https://github.com/FunkinCrew/thx.semver"
+    }
+  ]
+}

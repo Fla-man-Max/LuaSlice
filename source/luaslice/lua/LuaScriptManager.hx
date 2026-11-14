@@ -22,6 +22,7 @@ import funkin.Preferences;
 import funkin.save.Save;
 import funkin.data.stage.StageRegistry;
 import funkin.graphics.FunkinSprite;
+import funkin.modding.PolymodHandler;
 import funkin.modding.events.ScriptEvent;
 import funkin.play.cutscene.VideoCutscene;
 import funkin.play.PauseSubState;
@@ -31,6 +32,7 @@ import funkin.ui.options.OptionsState;
 import funkin.util.MemoryUtil;
 import funkin.util.WindowUtil;
 import haxe.Json;
+import haxe.io.Path;
 import hxluajit.Lua;
 import hxluajit.LuaL;
 import hxluajit.Types.Lua_State;
@@ -39,7 +41,10 @@ import sys.FileSystem;
 import sys.io.File;
 #end
 
-class LuaScriptManager
+typedef LuaScriptManager = LuaScriptManagerImpl;
+
+@:native('luaslice.lua.LuaScriptManager')
+private final class LuaScriptManagerImpl
 {
   #if FEATURE_LUA_SCRIPTS
   static var activeManager:Null<LuaScriptManager>;
@@ -88,6 +93,16 @@ class LuaScriptManager
 
   public function loadScript(path:String):Bool
   {
+    var policy = luaslice.debug.ModDebugSession.current?.scripts;
+    if (policy != null)
+    {
+      policy.discover('LuaSlice Lua', '', path, false);
+      if (!policy.isEnabled('LuaSlice Lua', '', path))
+      {
+        policy.note('LuaSlice Lua', '', path, 'Disabled');
+        return false;
+      }
+    }
     if (!FileSystem.exists(path))
     {
       reportLuaWarning('missing-script', path, null, 'Script does not exist: ${path}');
@@ -163,6 +178,7 @@ class LuaScriptManager
     }
 
     if (!loadedScripts.contains(path)) loadedScripts.push(path);
+    policy?.note('LuaSlice Lua', '', path, 'Loaded');
     scriptGlobalModes.set(path, isGlobalScript);
     if (envRef != LuaL.NOREF) scriptEnvRefs.set(path, envRef);
     hookPresence.clear();
@@ -580,19 +596,7 @@ class LuaScriptManager
   public static function loadOptionsScriptsForState(optionsState:OptionsState):Null<LuaScriptManager>
   {
     var scriptPaths:Array<String> = [];
-    collectOptionLuaScripts('mods/scripts/options', scriptPaths, '.luag');
-    collectOptionLuaScripts('mods/scripts/options', scriptPaths, '.lua');
-
-    if (FileSystem.exists('mods') && FileSystem.isDirectory('mods'))
-    {
-      for (modName in FileSystem.readDirectory('mods'))
-      {
-        var modPath = 'mods/${modName}';
-        if (!FileSystem.isDirectory(modPath) || modName == 'scripts') continue;
-        collectOptionLuaScripts('${modPath}/scripts/options', scriptPaths, '.luag');
-        collectOptionLuaScripts('${modPath}/scripts/options', scriptPaths, '.lua');
-      }
-    }
+    collectStateScripts('options', scriptPaths);
 
     var manager:Null<LuaScriptManager> = null;
     var loaded:Map<String, Bool> = [];
@@ -616,19 +620,7 @@ class LuaScriptManager
   public static function loadMainMenuScriptsForState(mainMenuState:MainMenuState):Null<LuaScriptManager>
   {
     var scriptPaths:Array<String> = [];
-    collectScriptFolder('mods/scripts/menu', scriptPaths, '.luag');
-    collectScriptFolder('mods/scripts/menu', scriptPaths, '.lua');
-
-    if (FileSystem.exists('mods') && FileSystem.isDirectory('mods'))
-    {
-      for (modName in FileSystem.readDirectory('mods'))
-      {
-        var modPath = 'mods/${modName}';
-        if (!FileSystem.isDirectory(modPath) || modName == 'scripts') continue;
-        collectScriptFolder('${modPath}/scripts/menu', scriptPaths, '.luag');
-        collectScriptFolder('${modPath}/scripts/menu', scriptPaths, '.lua');
-      }
-    }
+    collectStateScripts('menu', scriptPaths);
 
     var manager:Null<LuaScriptManager> = null;
     var loaded:Map<String, Bool> = [];
@@ -675,17 +667,7 @@ class LuaScriptManager
 
     var scriptPaths:Array<String> = [];
     collectScriptFolder('assets/scripts/engine', scriptPaths, '.luag');
-    addClassScriptPaths('mods', className, scriptPaths);
-
-    if (FileSystem.exists('mods') && FileSystem.isDirectory('mods'))
-    {
-      for (modName in FileSystem.readDirectory('mods'))
-      {
-        final modPath = 'mods/${modName}';
-        if (!FileSystem.isDirectory(modPath) || modName == 'scripts') continue;
-        addClassScriptPaths(modPath, className, scriptPaths);
-      }
-    }
+    for (root in scriptRoots()) addClassScriptPaths(root, className, scriptPaths);
 
     var manager:Null<LuaScriptManager> = null;
     var loaded:Map<String, Bool> = [];
@@ -709,19 +691,7 @@ class LuaScriptManager
   static function loadStateFolderScripts(folderName:String, createHook:String):Null<LuaScriptManager>
   {
     var scriptPaths:Array<String> = [];
-    collectScriptFolder('mods/scripts/${folderName}', scriptPaths, '.luag');
-    collectScriptFolder('mods/scripts/${folderName}', scriptPaths, '.lua');
-
-    if (FileSystem.exists('mods') && FileSystem.isDirectory('mods'))
-    {
-      for (modName in FileSystem.readDirectory('mods'))
-      {
-        var modPath = 'mods/${modName}';
-        if (!FileSystem.isDirectory(modPath) || modName == 'scripts') continue;
-        collectScriptFolder('${modPath}/scripts/${folderName}', scriptPaths, '.luag');
-        collectScriptFolder('${modPath}/scripts/${folderName}', scriptPaths, '.lua');
-      }
-    }
+    collectStateScripts(folderName, scriptPaths);
 
     var manager:Null<LuaScriptManager> = null;
     var loaded:Map<String, Bool> = [];
@@ -844,9 +814,28 @@ class LuaScriptManager
     return pauseMenuConfiguredThisPass;
   }
 
-  static function collectOptionLuaScripts(folder:String, scriptPaths:Array<String>, extension:String):Void
+  static function scriptRoots():Array<String>
   {
-    collectScriptFolder(folder, scriptPaths, extension);
+    final modRoot = PolymodHandler.getModRoot();
+    final roots = [modRoot];
+    for (dir in PolymodHandler.loadedModDirs)
+    {
+      if (dir == null || dir == '' || dir == '.' || dir == '..' || dir == 'scripts'
+        || dir.indexOf('/') >= 0 || dir.indexOf('\\') >= 0 || dir.indexOf(':') >= 0) continue;
+      final root = Path.join([modRoot, dir]);
+      if (!roots.contains(root) && FileSystem.isDirectory(root)) roots.push(root);
+    }
+    return roots;
+  }
+
+  static function collectStateScripts(folderName:String, scriptPaths:Array<String>):Void
+  {
+    for (root in scriptRoots())
+    {
+      final folder = '${root}/scripts/${folderName}';
+      collectScriptFolder(folder, scriptPaths, '.luag');
+      collectScriptFolder(folder, scriptPaths, '.lua');
+    }
   }
 
   static function collectScriptFolder(folder:String, scriptPaths:Array<String>, extension:String):Void
@@ -1069,39 +1058,16 @@ class LuaScriptManager
 
   function configurePackagePath():Void
   {
-    var paths:Array<String> = [
-      'mods/?.lua',
-      'mods/?.luag',
-      'mods/?/init.lua',
-      'mods/?/init.luag',
-      'mods/scripts/?.lua',
-      'mods/scripts/?.luag',
-      'mods/scripts/?/init.lua',
-      'mods/scripts/?/init.luag'
-    ];
-    addPackagePaths(paths, 'mods/scripts');
-
-    if (FileSystem.exists('mods') && FileSystem.isDirectory('mods'))
+    final paths:Array<String> = [];
+    final roots = scriptRoots();
+    for (i in 0...roots.length)
     {
-      for (modName in FileSystem.readDirectory('mods'))
-      {
-        var modPath = 'mods/${modName}';
-        if (!FileSystem.isDirectory(modPath)) continue;
-        paths.push('${modPath}/?.lua');
-        paths.push('${modPath}/?.luag');
-        paths.push('${modPath}/?/init.lua');
-        paths.push('${modPath}/?/init.luag');
-        paths.push('${modPath}/script/?.lua');
-        paths.push('${modPath}/script/?.luag');
-        paths.push('${modPath}/script/?/init.lua');
-        paths.push('${modPath}/script/?/init.luag');
-        paths.push('${modPath}/scripts/?.lua');
-        paths.push('${modPath}/scripts/?.luag');
-        paths.push('${modPath}/scripts/?/init.lua');
-        paths.push('${modPath}/scripts/?/init.luag');
-        addPackagePaths(paths, '${modPath}/script');
-        addPackagePaths(paths, '${modPath}/scripts');
-      }
+      final root = roots[i];
+      appendPackageDirectory(paths, root);
+      if (i != 0) appendPackageDirectory(paths, '${root}/script');
+      appendPackageDirectory(paths, '${root}/scripts');
+      if (i != 0) addPackagePaths(paths, '${root}/script');
+      addPackagePaths(paths, '${root}/scripts');
     }
 
     Lua.getglobal(state, 'package');
@@ -1117,6 +1083,14 @@ class LuaScriptManager
     Lua.pushstring(state, existingPath + ';' + paths.join(';'));
     Lua.setfield(state, -2, 'path');
     Lua.pop(state, 1);
+  }
+
+  function appendPackageDirectory(paths:Array<String>, folder:String):Void
+  {
+    paths.push('${folder}/?.lua');
+    paths.push('${folder}/?.luag');
+    paths.push('${folder}/?/init.lua');
+    paths.push('${folder}/?/init.luag');
   }
 
   function addPackagePaths(paths:Array<String>, folder:String):Void
@@ -2537,7 +2511,7 @@ class LuaScriptManager
 
   static function lua_flushSave(L:cpp.RawPointer<Lua_State>):Int
   {
-    Save.system.flush();
+    if (luaslice.debug.ModDebugSession.current == null) Save.system.flush();
     return 0;
   }
 
@@ -2549,6 +2523,10 @@ class LuaScriptManager
     var key = readString(L, 1, '');
     var fallback = manager.readValue(L, 2);
     if (key == '') return manager.pushReturn(L, fallback);
+
+    var session = luaslice.debug.ModDebugSession.current;
+    if (session != null)
+      return manager.pushReturn(L, session.getSave('luaslice', manager.currentLuaFiles[0] ?? '', '', key, fallback));
 
     var data = ensureLuaSaveData();
     if (!Reflect.hasField(data, key)) return manager.pushReturn(L, fallback);
@@ -2562,6 +2540,13 @@ class LuaScriptManager
 
     var key = readString(L, 1, '');
     if (key == '') return manager.pushReturn(L, false);
+
+    var session = luaslice.debug.ModDebugSession.current;
+    if (session != null)
+    {
+      session.setSave('luaslice', manager.currentLuaFiles[0] ?? '', '', key, manager.readValue(L, 2));
+      return manager.pushReturn(L, true);
+    }
 
     var data = ensureLuaSaveData();
     Reflect.setField(data, key, manager.readValue(L, 2));
@@ -2728,7 +2713,9 @@ class LuaScriptManager
     if (manager == null) return 0;
     try
     {
-      VideoCutscene.play(Paths.file(readString(L, 1, '')));
+      var path = Paths.file(readString(L, 1, ''));
+      var assetPath = funkin.assets.Paths.file(Paths.stripLibrary(path), haxe.io.Path.extension(path), false, Paths.getLibrary(path));
+      VideoCutscene.play(assetPath);
       return manager.pushReturn(L, true);
     }
     catch (e)

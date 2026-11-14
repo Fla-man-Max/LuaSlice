@@ -1,7 +1,5 @@
 package funkin.audio;
 
-import funkin.util.assets.ResourceCache;
-
 import flixel.math.FlxPoint;
 import flixel.tweens.FlxTween;
 import flixel.util.FlxDestroyUtil.IFlxDestroyable;
@@ -65,16 +63,21 @@ class FunkinSoundscape implements IFlxDestroyable
   var weights:Array<Float> = [];
   var _currentSFX:Null<FunkinSound> = null;
   var _usedInGroup:Map<String, Array<String>> = [];
+  var destroyed:Bool = false;
+  var initialized:Bool = false;
+  var waitTimers:Array<FlxTimer> = [];
+  var ambienceFade:Null<FlxTween> = null;
 
   public function new(params:FunkinSoundscapeSettings)
   {
     this.params = params;
 
-    var paths:Array<String> = ResourceCache.list().filter((path) ->
+    var paths:Array<String> = Assets.list().filter((path) ->
     {
       return path.contains(params.randomSoundPath) && path.endsWith(Constants.EXT_SOUND);
     });
 
+    // Sorts the paths by weight from lowest to highest
     paths.sort((a, b) ->
     {
       var aName:String = a.substring(a.lastIndexOf('/') + 1);
@@ -111,17 +114,21 @@ class FunkinSoundscape implements IFlxDestroyable
    */
   public function initialize():Void
   {
-    if (FlxG.sound.music != null)
-    {
-      FlxG.sound.music.fadeTween?.cancel();
-      FlxG.sound.music.stop();
-      FlxG.sound.music.kill();
-    }
-
-    var ambience = FunkinSound.load(Paths.music(params.baseAmbiencePath), 0.0, true, false, true, true);
-    if (ambience != null) FunkinSound.setMusic(ambience);
-
-    FlxG.sound.music?.fadeIn(params.fadeInTime, 0.0, 1.0, onSoundFadeIn);
+    if (destroyed || initialized) return;
+    initialized = true;
+    FunkinSound.playMusic(params.baseAmbiencePath, {
+      startingVolume: 0.0,
+      overrideExisting: true,
+      restartTrack: true,
+      onLoad: () ->
+      {
+        if (destroyed) return;
+        var music = FlxG.sound.music;
+        if (music == null) return;
+        music.fadeIn(params.fadeInTime, 0.0, 1.0, onSoundFadeIn);
+        ambienceFade = music.fadeTween;
+      }
+    });
   }
 
   /**
@@ -129,7 +136,7 @@ class FunkinSoundscape implements IFlxDestroyable
    */
   public function playRandomSound():Void
   {
-    if (soundList.length == 0) return;
+    if (destroyed || soundList.length == 0) return;
 
     var candidates:Array<String> = soundList.filter((s) ->
     {
@@ -151,10 +158,7 @@ class FunkinSoundscape implements IFlxDestroyable
 
     _currentSFX = FunkinSound.playOnce(randomSound, 1.0, () ->
     {
-      FlxTimer.wait(FlxG.random.float(params.randomTimeRange.x, params.randomTimeRange.y), () ->
-      {
-        playRandomSound();
-      });
+      scheduleSound(FlxG.random.float(params.randomTimeRange.x, params.randomTimeRange.y), playRandomSound);
     });
   }
 
@@ -183,9 +187,20 @@ class FunkinSoundscape implements IFlxDestroyable
 
   function onSoundFadeIn(tween:FlxTween):Void
   {
-    FlxTimer.wait(params.randomSoundWait, () ->
+    // Wait however long the timer is before pulling a random sound from the list.
+    scheduleSound(params.randomSoundWait, playRandomSound);
+  }
+
+  /** Schedule only this soundscape's work; subclasses must use the same owner. */
+  function scheduleSound(delay:Float, callback:Void->Void):Void
+  {
+    if (destroyed) return;
+    var timer = new FlxTimer();
+    waitTimers.push(timer);
+    timer.start(delay, (_) ->
     {
-      playRandomSound();
+      waitTimers.remove(timer);
+      if (!destroyed) callback();
     });
   }
 
@@ -194,8 +209,20 @@ class FunkinSoundscape implements IFlxDestroyable
    */
   public function destroy():Void
   {
-    FlxTimer.globalManager.clear();
-
-    if (_currentSFX != null) _currentSFX.destroy();
+    if (destroyed) return;
+    destroyed = true;
+    ambienceFade?.cancel();
+    ambienceFade = null;
+    for (timer in waitTimers)
+    {
+      timer.cancel();
+      timer.destroy();
+    }
+    waitTimers.resize(0);
+    if (_currentSFX != null)
+    {
+      _currentSFX.destroy();
+      _currentSFX = null;
+    }
   }
 }

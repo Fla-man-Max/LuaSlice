@@ -8,7 +8,7 @@ import flixel.addons.display.FlxTiledSprite;
 import flixel.math.FlxMath;
 import haxe.ui.components.NumberStepper;
 import haxe.ui.backend.flixel.components.SpriteWrapper;
-import funkin.ui.debug.charting.commands.SetAudioOffsetCommand;
+import funkin.ui.debug.charting.commands.song.SetAudioOffsetCommand;
 import funkin.ui.haxeui.components.WaveformPlayer;
 import haxe.ui.containers.Absolute;
 import haxe.ui.containers.ScrollView;
@@ -21,7 +21,7 @@ import haxe.ui.events.UIEvent;
  */
 // @:nullSafety // TODO: Fix null safety when used with HaxeUI build macros.
 
-@:access(funkin.ui.debug.charting.ChartEditorState) @:build(haxe.ui.ComponentBuilder.build('assets/exclude/data/ui/chart-editor/toolboxes/offsets.xml'))
+@:access(funkin.ui.debug.charting.ChartEditorState) @:build(haxe.ui.ComponentBuilder.build('assets/exclude/ui/editors/chart-editor/toolboxes/offsets.xml'))
 class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
 {
   var waveformContainer:Absolute;
@@ -78,6 +78,9 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
   var waveformMagicFactor:Float = 1.0;
 
   var audioPreviewTracks:SoundGroup;
+  var previewInstrumental:Null<funkin.audio.FunkinSound>;
+  var previewPlayer:Null<funkin.audio.FunkinSound>;
+  var previewOpponent:Null<funkin.audio.FunkinSound>;
   var tickTiledSprite:FlxTiledSprite;
   var tickLabels:Array<Label> = [];
   // Local store of the audio offsets, so we can detect when they change.
@@ -97,7 +100,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
   function onClose(event:UIEvent)
   {
     stopAudioPreview(); // Pause it instead, maybe?
-    chartEditorState.menubarItemToggleToolboxOffsets.selected = false;
+    if (chartEditorState.menubarItemToggleToolboxOffsets != null) chartEditorState.menubarItemToggleToolboxOffsets.selected = false;
   }
 
   function initialize():Void
@@ -266,17 +269,25 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     else
     {
       audioPreviewTracks.stop();
+      for (track in audioPreviewTracks.members) if (track != null) track.destroy();
       audioPreviewTracks.clear();
     }
 
+    previewInstrumental = null;
+    previewPlayer = null;
+    previewOpponent = null;
+    if (chartEditorState.audioInstTrack == null) return;
     var instTrack = chartEditorState.audioInstTrack.clone();
+    previewInstrumental = instTrack;
     audioPreviewTracks.add(instTrack);
 
     var playerVoice = chartEditorState.audioVocalTrackGroup.getPlayerVoice();
-    if (playerVoice != null) audioPreviewTracks.add(playerVoice.clone());
+    previewPlayer = playerVoice?.clone();
+    if (previewPlayer != null) audioPreviewTracks.add(previewPlayer);
 
     var opponentVoice = chartEditorState.audioVocalTrackGroup.getOpponentVoice();
-    if (opponentVoice != null) audioPreviewTracks.add(opponentVoice.clone());
+    previewOpponent = opponentVoice?.clone();
+    if (previewOpponent != null) audioPreviewTracks.add(previewOpponent);
 
     // Build player waveform.
     // waveformPlayer.waveform.forceUpdate = true;
@@ -483,21 +494,21 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
 
   public function addOffsetsToAudioPreview():Void
   {
-    var trackInst = audioPreviewTracks.members[0];
+    var trackInst = previewInstrumental;
     if (trackInst != null)
     {
       audioPreviewInstrumentalOffset = chartEditorState.currentInstrumentalOffset;
       trackInst.time -= audioPreviewInstrumentalOffset;
     }
 
-    var trackPlayer = audioPreviewTracks.members[1];
+    var trackPlayer = previewPlayer;
     if (trackPlayer != null)
     {
       audioPreviewPlayerOffset = chartEditorState.currentVocalOffsetPlayer;
       trackPlayer.time -= audioPreviewPlayerOffset;
     }
 
-    var trackOpponent = audioPreviewTracks.members[2];
+    var trackOpponent = previewOpponent;
     if (trackOpponent != null)
     {
       audioPreviewOpponentOffset = chartEditorState.currentVocalOffsetOpponent;
@@ -518,21 +529,21 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
 
     audioPreviewTracks.time = 0;
 
-    var trackInst = audioPreviewTracks.members[0];
+    var trackInst = previewInstrumental;
     if (trackInst != null)
     {
       audioPreviewInstrumentalOffset = chartEditorState.currentInstrumentalOffset;
       trackInst.time = -audioPreviewInstrumentalOffset;
     }
 
-    var trackPlayer = audioPreviewTracks.members[1];
+    var trackPlayer = previewPlayer;
     if (trackPlayer != null)
     {
       audioPreviewPlayerOffset = chartEditorState.currentVocalOffsetPlayer;
       trackPlayer.time = -audioPreviewPlayerOffset;
     }
 
-    var trackOpponent = audioPreviewTracks.members[2];
+    var trackOpponent = previewOpponent;
     if (trackOpponent != null)
     {
       audioPreviewOpponentOffset = chartEditorState.currentVocalOffsetOpponent;
@@ -589,19 +600,19 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     switch (target)
     {
       case Waveform.INSTRUMENTAL:
-        var trackInst = audioPreviewTracks.members[0];
+        var trackInst = previewInstrumental;
         if (trackInst != null)
         {
           trackInst.volume = volume;
         }
       case Waveform.PLAYER:
-        var trackPlayer = audioPreviewTracks.members[1];
+        var trackPlayer = previewPlayer;
         if (trackPlayer != null)
         {
           trackPlayer.volume = volume;
         }
       case Waveform.OPPONENT:
-        var trackOpponent = audioPreviewTracks.members[2];
+        var trackOpponent = previewOpponent;
         if (trackOpponent != null)
         {
           trackOpponent.volume = volume;
@@ -614,21 +625,21 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     switch (target)
     {
       case Waveform.INSTRUMENTAL:
-        var trackInst = audioPreviewTracks.members[0];
+        var trackInst = previewInstrumental;
         if (trackInst != null)
         {
           trackInst.muted = true;
           offsetInstrumentalMute.text = trackInst.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.PLAYER:
-        var trackPlayer = audioPreviewTracks.members[1];
+        var trackPlayer = previewPlayer;
         if (trackPlayer != null)
         {
           trackPlayer.muted = true;
           offsetPlayerMute.text = trackPlayer.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.OPPONENT:
-        var trackOpponent = audioPreviewTracks.members[2];
+        var trackOpponent = previewOpponent;
         if (trackOpponent != null)
         {
           trackOpponent.muted = true;
@@ -642,21 +653,21 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     switch (target)
     {
       case Waveform.INSTRUMENTAL:
-        var trackInst = audioPreviewTracks.members[0];
+        var trackInst = previewInstrumental;
         if (trackInst != null)
         {
           trackInst.muted = false;
           offsetInstrumentalMute.text = trackInst.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.PLAYER:
-        var trackPlayer = audioPreviewTracks.members[1];
+        var trackPlayer = previewPlayer;
         if (trackPlayer != null)
         {
           trackPlayer.muted = false;
           offsetPlayerMute.text = trackPlayer.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.OPPONENT:
-        var trackOpponent = audioPreviewTracks.members[2];
+        var trackOpponent = previewOpponent;
         if (trackOpponent != null)
         {
           trackOpponent.muted = false;
@@ -670,21 +681,21 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     switch (target)
     {
       case Waveform.INSTRUMENTAL:
-        var trackInst = audioPreviewTracks.members[0];
+        var trackInst = previewInstrumental;
         if (trackInst != null)
         {
           trackInst.muted = !trackInst.muted;
           offsetInstrumentalMute.text = trackInst.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.PLAYER:
-        var trackPlayer = audioPreviewTracks.members[1];
+        var trackPlayer = previewPlayer;
         if (trackPlayer != null)
         {
           trackPlayer.muted = !trackPlayer.muted;
           offsetPlayerMute.text = trackPlayer.muted ? 'Unmute' : 'Mute';
         }
       case Waveform.OPPONENT:
-        var trackOpponent = audioPreviewTracks.members[2];
+        var trackOpponent = previewOpponent;
         if (trackOpponent != null)
         {
           trackOpponent.muted = !trackOpponent.muted;
@@ -759,7 +770,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
 
     if (chartEditorState.currentInstrumentalOffset != audioPreviewInstrumentalOffset)
     {
-      var track = audioPreviewTracks.members[0];
+      var track = previewInstrumental;
       if (track != null)
       {
         track.time += audioPreviewInstrumentalOffset;
@@ -769,7 +780,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     }
     if (chartEditorState.currentVocalOffsetPlayer != audioPreviewPlayerOffset)
     {
-      var track = audioPreviewTracks.members[1];
+      var track = previewPlayer;
       if (track != null)
       {
         track.time += audioPreviewPlayerOffset;
@@ -779,7 +790,7 @@ class ChartEditorOffsetsToolbox extends ChartEditorBaseToolbox
     }
     if (chartEditorState.currentVocalOffsetOpponent != audioPreviewOpponentOffset)
     {
-      var track = audioPreviewTracks.members[2];
+      var track = previewOpponent;
       if (track != null)
       {
         track.time += audioPreviewOpponentOffset;

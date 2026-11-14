@@ -194,6 +194,7 @@ class PreciseInputManager extends FlxKeyManager<FlxKey, PreciseInputList>
     clearButtons();
 
     var limeGamepad = FlxGamepadUtil.getLimeGamepad(gamepad);
+    if (limeGamepad == null) return;
     var callbacks = {
       onButtonDown: handleButtonDown.bind(gamepad),
       onButtonUp: handleButtonUp.bind(gamepad),
@@ -341,7 +342,7 @@ class PreciseInputManager extends FlxKeyManager<FlxKey, PreciseInputList>
       onInputPressed.dispatch({
         noteDirection: getDirectionForButton(gamepad, buttonId),
         timestamp: timestamp,
-        keyCode: button // implicit cast to int
+        keyCode: button, // implicit cast to int
       });
       _dirPressTimestamps.set(getDirectionForButton(gamepad, buttonId), timestamp);
     }
@@ -418,6 +419,7 @@ class PreciseInputManager extends FlxKeyManager<FlxKey, PreciseInputList>
     {
       var callbacks = _deviceBinds.get(gamepad);
       var limeGamepad = FlxGamepadUtil.getLimeGamepad(gamepad);
+      if (limeGamepad == null) continue;
       limeGamepad.onButtonDownPrecise.remove(callbacks.onButtonDown);
       limeGamepad.onButtonUpPrecise.remove(callbacks.onButtonUp);
       limeGamepad.onAxisMovePrecise.remove(callbacks.onAxisMove);
@@ -509,5 +511,10 @@ typedef PreciseInputEvent =
    * Used to distinguish between multiple inputs for the same direction.
    */
   keyCode:Int,
-  ?position:Float
+
+  /**
+   * The current position of the Conductor for this event.
+   * Used to help calculate the note timing for the exact time.
+   */
+  ?position:Float,
 };

@@ -169,6 +169,9 @@ LuaSlice supports isolated `.lua` scripts and global `.luag` scripts. Lua is ena
 LuaSlice uses the real SScript and NxScript interpreters. AngelScript is not disguised as another language: `.as` and `.asg` are not loaded unless a genuine, cross-platform AngelScript backend is added.
 
 ## Main Script Folders
+
+On Windows and Linux, `mods/` is next to the game executable. On Android, it's under `Android/data/me.luaslice/files/mods/`. These paths are for LuaSlice's own scripts; see [the Psych API guide](CHANGELOG%20-%20PSYCH%20API.MD) for `.luap` and `.luapg`.
+
 - `mods/global.lua`
 - `mods/global.luag`
 - `mods/scripts/global.lua`
@@ -226,6 +229,8 @@ SScript and NxScript receive `state`, `game`, and `playState`, plus `FlxG`, `Pat
 ## Script Examples
 
 ### Small Lua Song Script
+
+To run a script only during Tutorial, place it at `mods/<mod name>/data/songs/tutorial/script.lua` in an enabled mod. Use the song's chart ID for the folder name.
 
 ```lua
 function onCreate()

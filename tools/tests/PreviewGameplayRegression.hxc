@@ -1,0 +1,161 @@
+import flixel.FlxG;
+import funkin.assets.Assets.AssetType;
+import funkin.modding.module.Module;
+import funkin.modding.events.ScriptEvent;
+import funkin.modding.events.ScriptEvent.NoteScriptEvent;
+import funkin.modding.events.ScriptEventType;
+import funkin.data.character.CharacterRegistry;
+import funkin.data.event.SongEventRegistry;
+import funkin.data.song.SongData.SongEventDataRaw;
+import funkin.data.stage.StageRegistry;
+import funkin.play.PlayState;
+import funkin.play.event.LuaSliceSongEventRuntime;
+
+// Native integration fixture, not a source-text test. Install as a test mod's
+// scripts/PreviewGameplayRegression.hxc and launch a chart with player notes.
+// Requires a newly built Preview 4 executable with FEATURE_PSYCH_LUA enabled.
+class PreviewGameplayRegression extends Module
+{
+  var checked = false;
+  var sawInitialCountdown = false;
+  var failed = false;
+  var retryRequested = false;
+  var sawRetry = false;
+  var retryElapsed = 0.0;
+  var scheduledCalls = 0;
+
+  public function new() { super('preview-gameplay-regression', 1000); }
+
+  function check(name, callback)
+  {
+    try
+    {
+      callback();
+      trace('PREVIEW_GAMEPLAY_CASE_OK: ' + name);
+    }
+    catch (error:Dynamic)
+    {
+      failed = true;
+      trace('PREVIEW_GAMEPLAY_CASE_FAILED: ' + name + ': ' + error);
+    }
+  }
+
+  override function onCountdownStart(event)
+  {
+    if (sawInitialCountdown) return;
+    sawInitialCountdown = true;
+    var game = PlayState.instance;
+    check('runtimes-exist-before-first-countdown', function()
+    {
+      if (game == null || game.psychLua == null || game.songEventRuntime == null)
+        throw 'Gameplay runtimes missed the initial cancellable countdown';
+    });
+  }
+
+  override function onUpdate(event)
+  {
+    var game = PlayState.instance;
+    if (retryRequested && !checked)
+    {
+      retryElapsed += event.elapsed;
+      if (retryElapsed < 0.1) return;
+      checked = true;
+      check('retry-cancels-owned-song-event-timers', function()
+      {
+        if (!sawRetry) throw 'Native song retry was not observed';
+        if (scheduledCalls != 0) throw 'Old song-event timer survived retry';
+      });
+      trace(failed ? 'PREVIEW_GAMEPLAY_REGRESSION_FAILED' : 'PREVIEW_GAMEPLAY_REGRESSION_OK');
+      return;
+    }
+    if (checked || game == null || !game.initialized || game.playerStrumline == null) return;
+    checked = true;
+    check('initial-countdown-was-observed', function()
+    {
+      if (!sawInitialCountdown) throw 'Fixture did not observe the initial countdown';
+    });
+    check('ignored-miss-releases-owned-event-only', function()
+    {
+      if (game.psychLua == null) throw 'FEATURE_PSYCH_LUA is required';
+      if (game.currentChart.notes.length == 0) throw 'Fixture chart needs a note';
+      var data = game.currentChart.notes[0].clone();
+      data.data = 0;
+      var note = game.playerStrumline.buildNoteSprite(data);
+      game.psychLua.noteOptions.write(note, 'ignoreNote', true, '');
+
+      var borrowed = NoteScriptEvent.get(ScriptEventType.NOTE_MISS, note, -0.1, 0, true);
+      game.dispatchEvent(borrowed, false);
+      if (!borrowed.eventCanceled || !borrowed.isInUse)
+        throw 'Borrowed ignored miss was not canceled or was prematurely released';
+      borrowed.finish();
+
+      var owned = NoteScriptEvent.get(ScriptEventType.NOTE_MISS, note, -0.1, 0, true);
+      game.dispatchEvent(owned);
+      if (!owned.eventCanceled || owned.isInUse)
+        throw 'Ignored miss leaked its owned pooled event';
+      game.psychLua.noteOptions.write(note, 'ignoreNote', false, '');
+      note.kill();
+    });
+    check('stage-replacement-detaches-destroyed-character', function()
+    {
+      if (game.currentStage == null) throw 'Fixture needs a non-minimal stage';
+      var stage = game.currentStage;
+      var oldPlayer = stage.getBoyfriend();
+      if (oldPlayer == null) throw 'Fixture needs a player character';
+      var characterId = oldPlayer.characterId;
+      if (!game.changeCharacter(0, characterId)) throw 'Character replacement failed';
+      if (stage.members.indexOf(oldPlayer) != -1)
+        throw 'Destroyed character remained in stage members';
+      if (stage.getBoyfriend() == oldPlayer || stage.getBoyfriend() == null)
+        throw 'Stage did not retain the new character';
+    });
+    check('cached-stage-can-be-reentered', function()
+    {
+      if (game.currentStage == null) throw 'Fixture needs a non-minimal stage';
+      var stage = game.currentStage;
+      var id = stage.id;
+      if (!game.changeStage(id) || game.currentStage != stage || !stage.alive)
+        throw 'Registry-owned stage could not be reused';
+      var player = stage.getBoyfriend();
+      if (player == null || !player.alive) throw 'Reentered stage did not recreate its characters';
+    });
+    check('chart-events-declare-native-transition-assets', function()
+    {
+      var playerId = game.currentStage.getBoyfriend().characterId;
+      var characterPlan = SongEventRegistry.queryAssets(AssetType.IMAGE,
+        new SongEventDataRaw(0, 'ChangeCharacter', {id: playerId}));
+      var expectedCharacterPlan = CharacterRegistry.instance.queryAssets(AssetType.IMAGE, playerId);
+      if (expectedCharacterPlan.length == 0) throw 'Fixture player must declare image assets';
+      var characterPaths = characterPlan.map(function(path) { return path.toString(); });
+      for (path in expectedCharacterPlan)
+        if (!characterPaths.contains(path.toString())) throw 'Character event omitted a native dependency: ' + path;
+
+      var stageId = game.currentStage.id;
+      var stagePlan = SongEventRegistry.queryAssets(AssetType.IMAGE,
+        new SongEventDataRaw(0, 'ChangeStage', {stage: stageId}));
+      var expectedStagePlan = StageRegistry.instance.queryAssets(AssetType.IMAGE, stageId);
+      if (expectedStagePlan.length == 0) throw 'Fixture stage must declare image assets';
+      var stagePaths = stagePlan.map(function(path) { return path.toString(); });
+      for (path in expectedStagePlan)
+        if (!stagePaths.contains(path.toString())) throw 'Stage event omitted a native dependency: ' + path;
+    });
+    game.songEventRuntime.setHealthDrain('player', 1, false, false, 0);
+    game.songEventRuntime.schedule(0.01, function() { scheduledCalls++; });
+    game.needsReset = true;
+    retryRequested = true;
+    checked = false;
+  }
+
+  override function onSongRetry(event)
+  {
+    if (!retryRequested) return;
+    sawRetry = true;
+    check('retry-resets-persistent-effects-before-callbacks', function()
+    {
+      var game = PlayState.instance;
+      var health = game.health;
+      game.songEventRuntime.updatePersistentEffects(0.1);
+      if (game.health != health) throw 'Health drain survived the song retry';
+    });
+  }
+}

@@ -13,7 +13,6 @@ import android.webkit.MimeTypeMap;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.IOException;
-import java.util.Collections;
 import java.util.LinkedList;
 
 /**
@@ -21,9 +20,7 @@ import java.util.LinkedList;
  */
 public class DataFolderProvider extends DocumentsProvider
 {
-  private static File BASE_DIR;
-
-  private static String BASE_DIR_PATH;
+  private DataFolderPaths paths;
 
   private static final String[] DEFAULT_ROOT_PROJECTION = new String[] {
     Root.COLUMN_ROOT_ID,
@@ -50,18 +47,19 @@ public class DataFolderProvider extends DocumentsProvider
   {
     final MatrixCursor result = new MatrixCursor(projection != null ? projection : DEFAULT_ROOT_PROJECTION);
 
-    if (BASE_DIR == null)
+    if (paths == null)
       return result;
 
+    final File root = paths.root();
     final MatrixCursor.RowBuilder row = result.newRow();
 
-    row.add(Root.COLUMN_ROOT_ID, getDocIdForFile(BASE_DIR));
-    row.add(Root.COLUMN_DOCUMENT_ID, getDocIdForFile(BASE_DIR));
+    row.add(Root.COLUMN_ROOT_ID, getDocIdForFile(root));
+    row.add(Root.COLUMN_DOCUMENT_ID, getDocIdForFile(root));
     row.add(Root.COLUMN_SUMMARY, "Data Folder");
     row.add(Root.COLUMN_FLAGS, Root.FLAG_SUPPORTS_CREATE | Root.FLAG_SUPPORTS_SEARCH | Root.FLAG_SUPPORTS_IS_CHILD);
     row.add(Root.COLUMN_TITLE, "::APP_TITLE::");
     row.add(Root.COLUMN_MIME_TYPES, "*/*");
-    row.add(Root.COLUMN_AVAILABLE_BYTES, BASE_DIR.getFreeSpace());
+    row.add(Root.COLUMN_AVAILABLE_BYTES, root.getFreeSpace());
     ::if (APP_PACKAGE != "")::
     row.add(Root.COLUMN_ICON, ::APP_PACKAGE::.R.drawable.icon);
     ::end::
@@ -84,22 +82,8 @@ public class DataFolderProvider extends DocumentsProvider
 
     File parent = getFileForDocId(parentDocumentId);
 
-    if (parent != null)
-    {
-      File[] children = null;
-
-      try {
-        children = parent.listFiles();
-      } catch (SecurityException e) {
-        children = new File[0];
-      }
-
-      if (children != null)
-      {
-        for (File file : children)
-          includeFile(result, null, file);
-      }
-    }
+    for (File file : paths.children(parent))
+      includeFile(result, null, file);
 
     return result;
   }
@@ -121,18 +105,17 @@ public class DataFolderProvider extends DocumentsProvider
   @Override
   public boolean onCreate()
   {
-    BASE_DIR = getContext().getExternalFilesDir(null);
-
-    if (BASE_DIR == null)
+    File root = getContext().getExternalFilesDir(null);
+    if (root == null)
       return false;
 
     try
     {
-      BASE_DIR_PATH = BASE_DIR.getCanonicalPath();
+      paths = new DataFolderPaths(root);
     }
     catch (IOException e)
     {
-      BASE_DIR_PATH = BASE_DIR.getAbsolutePath();
+      return false;
     }
 
     return true;
@@ -143,13 +126,13 @@ public class DataFolderProvider extends DocumentsProvider
   {
     File parentFile = getFileForDocId(parentDocumentId);
 
-    File newFile = new File(parentFile, displayName);
+    File newFile = paths.child(parentFile, displayName);
 
     int noConflictId = 2;
 
     while (newFile.exists())
     {
-      newFile = new File(parentFile, displayName + " (" + noConflictId++ + ")");
+      newFile = paths.child(parentFile, displayName + " (" + noConflictId++ + ")");
     }
 
     try
@@ -169,13 +152,15 @@ public class DataFolderProvider extends DocumentsProvider
       throw new FileNotFoundException("Failed to create document with id " + newFile.getPath());
     }
 
-    return newFile.getPath();
+    return getDocIdForFile(newFile);
   }
 
   @Override
   public void deleteDocument(String documentId) throws FileNotFoundException
   {
-    if (!deleteRecursive(getFileForDocId(documentId)))
+    File file = getFileForDocId(documentId);
+    if (file.equals(paths.root())) throw new FileNotFoundException("Cannot delete the data folder root");
+    if (!deleteRecursive(file))
       throw new FileNotFoundException("Failed to delete document with id " + documentId);
   }
 
@@ -200,32 +185,10 @@ public class DataFolderProvider extends DocumentsProvider
     {
       final File file = pending.removeFirst();
 
-      boolean isInsideHome;
-
-      try
-      {
-        isInsideHome = file.getCanonicalPath().startsWith(BASE_DIR_PATH);
-      }
-      catch (IOException e)
-      {
-        isInsideHome = true;
-      }
-
-      if (isInsideHome)
-      {
-        if (file.isDirectory())
-        {
-          try {
-            Collections.addAll(pending, file.listFiles());
-          } catch (SecurityException e) {
-            // ignore
-          }
-        }
-        else if (file.getName().toLowerCase().contains(query))
-        {
-          includeFile(result, null, file);
-        }
-      }
+      if (file.isDirectory())
+        pending.addAll(paths.children(file));
+      else if (file.getName().toLowerCase().contains(query))
+        includeFile(result, null, file);
     }
 
     return result;
@@ -236,9 +199,9 @@ public class DataFolderProvider extends DocumentsProvider
   {
     try
     {
-      File parent = getFileForDocId(parentDocumentId).getCanonicalFile();
-      File child = getFileForDocId(documentId).getCanonicalFile();
-      return child.getPath().startsWith(parent.getPath() + "/");
+      File parent = getFileForDocId(parentDocumentId);
+      File child = getFileForDocId(documentId);
+      return DataFolderPaths.isDescendant(parent, child);
     }
     catch (IOException e)
     {
@@ -246,7 +209,7 @@ public class DataFolderProvider extends DocumentsProvider
     }
   }
 
-  private boolean deleteRecursive(File file)
+  private boolean deleteRecursive(File file) throws FileNotFoundException
   {
     if (file.isDirectory())
     {
@@ -256,7 +219,7 @@ public class DataFolderProvider extends DocumentsProvider
       {
         for (File child : children)
         {
-          if (!deleteRecursive(child))
+          if (!deleteRecursive(paths.child(file, child.getName())))
             return false;
         }
       }
@@ -270,17 +233,11 @@ public class DataFolderProvider extends DocumentsProvider
     return file.getAbsolutePath();
   }
 
-  private static File getFileForDocId(String docId) throws FileNotFoundException
+  private File getFileForDocId(String docId) throws FileNotFoundException
   {
-    if (BASE_DIR == null)
+    if (paths == null)
       throw new FileNotFoundException("Base directory not available");
-
-    final File f = (docId == null || docId.isEmpty()) ? BASE_DIR : new File(docId);
-
-    if (!f.exists())
-      throw new FileNotFoundException(f.getAbsolutePath() + " not found");
-
-    return f;
+    return paths.resolve(docId);
   }
 
   private static String getMimeType(File file)
@@ -324,7 +281,7 @@ public class DataFolderProvider extends DocumentsProvider
       flags |= Document.FLAG_SUPPORTS_WRITE;
     }
 
-    if (file.getParentFile() != null && file.getParentFile().canWrite())
+    if (!file.equals(paths.root()) && file.getParentFile() != null && file.getParentFile().canWrite())
       flags |= Document.FLAG_SUPPORTS_DELETE;
 
     final String mimeType = getMimeType(file);

@@ -4,8 +4,8 @@ package luaslice.lua;
 import flixel.FlxG;
 import flixel.FlxState;
 import flixel.FlxSubState;
-import funkin.ui.ScriptedMusicBeatState;
-import funkin.ui.ScriptedMusicBeatSubState;
+import funkin.ui.MusicBeatState;
+import funkin.ui.MusicBeatSubState;
 #end
 
 class LuaStateManager
@@ -14,12 +14,12 @@ class LuaStateManager
   public static function openState(target:String, args:Array<Dynamic>):Bool
   {
     var state:Dynamic = null;
-    final scriptedStateClass:Dynamic = ScriptedMusicBeatState;
+    final scriptedStateClass:Dynamic = MusicBeatState;
     final listStateScripts:Dynamic = Reflect.field(scriptedStateClass, 'listScriptClasses');
     final initStateScript:Dynamic = Reflect.field(scriptedStateClass, 'scriptInit');
     final scriptedStates:Array<String> = listStateScripts == null ? [] : cast Reflect.callMethod(scriptedStateClass, listStateScripts, []);
     if (scriptedStates.indexOf(target) >= 0 && initStateScript != null)
-      state = Reflect.callMethod(scriptedStateClass, initStateScript, [target]);
+      state = Reflect.callMethod(scriptedStateClass, initStateScript, ([target] : Array<Dynamic>).concat(args ?? []));
     else
     {
       final targetClass = Type.resolveClass(target);
@@ -35,12 +35,12 @@ class LuaStateManager
   public static function openSubState(target:String, args:Array<Dynamic>):Bool
   {
     var subState:Dynamic = null;
-    final scriptedSubStateClass:Dynamic = ScriptedMusicBeatSubState;
+    final scriptedSubStateClass:Dynamic = MusicBeatSubState;
     final listSubStateScripts:Dynamic = Reflect.field(scriptedSubStateClass, 'listScriptClasses');
     final initSubStateScript:Dynamic = Reflect.field(scriptedSubStateClass, 'scriptInit');
     final scriptedSubStates:Array<String> = listSubStateScripts == null ? [] : cast Reflect.callMethod(scriptedSubStateClass, listSubStateScripts, []);
     if (scriptedSubStates.indexOf(target) >= 0 && initSubStateScript != null)
-      subState = Reflect.callMethod(scriptedSubStateClass, initSubStateScript, [target]);
+      subState = Reflect.callMethod(scriptedSubStateClass, initSubStateScript, ([target] : Array<Dynamic>).concat(args ?? []));
     else
     {
       final targetClass = Type.resolveClass(target);

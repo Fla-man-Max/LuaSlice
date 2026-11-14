@@ -16,7 +16,7 @@ import funkin.Conductor;
 import funkin.Preferences;
 import funkin.util.Constants;
 import funkin.audio.FunkinSound;
-import funkin.data.character.CharacterData.CharacterDataParser;
+import funkin.data.character.CharacterRegistry;
 import funkin.data.dialogue.ConversationRegistry;
 import funkin.data.dialogue.DialogueBoxRegistry;
 import funkin.data.dialogue.SpeakerRegistry;
@@ -153,8 +153,11 @@ class LuaSliceSongEventRuntime
           if (path == null) return warn('Music not found: ${resource}');
           FlxG.sound.cache(path);
         case 'character':
-          final character = CharacterDataParser.fetchCharacter(resource, false);
+          final character = CharacterRegistry.instance.fetchEntry(resource);
           if (character == null) return warn('Character not found: ${resource}');
+          final event = ScriptEvent.get(DESTROY, false);
+          ScriptEventDispatcher.callEvent(character, event);
+          event.finish();
           character.destroy();
         case 'stage':
           final stage = StageRegistry.instance.fetchEntry(resource);
@@ -951,7 +954,9 @@ class LuaSliceSongEventRuntime
     if (state.currentConversation != null)
     {
       final conversation = state.currentConversation;
-      ScriptEventDispatcher.callEvent(conversation, new ScriptEvent(DESTROY, false));
+      final event = ScriptEvent.get(DESTROY, false);
+      ScriptEventDispatcher.callEvent(conversation, event);
+      event.finish();
       if (state.currentConversation == conversation)
       {
         conversation.kill();

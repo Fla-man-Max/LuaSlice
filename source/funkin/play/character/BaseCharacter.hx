@@ -3,24 +3,41 @@ package funkin.play.character;
 import flixel.math.FlxPoint;
 import funkin.data.animation.AnimationData;
 import funkin.modding.events.ScriptEvent;
+import funkin.data.IRegistryEntry;
 import funkin.data.character.CharacterData;
-import funkin.data.character.CharacterData.CharacterDataParser;
+import funkin.data.character.CharacterRegistry;
 import funkin.data.character.CharacterData.CharacterRenderType;
 import funkin.play.stage.Bopper;
 import funkin.play.notes.NoteDirection;
+import funkin.data.song.SongData.SongNoteData;
 import funkin.play.notes.notekind.NoteKind;
 import funkin.play.notes.notekind.NoteKindManager;
 import funkin.play.stage.Stage;
+import funkin.graphics.FunkinAnimationController;
+//
+// ~PATHS~
+//
+import funkin.assets.ValidatedPaths as Paths;
+import funkin.assets.Paths.AssetPath;
+import funkin.assets.Assets.AssetType;
 
 /**
  * A Character is a stage prop which bops to the music as well as controlled by the strumlines.
  *
  * Remember: The character's origin is at its FEET. (horizontal center, vertical bottom)
  */
-class BaseCharacter extends Bopper
+class BaseCharacter extends Bopper implements IRegistryEntry<CharacterData>
 {
   // Metadata about a character.
-  public var characterId(default, null):String;
+  public final id:String;
+  public var characterId(get, never):String;
+
+  function get_characterId():String
+  {
+    // Backwards compatibility from before characters were moved to a registry.
+    return id;
+  }
+
   public var characterName(default, null):String;
 
   /**
@@ -74,8 +91,12 @@ class BaseCharacter extends Bopper
   public var dropNoteCounts(default, null):Array<Int>;
 
   @:allow(funkin.ui.debug.anim.DebugBoundingState)
-  final _data:CharacterData;
-  final singTimeSteps:Float;
+  public final _data:CharacterData;
+
+  /**
+   * The amount of time, in seconds, that the character's singing animations should last for.
+   */
+  public final singTimeSteps:Float;
 
   /**
    * When set to true, the next animation to play will temporarily force the character's vocals to play.
@@ -92,7 +113,7 @@ class BaseCharacter extends Bopper
   {
     var xPos = (width / 2); // Horizontal center
     var yPos = (height); // Vertical bottom
-    return new FlxPoint(xPos, yPos);
+    return FlxPoint.weak(xPos, yPos);
   }
 
   /**
@@ -103,7 +124,7 @@ class BaseCharacter extends Bopper
 
   function get_cornerPosition():FlxPoint
   {
-    return new FlxPoint(x, y);
+    return FlxPoint.weak(x, y);
   }
 
   function set_cornerPosition(value:FlxPoint):FlxPoint
@@ -127,7 +148,7 @@ class BaseCharacter extends Bopper
 
   function get_feetPosition():FlxPoint
   {
-    return new FlxPoint(x + characterOrigin.x, y + characterOrigin.y);
+    return FlxPoint.weak(x + characterOrigin.x, y + characterOrigin.y);
   }
 
   /**
@@ -136,7 +157,7 @@ class BaseCharacter extends Bopper
    *
    * Set the position of this rather than reassigning it, so that anything referencing it will not be affected.
    */
-  public var cameraFocusPoint(default, null):FlxPoint = new FlxPoint(0, 0);
+  public var cameraFocusPoint(default, null):FlxPoint = FlxPoint.get(0, 0);
 
   /**
    * If the x position changes, other than via changing the animation offset,
@@ -166,22 +187,102 @@ class BaseCharacter extends Bopper
     return super.set_y(value);
   }
 
-  public function new(id:String, renderType:CharacterRenderType)
+  /**
+   * Retrieve a list of all the asset paths required to load the character.
+   *
+   * If you have a scripted class which initializes sprites, or plays sounds or something,
+   * make sure you extend this function and add them here so they get cached in the loading screen.
+   *
+   * @param type The type of asset to query
+   * @param id The character ID to query.
+   * @param params Optional. Char entry params.
+   * @return An array of asset paths, or empty if no assets of that type are required.
+   */
+  public static function queryAssets(type:AssetType, entryId:String, ?params:CharacterEntryParams):Array<AssetPath>
   {
-    super(CharacterDataParser.DEFAULT_DANCEEVERY);
+    var results:Array<AssetPath> = queryBaseAssets(type, entryId, params);
 
-    this.characterId = id;
+    var _data:Null<CharacterData> = CharacterRegistry.instance.fetchCharacterData(entryId);
+    if (_data != null)
+    {
+      switch (_data.renderType)
+      {
+        case CharacterRenderType.AnimateAtlas:
+          results = AnimateAtlasCharacter.queryAssets(type, entryId, params);
+        case CharacterRenderType.MultiAnimateAtlas:
+          results = MultiAnimateAtlasCharacter.queryAssets(type, entryId, params);
+        case CharacterRenderType.Sparrow:
+          results = SparrowCharacter.queryAssets(type, entryId, params);
+        case CharacterRenderType.MultiSparrow:
+          results = MultiSparrowCharacter.queryAssets(type, entryId, params);
+        case CharacterRenderType.Packer:
+          results = PackerCharacter.queryAssets(type, entryId, params);
+        default:
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Assets common to every character (like the health icon). Character subclasses `queryAssets` functions should call this,
+   * NOT `BaseCharacter.queryAssets`, to avoid infinite looping (the rooms).
+   *
+   * @param type The type of asset to query
+   * @param id The character ID to query.
+   * @param params Optional. Char entry params.
+   * @return An array of asset paths, or empty if no assets of that type are required.
+   */
+  public static function queryBaseAssets(type:AssetType, entryId:String, ?params:CharacterEntryParams):Array<AssetPath>
+  {
+    // Specific implementations handle figuring out which assets to load.
+
+    var results:Array<funkin.assets.Paths.AssetPath> = [];
+
+    var _data:Null<CharacterData> = CharacterRegistry.instance.fetchCharacterData(entryId);
+    if (_data == null) return results;
+
+    // Get the character's health icon path.
+    var healthIconId:String = _data?.healthIcon?.id ?? Constants.DEFAULT_HEALTH_ICON;
+    var healthIconPath:AssetPath = Paths.image('gameplay/characters/$healthIconId/icon-$healthIconId');
+
+    var results:Array<AssetPath> = [];
+
+    switch (type)
+    {
+      case IMAGE:
+        results.push(healthIconPath);
+      case XML:
+        results.push(healthIconPath.withAssetType(XML).orNull());
+      default:
+        // Nothing
+    }
+
+    return results.filterNull();
+  }
+
+  /**
+   * The render type of the character.
+   */
+  public var renderType(default, null):CharacterRenderType;
+
+  public function new(id:String, ?params:Dynamic)
+  {
+    super(CharacterData.DEFAULT_DANCEEVERY);
+
+    this.id = id;
 
     ignoreExclusionPref = ['sing'];
 
-    _data = CharacterDataParser.fetchCharacterData(this.characterId);
+    _data = params?.previewData ?? CharacterRegistry.instance.fetchCharacterData(this.id);
     if (_data == null)
     {
-      throw 'Could not find character data for characterId: $characterId';
+      throw 'Could not find character data for characterId: $id';
     }
-    else if (_data.renderType != renderType)
+    var expectedRenderType:CharacterRenderType = params?.renderType ?? _data.renderType;
+    if (_data.renderType != expectedRenderType)
     {
-      throw 'Render type mismatch for character ($characterId): expected ${renderType}, got ${_data.renderType}';
+      throw 'Render type mismatch for character ($id): expected ${expectedRenderType}, got ${_data.renderType}';
     }
     else
     {
@@ -191,6 +292,7 @@ class BaseCharacter extends Bopper
       this.singTimeSteps = _data.singTime;
       this.globalOffsets = _data.offsets;
       this.flipX = _data.flipX;
+      this.renderType = expectedRenderType;
     }
 
     if (PlayState.instance != null) currentStage = PlayState.instance.currentStage;
@@ -330,8 +432,8 @@ class BaseCharacter extends Bopper
     // so we can query which ones are available.
     this.comboNoteCounts = findCountAnimations('combo'); // ex. combo50
     this.dropNoteCounts = findCountAnimations('drop'); // ex. drop50
-    if (comboNoteCounts.length > 0) log('Character $characterId plays Combo animation at ${this.comboNoteCounts.join(', ')}');
-    if (dropNoteCounts.length > 0) log('Character $characterId plays Drop animation at ${this.dropNoteCounts.join(', ')}');
+    if (comboNoteCounts.length > 0) log('Character $id plays Combo animation at ${this.comboNoteCounts.join(', ')}');
+    if (dropNoteCounts.length > 0) log('Character $id plays Drop animation at ${this.dropNoteCounts.join(', ')}');
 
     super.onCreate(event);
   }
@@ -340,9 +442,11 @@ class BaseCharacter extends Bopper
   {
     super.onAnimationFinished(animationName);
 
-    if ((animationName.endsWith(Constants.ANIMATION_END_SUFFIX) && !animationName.startsWith('idle') && !animationName.startsWith('dance'))
-      || animationName.startsWith('combo')
-      || animationName.startsWith('drop'))
+    if
+      ((animationName.endsWith(Constants.ANIMATION_END_SUFFIX) && !animationName.startsWith('idle') && !animationName.startsWith('dance'))
+        || animationName.startsWith('combo')
+        || animationName.startsWith('drop')
+      )
     {
       // Force the character to play the idle after the animation ends.
       this.dance(true);
@@ -368,12 +472,18 @@ class BaseCharacter extends Bopper
     // Calculate the camera focus point
     var charCenterX = this.originalPosition.x + this.width / 2;
     var charCenterY = this.originalPosition.y + this.height / 2;
-    this.cameraFocusPoint = new FlxPoint(charCenterX + _data.cameraOffsets[0], charCenterY + _data.cameraOffsets[1]);
+    if (this.cameraFocusPoint == null) this.cameraFocusPoint = FlxPoint.get();
+    this.cameraFocusPoint.set(charCenterX + _data.cameraOffsets[0], charCenterY + _data.cameraOffsets[1]);
   }
 
   public function getHealthIconId():String
   {
     return getHealthIconData()?.id ?? Constants.DEFAULT_HEALTH_ICON;
+  }
+
+  public function getDiscordRPCImage():String
+  {
+    return _data?.discordRPCImage ?? 'icon-${getHealthIconId()}';
   }
 
   public function initHealthIcon(isOpponent:Bool):Void
@@ -409,7 +519,12 @@ class BaseCharacter extends Bopper
     // Reset hold timer for each note pressed.
     if (justPressedNote() && this.characterType == BF)
     {
-      holdTimer = 0;
+      // If the `noanim` noteKind is active, don't reset the holdTimer.
+      if (curNoteKind != null && curNoteKind.noanim) return;
+      else
+      {
+        holdTimer = 0;
+      }
     }
 
     if (isDead)
@@ -424,9 +539,11 @@ class BaseCharacter extends Bopper
     // and Darnell (this keeps the flame on his lighter flickering).
     // Works for idle, singLEFT/RIGHT/UP/DOWN, alt singing animations, and anything else really.
 
-    if (isAnimationFinished()
+    if (
+      isAnimationFinished()
       && !getCurrentAnimation().endsWith(Constants.ANIMATION_HOLD_SUFFIX)
-      && hasAnimation(getCurrentAnimation() + Constants.ANIMATION_HOLD_SUFFIX))
+      && hasAnimation(getCurrentAnimation() + Constants.ANIMATION_HOLD_SUFFIX)
+    )
     {
       playAnimation(getCurrentAnimation() + Constants.ANIMATION_HOLD_SUFFIX);
     }
@@ -455,6 +572,9 @@ class BaseCharacter extends Bopper
       // for one beat, as opposed to holding it as long as the player is holding the button.
       var shouldStopSinging:Bool = (this.characterType == BF) ? !isHoldingNote() : true;
 
+      var controller = cast(animation, FunkinAnimationController);
+      if (controller.shouldUseConductorSync && shouldStopSinging) shouldStopSinging = FlxG.sound.music != null && FlxG.sound.music.playing;
+
       FlxG.watch.addQuick('singTimeSec-${characterId}', singTimeSec);
       if (holdTimer > singTimeSec && shouldStopSinging)
       {
@@ -462,8 +582,9 @@ class BaseCharacter extends Bopper
 
         var currentAnimation:String = getCurrentAnimation();
         // Strip "-hold" from the end.
-        if (currentAnimation.endsWith(Constants.ANIMATION_HOLD_SUFFIX)) currentAnimation = currentAnimation.substring(0,
-          currentAnimation.length - Constants.ANIMATION_HOLD_SUFFIX.length);
+        if (currentAnimation.endsWith(
+          Constants.ANIMATION_HOLD_SUFFIX
+        )) currentAnimation = currentAnimation.substring(0, currentAnimation.length - Constants.ANIMATION_HOLD_SUFFIX.length);
 
         var endAnimation:String = currentAnimation + Constants.ANIMATION_END_SUFFIX;
         if (hasAnimation(endAnimation))
@@ -513,7 +634,7 @@ class BaseCharacter extends Bopper
 
   /**
    * Returns true if the player just pressed a note.
-   * Used when determing whether a the player character should revert to the `idle` animation.
+   * Used when determining whether a player character should revert to the `idle` animation.
    * On non-player characters, this should be ignored.
    */
   function justPressedNote(player:Int = 1):Bool
@@ -522,12 +643,14 @@ class BaseCharacter extends Bopper
     switch (player)
     {
       case 1:
-        return PlayerSettings.player1.controls.NOTE_LEFT_P
+        return
+          PlayerSettings.player1.controls.NOTE_LEFT_P
           || PlayerSettings.player1.controls.NOTE_DOWN_P
           || PlayerSettings.player1.controls.NOTE_UP_P
           || PlayerSettings.player1.controls.NOTE_RIGHT_P;
       case 2:
-        return PlayerSettings.player2.controls.NOTE_LEFT_P
+        return
+          PlayerSettings.player2.controls.NOTE_LEFT_P
           || PlayerSettings.player2.controls.NOTE_DOWN_P
           || PlayerSettings.player2.controls.NOTE_UP_P
           || PlayerSettings.player2.controls.NOTE_RIGHT_P;
@@ -537,7 +660,7 @@ class BaseCharacter extends Bopper
 
   /**
    * Returns true if the player is holding a note.
-   * Used when determing whether a the player character should revert to the `idle` animation.
+   * Used when determining whether a player character should revert to the `idle` animation.
    * On non-player characters, this should be ignored.
    */
   function isHoldingNote(player:Int = 1):Bool
@@ -546,17 +669,52 @@ class BaseCharacter extends Bopper
     switch (player)
     {
       case 1:
-        return PlayerSettings.player1.controls.NOTE_LEFT
+        return
+          PlayerSettings.player1.controls.NOTE_LEFT
           || PlayerSettings.player1.controls.NOTE_DOWN
           || PlayerSettings.player1.controls.NOTE_UP
           || PlayerSettings.player1.controls.NOTE_RIGHT;
       case 2:
-        return PlayerSettings.player2.controls.NOTE_LEFT
+        return
+          PlayerSettings.player2.controls.NOTE_LEFT
           || PlayerSettings.player2.controls.NOTE_DOWN
           || PlayerSettings.player2.controls.NOTE_UP
           || PlayerSettings.player2.controls.NOTE_RIGHT;
     }
     return false;
+  }
+
+  /**
+   * Play the appropriate singing animation based on the given note data.
+   * @param noteData The note data of the note.
+   */
+  public function playNoteSingAnimation(noteData:SongNoteData, judgement:Null<String> = null, comboCount:Int = 0):Void
+  {
+    curNoteKind = NoteKindManager.getNoteKind(noteData.kind);
+    // Let the character naturally transition back to their idle/dance animation
+    // if the notekind is set to noanim.
+    if (curNoteKind != null && curNoteKind.noanim) return;
+
+    if (noteData.getMustHitNote() && characterType == BF)
+    {
+      this.playSingAnimation(noteData.getDirection(), false, curNoteKind?.suffix ?? '');
+      holdTimer = 0;
+    }
+    else if (!noteData.getMustHitNote() && characterType == DAD)
+    {
+      this.playSingAnimation(noteData.getDirection(), false, curNoteKind?.suffix ?? '');
+      holdTimer = 0;
+    }
+    else if (characterType == GF && noteData.getMustHitNote() && judgement != null)
+    {
+      switch (judgement)
+      {
+        case 'sick' | 'good':
+          playComboAnimation(comboCount);
+        default:
+          playComboDropAnimation(comboCount);
+      }
+    }
   }
 
   /**
@@ -568,49 +726,27 @@ class BaseCharacter extends Bopper
     super.onNoteHit(event);
     // If another script cancelled the event, don't do anything.
     if (event.eventCanceled) return;
-    curNoteKind = NoteKindManager.getNoteKind(event.note.noteData.kind);
 
-    if (event.note.noteData.getMustHitNote() && characterType == BF)
+    playNoteSingAnimation(event.note.noteData, event.judgement, event.comboCount);
+  }
+
+  /**
+   * Every time a hold note is held, check if it is of the same strumline before updating the hold timer.
+   */
+  public override function onNoteHoldHit(event:HoldNoteScriptEvent)
+  {
+    super.onNoteHoldHit(event);
+
+    // If another script cancelled the event, don't do anything.
+    if (event.eventCanceled) return;
+
+    if (event.holdNote.noteData.getMustHitNote() && characterType == BF)
     {
-      if (curNoteKind != null)
-      {
-        if (!curNoteKind.noanim)
-        {
-          this.playSingAnimation(event.note.noteData.getDirection(), false, curNoteKind?.suffix);
-          holdTimer = 0;
-        }
-      }
-      else
-      {
-        this.playSingAnimation(event.note.noteData.getDirection(), false);
-        holdTimer = 0;
-      }
+      holdTimer = 0;
     }
-    else if (!event.note.noteData.getMustHitNote() && characterType == DAD)
+    else if (!event.holdNote.noteData.getMustHitNote() && characterType == DAD)
     {
-      if (curNoteKind != null)
-      {
-        if (!curNoteKind.noanim)
-        {
-          this.playSingAnimation(event.note.noteData.getDirection(), false, curNoteKind?.suffix);
-          holdTimer = 0;
-        }
-      }
-      else
-      {
-        this.playSingAnimation(event.note.noteData.getDirection(), false);
-        holdTimer = 0;
-      }
-    }
-    else if (characterType == GF && event.note.noteData.getMustHitNote())
-    {
-      switch (event.judgement)
-      {
-        case 'sick' | 'good':
-          playComboAnimation(event.comboCount);
-        default:
-          playComboDropAnimation(event.comboCount);
-      }
+      holdTimer = 0;
     }
   }
 
@@ -618,7 +754,7 @@ class BaseCharacter extends Bopper
    * Every time a note is missed, check if the note is from the same strumline.
    * If it is, then play the sing animation.
    */
-  override public function onNoteMiss(event:NoteScriptEvent)
+  override public function onNoteMiss(event:NoteScriptEvent):Void
   {
     super.onNoteMiss(event);
 
@@ -629,11 +765,13 @@ class BaseCharacter extends Bopper
     {
       // If the note is from the same strumline, play the miss animation.
       this.playSingAnimation(event.note.noteData.getDirection(), true);
+      holdTimer = 0;
     }
     else if (!event.note.noteData.getMustHitNote() && characterType == DAD)
     {
       // If the note is from the same strumline, play the miss animation.
       this.playSingAnimation(event.note.noteData.getDirection(), true);
+      holdTimer = 0;
     }
     else if (event.note.noteData.getMustHitNote() && characterType == GF)
     {
@@ -641,7 +779,7 @@ class BaseCharacter extends Bopper
     }
   }
 
-  override public function onNoteHoldDrop(event:HoldNoteScriptEvent)
+  override public function onNoteHoldDrop(event:HoldNoteScriptEvent):Void
   {
     super.onNoteHoldDrop(event);
 
@@ -652,11 +790,13 @@ class BaseCharacter extends Bopper
     {
       // If the note is from the same strumline, play the miss animation.
       this.playSingAnimation(event.holdNote.noteData.getDirection(), true);
+      holdTimer = 0;
     }
     else if (!event.holdNote.noteData.getMustHitNote() && characterType == DAD)
     {
       // If the note is from the same strumline, play the miss animation.
       this.playSingAnimation(event.holdNote.noteData.getDirection(), true);
+      holdTimer = 0;
     }
     else if (event.holdNote.noteData.getMustHitNote() && event.isComboBreak && characterType == GF)
     {
@@ -732,6 +872,7 @@ class BaseCharacter extends Bopper
     var anim:String = 'sing${dir.nameUpper}${miss ? 'miss' : ''}${suffix != '' ? '-${suffix}' : ''}';
 
     // restart even if already playing, because the character might sing the same note twice.
+    holdTimer = 0;
 
     playAnimation(anim, true);
   }
@@ -760,9 +901,20 @@ class BaseCharacter extends Bopper
     return null;
   }
 
+  override function destroy():Void
+  {
+    cameraFocusPoint.put();
+    super.destroy();
+  }
+
   static function log(message:String):Void
   {
     trace(' CHARACTER '.bold().bg_blue() + ' $message');
+  }
+
+  public override function toString():String
+  {
+    return 'BaseCharacter($characterName ($characterId), pos=[$x, $y])';
   }
 }
 

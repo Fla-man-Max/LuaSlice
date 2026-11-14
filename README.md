@@ -1,11 +1,10 @@
 # LuaSlice
 LuaSlice is a fork of Friday Night Funkin' V-Slice that adds built-in Lua modding support and small tweaks to the engine itself. It is made for people who want to create gameplay scripts, events, menus, options and other mod features without having to write everything in Haxe.
 
-LuaSlice supports isolated `.lua` scripts and shared `.luag` scripts, but Psych Engine Lua API (that LuaSlice supports too) supports isolated `.luap` scripts and shared `.luapg` scripts. LuaSlice (with psych engine lua api support) also includes F5 hot reloading, Lua error reports, persistent save data, custom Chart Editor events, and Lua hooks for gameplay and menus.
+LuaSlice's original API uses `.lua` and `.luag`. Psych scripts use `.luap` and `.luapg` in a separate runtime; the global suffix controls loading scope, not a shared Psych Lua state. LuaSlice also includes F5 hot reloading, Lua error reports, persistent save data, custom Chart Editor events, and Lua hooks for gameplay and menus.
 Existing `.hx` and `.hxc` modding still works, so Lua can be used by itself or alongside Haxe scripts.
 
-The engine is based on V-Slice 0.8.5 and is still being worked on. Lua compatibility is the main focus, along with making mod creation easier on Windows and Android. And maybe other builds....
-And YES, Psych Engine v1.0.4 Lua Api IS supported! (I don't know if P-slice has an different api, but this is only Psych engine lua api and LuaSlice lua api.)
+This branch is migrating the existing V-Slice 0.8.6-based engine to the official public-playtest preview at `5a63f2062bfc95a1fe35f83405acdee1f8c845ec` (upstream metadata: 0.8.7, build 70). It is not ready for release. The migration and Psych Engine 1.0.4 API reimplementation are still being tested; see [the source audit](docs/migration/preview4/SOURCE-AUDIT.md) for the pinned versions and known gaps.
 
 `Credit is required if you use LuaSlice in a engine edit, project, or anything like that. No [but ...]
 (Videos, Showcases, Original Mods, Ported Mods are allowed!)`

@@ -1,5 +1,6 @@
 package funkin.play;
 
+import flixel.util.typeLimit.NextState;
 import flixel.FlxState;
 import funkin.ui.story.StoryMenuState;
 import funkin.data.freeplay.player.PlayerRegistry;
@@ -13,6 +14,7 @@ import flixel.tweens.FlxTween;
 import flixel.util.FlxColor;
 import funkin.audio.FunkinSound;
 import funkin.data.song.SongRegistry;
+import flixel.util.typeLimit.NextState;
 import funkin.ui.freeplay.FreeplayState;
 import funkin.graphics.FunkinSprite;
 import funkin.play.cutscene.VideoCutscene;
@@ -21,11 +23,10 @@ import flixel.util.FlxTimer;
 import funkin.ui.MusicBeatSubState;
 import funkin.util.HapticUtil;
 import funkin.ui.FullScreenScaleMode;
-import funkin.ui.transition.stickers.StickerSubState;
 import funkin.util.SwipeUtil;
 import funkin.util.TouchUtil;
 #if FEATURE_MOBILE_ADVERTISEMENTS
-import funkin.mobile.util.AdMobUtil;
+import funkin.util.mobile.AdMobUtil;
 #end
 
 /**
@@ -56,7 +57,10 @@ class PauseSubState extends MusicBeatSubState
    * Pause menu entries for when the game is paused during a song.
    */
   static final PAUSE_MENU_ENTRIES_STANDARD:Array<PauseMenuEntry> = [
-    {text: 'Resume', callback: resume},
+    {
+      text: 'Resume',
+      callback: resume
+    },
     {
       text: 'Restart Song',
       callback: restartPlayState
@@ -70,55 +74,81 @@ class PauseSubState extends MusicBeatSubState
       callback: enablePracticeMode,
       filter: () -> !(PlayState.instance?.isPracticeMode ?? false)
     },
-    {text: 'Exit to Menu', callback: quitToMenu},
+    {
+      text: 'Exit to Menu',
+      callback: quitToMenu
+    },
   ];
 
   /**
    * Pause menu entries for when the game is paused in the Chart Editor preview.
    */
   static final PAUSE_MENU_ENTRIES_CHARTING:Array<PauseMenuEntry> = [
-    {text: 'Resume', callback: resume},
+    {
+      text: 'Resume',
+      callback: resume
+    },
     {
       text: 'Restart Song',
       callback: restartPlayState
     },
-    {text: 'Return to Chart Editor', callback: quitToChartEditor},
+    {
+      text: 'Return to Chart Editor',
+      callback: quitToChartEditor
+    },
   ];
 
   /**
    * Pause menu entries for when the user selects "Change Difficulty".
    */
-  static final PAUSE_MENU_ENTRIES_DIFFICULTY:Array<PauseMenuEntry> = [
-    {
-      text: 'Back',
-      callback: switchMode.bind(_, Standard)
-    } // Other entries are added dynamically.
+  static final PAUSE_MENU_ENTRIES_DIFFICULTY:Array<PauseMenuEntry> = [{
+    text: 'Back',
+    callback: switchMode.bind(_, Standard)
+  } // Other entries are added dynamically.
   ];
 
   /**
    * Pause menu entries for when the game is paused during a video cutscene.
    */
   static final PAUSE_MENU_ENTRIES_VIDEO_CUTSCENE:Array<PauseMenuEntry> = [
-    {text: 'Resume', callback: resume},
+    {
+      text: 'Resume',
+      callback: resume
+    },
     {
       text: 'Skip Cutscene',
       callback: skipVideoCutscene
     },
-    {text: 'Restart Cutscene', callback: restartVideoCutscene},
-    {text: 'Exit to Menu', callback: quitToMenu},
+    {
+      text: 'Restart Cutscene',
+      callback: restartVideoCutscene
+    },
+    {
+      text: 'Exit to Menu',
+      callback: quitToMenu
+    },
   ];
 
   /**
    * Pause menu entries for when the game is paused during a conversation.
    */
   static final PAUSE_MENU_ENTRIES_CONVERSATION:Array<PauseMenuEntry> = [
-    {text: 'Resume', callback: resume},
+    {
+      text: 'Resume',
+      callback: resume
+    },
     {
       text: 'Skip Dialogue',
       callback: skipConversation
     },
-    {text: 'Restart Dialogue', callback: restartConversation},
-    {text: 'Exit to Menu', callback: quitToMenu},
+    {
+      text: 'Restart Dialogue',
+      callback: restartConversation
+    },
+    {
+      text: 'Exit to Menu',
+      callback: quitToMenu
+    },
   ];
 
   /**
@@ -184,7 +214,7 @@ class PauseSubState extends MusicBeatSubState
   // Graphics Variables
   // ===============
 
-  #if mobile
+  #if FEATURE_TOUCH_CONTROLS
   /**
    * The pause button for the game, only appears in Mobile targets. Shows up breifly to finish the pause animation.
    */
@@ -259,6 +289,11 @@ class PauseSubState extends MusicBeatSubState
   public function new(?params:PauseSubStateParams, ?onPause:Void->Void)
   {
     super();
+
+    // remove possible transitions, prolly should do ts for every playstate substate
+    transIn = null;
+    transOut = null;
+
     this.currentMode = params?.mode ?? Standard;
     this.lostFocus = params?.lostFocus ?? false;
     this.onPause = onPause;
@@ -277,7 +312,8 @@ class PauseSubState extends MusicBeatSubState
     #if FEATURE_MOBILE_ADVERTISEMENTS
     // extension.admob.Admob.onEvent.add(onBannerEvent);
 
-    AdMobUtil.addBanner(extension.admob.AdmobBannerSize.BANNER, extension.admob.AdmobBannerAlign.TOP_LEFT);
+    if (PlayState.instance?.isDiagnosticPlaytest != true)
+      AdMobUtil.addBanner(extension.admob.AdmobBannerSize.BANNER, extension.admob.AdmobBannerAlign.TOP_LEFT);
     #end
 
     if (onPause != null) onPause();
@@ -294,7 +330,7 @@ class PauseSubState extends MusicBeatSubState
 
     regenerateMenu();
 
-    transitionIn();
+    transitionBgIn();
 
     startCharterTimer();
   }
@@ -369,7 +405,7 @@ class PauseSubState extends MusicBeatSubState
    */
   function startPauseMusic():Void
   {
-    var pauseMusicPath:String = Paths.music('breakfast$musicSuffix/breakfast$musicSuffix');
+    var pauseMusicPath:String = Paths.music('ui/pause/music/breakfast$musicSuffix/breakfast$musicSuffix');
     pauseMusic = FunkinSound.load(pauseMusicPath, 0, true, true);
 
     if (pauseMusic == null)
@@ -413,8 +449,8 @@ class PauseSubState extends MusicBeatSubState
     background.updateHitbox();
     add(background);
 
-    #if mobile
-    pauseButton = FunkinSprite.createSparrow(0, 0, 'pauseButton');
+    #if FEATURE_TOUCH_CONTROLS
+    pauseButton = FunkinSprite.createSparrow(0, 0, 'ui/pause-button');
     pauseButton.animation.addByIndices('idle', 'pause', [0], '', 24, false);
     pauseButton.animation.addByIndices('hold', 'pause', [5], '', 24, false);
     pauseButton.animation.addByIndices('confirm', 'pause', [
@@ -451,7 +487,7 @@ class PauseSubState extends MusicBeatSubState
     pauseButton.animation.play('confirm');
     pauseButton.setPosition((FlxG.width - pauseButton.width) - 35, 35);
 
-    pauseCircle = FunkinSprite.create(0, 0, 'pauseCircle');
+    pauseCircle = FunkinSprite.create(0, 0, 'ui/pause-circle');
     pauseCircle.scale.set(0.84, 0.8);
     pauseCircle.updateHitbox();
     pauseCircle.x = ((pauseButton.x + (pauseButton.width / 2)) - (pauseCircle.width / 2));
@@ -472,10 +508,13 @@ class PauseSubState extends MusicBeatSubState
     metadata.scrollFactor.set(0, 0);
     add(metadata);
 
-    var metadataSong:FlxText = new FlxText(20,
-      #if mobile (PlayState.instance?.isPracticeMode ?? false) ? camera.height - 185 : camera.height - 155 #else 15 #end,
-      camera.width - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x), 'Song Name');
-    metadataSong.setFormat(Paths.font('vcr.ttf'), 32, FlxColor.WHITE, FlxTextAlign.RIGHT);
+    var metadataSong:FlxText = new FlxText(
+      20,
+      #if FEATURE_TOUCH_CONTROLS (PlayState.instance?.isPracticeMode ?? false) ? camera.height - 185 : camera.height - 155 #else 15 #end,
+      camera.width - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
+      'Song Name'
+    );
+    metadataSong.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 32, FlxColor.WHITE, FlxTextAlign.RIGHT);
     if (PlayState.instance?.currentChart != null)
     {
       metadataSong.text = '${PlayState.instance.currentChart.songName}';
@@ -483,9 +522,13 @@ class PauseSubState extends MusicBeatSubState
     metadataSong.scrollFactor.set(0, 0);
     metadata.add(metadataSong);
 
-    metadataArtist = new FlxText(20, metadataSong.y + 32, camera.width - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
-      'Artist: ${Constants.DEFAULT_ARTIST}');
-    metadataArtist.setFormat(Paths.font('vcr.ttf'), 32, FlxColor.WHITE, FlxTextAlign.RIGHT);
+    metadataArtist = new FlxText(
+      20,
+      metadataSong.y + 32,
+      camera.width - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
+      'Artist: ${Constants.DEFAULT_ARTIST}'
+    );
+    metadataArtist.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 32, FlxColor.WHITE, FlxTextAlign.RIGHT);
     if (PlayState.instance?.currentChart != null)
     {
       metadataArtist.text = 'Artist: ${PlayState.instance.currentChart.songArtist}';
@@ -493,9 +536,13 @@ class PauseSubState extends MusicBeatSubState
     metadataArtist.scrollFactor.set(0, 0);
     metadata.add(metadataArtist);
 
-    var metadataDifficulty:FlxText = new FlxText(20, metadataArtist.y + 32, camera.width - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
-      'Difficulty: ');
-    metadataDifficulty.setFormat(Paths.font('vcr.ttf'), 32, FlxColor.WHITE, FlxTextAlign.RIGHT);
+    var metadataDifficulty:FlxText = new FlxText(
+      20,
+      metadataArtist.y + 32,
+      camera.width - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
+      'Difficulty: '
+    );
+    metadataDifficulty.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 32, FlxColor.WHITE, FlxTextAlign.RIGHT);
     if (PlayState.instance?.currentDifficulty != null)
     {
       metadataDifficulty.text += PlayState.instance.currentDifficulty.replace('-', ' ').toTitleCase();
@@ -503,27 +550,39 @@ class PauseSubState extends MusicBeatSubState
     metadataDifficulty.scrollFactor.set(0, 0);
     metadata.add(metadataDifficulty);
 
-    metadataDeaths = new FlxText(20, metadataDifficulty.y + 32, camera.width - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
-      '${PlayState.instance?.deathCounter} Blue Balls');
-    metadataDeaths.setFormat(Paths.font('vcr.ttf'), 32, FlxColor.WHITE, FlxTextAlign.RIGHT);
+    metadataDeaths = new FlxText(
+      20,
+      metadataDifficulty.y + 32,
+      camera.width - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
+      '${PlayState.instance?.deathCounter} Blue Balls'
+    );
+    metadataDeaths.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 32, FlxColor.WHITE, FlxTextAlign.RIGHT);
     metadataDeaths.scrollFactor.set(0, 0);
     metadata.add(metadataDeaths);
 
     metadataPractice = new FlxText(20, metadataDeaths.y + 32, camera.width - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x), 'PRACTICE MODE');
-    metadataPractice.setFormat(Paths.font('vcr.ttf'), 32, FlxColor.WHITE, FlxTextAlign.RIGHT);
+    metadataPractice.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 32, FlxColor.WHITE, FlxTextAlign.RIGHT);
     metadataPractice.visible = PlayState.instance?.isPracticeMode ?? false;
     metadataPractice.scrollFactor.set(0, 0);
     metadata.add(metadataPractice);
 
     // Right side
-    offsetText = new FlxText(20, metadataSong.y - 12, (camera.width + 10) - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
-      'Global Offset: ${Preferences.globalOffset ?? 0}ms');
-    offsetText.setFormat(Paths.font('vcr.ttf'), 16, FlxColor.WHITE, FlxTextAlign.RIGHT);
+    offsetText = new FlxText(
+      20,
+      metadataSong.y - 12,
+      (camera.width + 10) - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
+      'Global Offset: ${Preferences.globalOffset ?? 0}ms'
+    );
+    offsetText.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 16, FlxColor.WHITE, FlxTextAlign.RIGHT);
     offsetText.scrollFactor.set(0, 0);
 
-    offsetTextInfo = new FlxText(20, offsetText.y + 16, (camera.width + 10) - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
-      'Hold SHIFT-UP/DOWN,\nto change the offset.');
-    offsetTextInfo.setFormat(Paths.font('vcr.ttf'), 16, FlxColor.WHITE, FlxTextAlign.RIGHT);
+    offsetTextInfo = new FlxText(
+      20,
+      offsetText.y + 16,
+      (camera.width + 10) - Math.max(40, funkin.ui.FullScreenScaleMode.gameNotchSize.x),
+      'Hold SHIFT-UP/DOWN,\nto change the offset.'
+    );
+    offsetTextInfo.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 16, FlxColor.WHITE, FlxTextAlign.RIGHT);
     offsetTextInfo.scrollFactor.set(0, 0);
 
     offsetText.y = FlxG.height - (offsetText.height + offsetText.height + 40);
@@ -549,7 +608,9 @@ class PauseSubState extends MusicBeatSubState
 
   function startCharterTimer():Void
   {
-    charterFadeTween = FlxTween.tween(metadataArtist, {alpha: 0.0}, CHARTER_FADE_DURATION, {
+    charterFadeTween = FlxTween.tween(metadataArtist, {
+      alpha: 0.0
+    }, CHARTER_FADE_DURATION, {
       startDelay: CHARTER_FADE_DELAY,
       ease: FlxEase.quartOut,
       onComplete: (_) ->
@@ -563,7 +624,9 @@ class PauseSubState extends MusicBeatSubState
           metadataArtist.text = 'Charter: ${Constants.DEFAULT_CHARTER}';
         }
 
-        FlxTween.tween(metadataArtist, {alpha: 1.0}, CHARTER_FADE_DURATION, {
+        FlxTween.tween(metadataArtist, {
+          alpha: 1.0
+        }, CHARTER_FADE_DURATION, {
           ease: FlxEase.quartOut,
           onComplete: (_) ->
           {
@@ -576,7 +639,9 @@ class PauseSubState extends MusicBeatSubState
 
   function startArtistTimer():Void
   {
-    charterFadeTween = FlxTween.tween(metadataArtist, {alpha: 0.0}, CHARTER_FADE_DURATION, {
+    charterFadeTween = FlxTween.tween(metadataArtist, {
+      alpha: 0.0
+    }, CHARTER_FADE_DURATION, {
       startDelay: CHARTER_FADE_DELAY,
       ease: FlxEase.quartOut,
       onComplete: (_) ->
@@ -590,7 +655,9 @@ class PauseSubState extends MusicBeatSubState
           metadataArtist.text = 'Artist: ${Constants.DEFAULT_ARTIST}';
         }
 
-        FlxTween.tween(metadataArtist, {alpha: 1.0}, CHARTER_FADE_DURATION, {
+        FlxTween.tween(metadataArtist, {
+          alpha: 1.0
+        }, CHARTER_FADE_DURATION, {
           ease: FlxEase.quartOut,
           onComplete: (_) ->
           {
@@ -607,18 +674,33 @@ class PauseSubState extends MusicBeatSubState
   /**
    * Perform additional animations to transition the pause menu in when it is first displayed.
    */
-  function transitionIn():Void
+  function transitionBgIn():Void
   {
-    FlxTween.tween(background, {alpha: 0.6}, 0.8, {ease: FlxEase.quartOut});
+    FlxTween.tween(background, {
+      alpha: 0.6
+    }, 0.8, {
+      ease: FlxEase.quartOut
+    });
 
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
+    #if FEATURE_HAPTICS
     HapticUtil.vibrate(0, 0.05, 0.5);
+    #end
 
     pauseButton.animation.play('confirm');
     pauseCircle.scale.set(0.84 * 1.4, 0.8 * 1.4);
     pauseCircle.alpha = 0.4;
-    FlxTween.tween(pauseCircle.scale, {x: 0.84 * 0.8, y: 0.8 * 0.8}, 0.4, {ease: FlxEase.backInOut});
-    FlxTween.tween(pauseCircle, {alpha: 0}, 0.6, {ease: FlxEase.quartOut});
+    FlxTween.tween(pauseCircle.scale, {
+      x: 0.84 * 0.8,
+      y: 0.8 * 0.8
+    }, 0.4, {
+      ease: FlxEase.backInOut
+    });
+    FlxTween.tween(pauseCircle, {
+      alpha: 0
+    }, 0.6, {
+      ease: FlxEase.quartOut
+    });
 
     hapticTimer.start(0.2, function(_)
     {
@@ -628,7 +710,11 @@ class PauseSubState extends MusicBeatSubState
     dataFadeTimer.start(0.3, function(_)
     {
       transitionMetadataIn();
-      FlxTween.tween(pauseButton, {alpha: 0}, 0.6, {ease: FlxEase.quartOut});
+      FlxTween.tween(pauseButton, {
+        alpha: 0
+      }, 0.6, {
+        ease: FlxEase.quartOut
+      });
     });
     #else
     transitionMetadataIn();
@@ -641,7 +727,13 @@ class PauseSubState extends MusicBeatSubState
     var delay:Float = 0.1;
     for (child in metadata.members)
     {
-      FlxTween.tween(child, {alpha: 1, y: #if mobile child.y - 5 #else child.y + 5 #end}, 1.8, {ease: FlxEase.quartOut, startDelay: delay});
+      FlxTween.tween(child, {
+        alpha: 1,
+        y: #if FEATURE_TOUCH_CONTROLS child.y - 5 #else child.y + 5 #end
+      }, 1.8, {
+        ease: FlxEase.quartOut,
+        startDelay: delay
+      });
       delay += 0.1;
     }
   }
@@ -796,7 +888,7 @@ class PauseSubState extends MusicBeatSubState
     var prevEntry:Int = currentEntry;
     currentEntry += change;
 
-    if (#if FEATURE_TOUCH_CONTROLS !funkin.mobile.input.ControlsHandler.usingExternalInputDevice #else false #end)
+    if (#if FEATURE_TOUCH_CONTROLS !funkin.touch.input.ControlsHandler.usingExternalInputDevice #else false #end)
     {
       if (currentEntry < 0) currentEntry = 0;
       if (currentEntry >= currentMenuEntries.length) currentEntry = currentMenuEntries.length - 1;
@@ -807,7 +899,7 @@ class PauseSubState extends MusicBeatSubState
       if (currentEntry >= currentMenuEntries.length) currentEntry = 0;
     }
 
-    if (currentEntry != prevEntry) FunkinSound.playOnce(Paths.sound('scrollMenu'), 0.4);
+    if (currentEntry != prevEntry) FunkinSound.playOnce(Paths.sound('ui/main-menu/scroll-menu'), 0.4);
 
     for (entryIndex in 0...currentMenuEntries.length)
     {
@@ -819,19 +911,28 @@ class PauseSubState extends MusicBeatSubState
       // Set the transparency.
       text.alpha = isCurrent ? 1.0 : 0.6;
 
-      #if mobile
+      #if FEATURE_TOUCH_CONTROLS
       // Set the position.
       if (isCurrent && currentEntry != prevEntry)
       {
         FlxTween.globalManager.cancelTweensOf(text);
         text.x = 165;
-        FlxTween.tween(text, {x: 150}, 0.2, {ease: FlxEase.backInOut});
+        FlxTween.tween(text, {
+          x: 150
+        }, 0.2, {
+          ease: FlxEase.backInOut
+        });
       }
       #else
       var targetX = FlxMath.remapToRange((entryIndex - currentEntry), 0, 1, 0, 1.3) * 20 + Math.max(90, funkin.ui.FullScreenScaleMode.gameNotchSize.x);
       var targetY = FlxMath.remapToRange((entryIndex - currentEntry), 0, 1, 0, 1.3) * 120 + (camera.height * 0.48);
       FlxTween.globalManager.cancelTweensOf(text);
-      FlxTween.tween(text, {x: targetX, y: targetY}, 0.33, {ease: FlxEase.quartOut});
+      FlxTween.tween(text, {
+        x: targetX,
+        y: targetY
+      }, 0.33, {
+        ease: FlxEase.quartOut
+      });
       #end
     }
   }
@@ -1012,6 +1113,8 @@ class PauseSubState extends MusicBeatSubState
         currentMenuEntries = PAUSE_MENU_ENTRIES_STANDARD.clone();
       case PauseMode.Charting:
         currentMenuEntries = PAUSE_MENU_ENTRIES_CHARTING.clone();
+        if (PlayState.instance?.isDiagnosticPlaytest == true)
+          currentMenuEntries[currentMenuEntries.length - 1] = {text: 'Return to Test Debug Editor', callback: quitToChartEditor};
       case PauseMode.Difficulty:
         // Prepend the difficulties.
         var entries:Array<PauseMenuEntry> = [];
@@ -1020,7 +1123,10 @@ class PauseSubState extends MusicBeatSubState
           var difficultiesInVariation = PlayState.instance.currentSong.listDifficulties(PlayState.instance.currentChart.variation, true);
           for (difficulty in difficultiesInVariation)
           {
-            entries.push({text: difficulty.toTitleCase(), callback: (state) -> changeDifficulty(state, difficulty)});
+            entries.push({
+              text: difficulty.toTitleCase(),
+              callback: (state) -> changeDifficulty(state, difficulty)
+            });
           }
         }
 
@@ -1060,7 +1166,7 @@ class PauseSubState extends MusicBeatSubState
       else
       {
         // Handle visible entries.
-        #if mobile
+        #if FEATURE_TOUCH_CONTROLS
         // var yPos:Float = (150 * entryIndex) + 100;
 
         // var yPos:Float = (140 * entryIndex) + 150;
@@ -1076,7 +1182,11 @@ class PauseSubState extends MusicBeatSubState
         }
         menuEntryText.add(text);
 
-        FlxTween.tween(text, {x: 150}, 0.4 * (entryIndex + 1), {ease: FlxEase.expoOut});
+        FlxTween.tween(text, {
+          x: 150
+        }, 0.4 * (entryIndex + 1), {
+          ease: FlxEase.expoOut
+        });
 
         entry.sprite = text;
         #else
@@ -1114,7 +1224,7 @@ class PauseSubState extends MusicBeatSubState
   {
     metadataPractice.visible = PlayState.instance?.isPracticeMode ?? false;
 
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
     if (metadata.members[0].y != camera.height - 185 && metadataPractice.visible)
     {
       for (text in metadata)
@@ -1129,7 +1239,7 @@ class PauseSubState extends MusicBeatSubState
       case Standard | Difficulty:
         metadataDeaths.text = '${PlayState.instance?.deathCounter} Blue Balls';
       case Charting:
-        metadataDeaths.text = 'Chart Editor Preview';
+        metadataDeaths.text = PlayState.instance?.isDiagnosticPlaytest == true ? 'Mod Debug Preview' : 'Chart Editor Preview';
       case Conversation:
         metadataDeaths.text = 'Dialogue Paused';
       case Cutscene:
@@ -1173,8 +1283,9 @@ class PauseSubState extends MusicBeatSubState
    */
   static function changeDifficulty(state:PauseSubState, difficulty:String):Void
   {
-    PlayState.instance.currentSong = SongRegistry.instance.fetchEntry(PlayState.instance.currentSong.id.toLowerCase(),
-      {variation: PlayState.instance.currentChart.variation});
+    PlayState.instance.currentSong = SongRegistry.instance.fetchEntry(PlayState.instance.currentSong.id.toLowerCase(), {
+      variation: PlayState.instance.currentChart.variation
+    });
 
     // Reset campaign score when changing difficulty
     // So if you switch difficulty on the last song of a week you get a really low overall score.
@@ -1225,6 +1336,11 @@ class PauseSubState extends MusicBeatSubState
   static function restartPlayState(state:PauseSubState):Void
   {
     PlayState.instance.needsReset = true;
+    if (PlayState.instance.isDiagnosticPlaytest)
+    {
+      state.close();
+      return;
+    }
 
     #if FEATURE_MOBILE_ADVERTISEMENTS
     if (AdMobUtil.PLAYING_COUNTER < AdMobUtil.MAX_BEFORE_AD) AdMobUtil.PLAYING_COUNTER++;
@@ -1332,37 +1448,33 @@ class PauseSubState extends MusicBeatSubState
     state.allowInput = false;
 
     PlayState.instance.deathCounter = 0;
+    var wasStoryMode:Bool = PlayStatePlaylist.isStoryMode;
 
-    FlxTransitionableState.skipNextTransIn = true;
-    FlxTransitionableState.skipNextTransOut = true;
-
-    var targetState:funkin.ui.transition.stickers.StickerSubState->FlxState = (PlayStatePlaylist.isStoryMode) ? (sticker) ->
-      new StoryMenuState(sticker) : (sticker) -> FreeplayState.build(sticker);
+    var targetState:NextState = (wasStoryMode) ? () -> new StoryMenuState() : () -> FreeplayState.build({
+      forceSkipIntro: true
+    });
+    var assetQuery = (wasStoryMode) ? StoryMenuState.queryAssets : FreeplayState.queryAssets.bind(_, {
+      forceSkipIntro: true
+    }, FreeplayState.rememberedCharacterId);
 
     // Do this AFTER because this resets the value of isStoryMode!
-    if (PlayStatePlaylist.isStoryMode)
+    if (wasStoryMode)
     {
       PlayStatePlaylist.reset();
     }
 
-    var stickerPackId:Null<String> = PlayState.instance.currentChart.stickerPack;
-
-    if (stickerPackId == null)
-    {
-      var playerCharacterId = PlayerRegistry.instance.getCharacterOwnerId(PlayState.instance.currentChart.characters.player);
-      var playerCharacter = PlayerRegistry.instance.fetchEntry(playerCharacterId ?? Constants.DEFAULT_CHARACTER);
-
-      if (playerCharacter != null)
-      {
-        stickerPackId = playerCharacter.getStickerPackID();
-      }
-    }
+    var stickerPackId:String = PlayState.instance?.resolveStickerPackId() ?? Constants.DEFAULT_STICKER_PACK;
 
     #if FEATURE_MOBILE_ADVERTISEMENTS
     AdMobUtil.removeBanner();
     #end
 
-    state.openSubState(new funkin.ui.transition.stickers.StickerSubState({targetState: targetState, stickerPack: stickerPackId}));
+    funkin.ui.transition.Transition.switchState(targetState, {
+      assetQuery: assetQuery,
+      transition: Sticker(stickerPackId),
+      shouldStopMusic: true,
+      shouldPurgeCache: wasStoryMode
+    });
   }
 
   /**

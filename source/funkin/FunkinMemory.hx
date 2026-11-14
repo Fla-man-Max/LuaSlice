@@ -286,42 +286,10 @@ class FunkinMemory
    */
   public static function cacheNoteStyle(style:NoteStyle):Void
   {
-    // TODO: Texture paths should fall back to the default values.
-    cacheTexture(Paths.image(style.getNoteAssetPath() ?? 'note'));
-    cacheTexture(style.getHoldNoteAssetPath() ?? 'noteHold');
-    cacheTexture(Paths.image(style.getStrumlineAssetPath() ?? 'strumline'));
-    cacheTexture(Paths.image(style.getSplashAssetPath() ?? 'noteSplash'));
-
-    cacheTexture(Paths.image(style.getHoldCoverDirectionAssetPath(LEFT) ?? 'LEFT'));
-    cacheTexture(Paths.image(style.getHoldCoverDirectionAssetPath(RIGHT) ?? 'RIGHT'));
-    cacheTexture(Paths.image(style.getHoldCoverDirectionAssetPath(UP) ?? 'UP'));
-    cacheTexture(Paths.image(style.getHoldCoverDirectionAssetPath(DOWN) ?? 'DOWN'));
-
-    // cacheTexture(Paths.image(style.buildCountdownSpritePath(THREE) ?? "THREE"));
-    cacheTexture(Paths.image(style.buildCountdownSpritePath(TWO) ?? 'TWO'));
-    cacheTexture(Paths.image(style.buildCountdownSpritePath(ONE) ?? 'ONE'));
-    cacheTexture(Paths.image(style.buildCountdownSpritePath(GO) ?? 'GO'));
-
-    cacheSound(style.getCountdownSoundPath(THREE) ?? 'THREE');
-    cacheSound(style.getCountdownSoundPath(TWO) ?? 'TWO');
-    cacheSound(style.getCountdownSoundPath(ONE) ?? 'ONE');
-    cacheSound(style.getCountdownSoundPath(GO) ?? 'GO');
-
-    cacheTexture(Paths.image(style.buildJudgementSpritePath('sick') ?? 'sick'));
-    cacheTexture(Paths.image(style.buildJudgementSpritePath('good') ?? 'good'));
-    cacheTexture(Paths.image(style.buildJudgementSpritePath('bad') ?? 'bad'));
-    cacheTexture(Paths.image(style.buildJudgementSpritePath('shit') ?? 'shit'));
-
-    cacheTexture(Paths.image(style.buildComboNumSpritePath(0) ?? '0'));
-    cacheTexture(Paths.image(style.buildComboNumSpritePath(1) ?? '1'));
-    cacheTexture(Paths.image(style.buildComboNumSpritePath(2) ?? '2'));
-    cacheTexture(Paths.image(style.buildComboNumSpritePath(3) ?? '3'));
-    cacheTexture(Paths.image(style.buildComboNumSpritePath(4) ?? '4'));
-    cacheTexture(Paths.image(style.buildComboNumSpritePath(5) ?? '5'));
-    cacheTexture(Paths.image(style.buildComboNumSpritePath(6) ?? '6'));
-    cacheTexture(Paths.image(style.buildComboNumSpritePath(7) ?? '7'));
-    cacheTexture(Paths.image(style.buildComboNumSpritePath(8) ?? '8'));
-    cacheTexture(Paths.image(style.buildComboNumSpritePath(9) ?? '9'));
+    for (path in NoteStyle.queryAssets(funkin.assets.Assets.AssetType.IMAGE, style.id))
+      cacheTexture(path.toString());
+    for (path in NoteStyle.queryAssets(funkin.assets.Assets.AssetType.SOUND, style.id))
+      cacheSound(path.toString());
   }
 
   ///// SOUND //////

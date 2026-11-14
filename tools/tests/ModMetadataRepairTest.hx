@@ -45,6 +45,8 @@ class ModMetadataRepairTest
     FileSystem.createDirectory(root);
     createMod(root, 'valid', metadata('sky-mod', 'Valid Mod'));
     createMod(root, 'declined');
+    var loose = createMod(root, 'scripts');
+    File.saveContent(Path.join([loose, 'example.lua']), 'return true');
     var corruptPath = createMod(root, 'corrupt', '{broken');
     var corruptMetadata = Path.join([corruptPath, polymod.PolymodConfig.modMetadataFile]);
     var repair = new ModMetadataRepair();
@@ -98,7 +100,7 @@ class ModMetadataRepairTest
       'Generated IDs do not collide with installed metadata');
     var polymodErrors:Array<String> = [];
     polymod.Polymod.onError = error -> polymodErrors.push(error.code + ':' + error.message);
-    var parsed = fs.getMetadataByDir('Generated Mod');
+    var parsed = fs.getMetadataByModDir('Generated Mod');
     expect(parsed != null && parsed.id == 'generated-mod' && parsed.title == 'Generated Mod', 'Polymod parses the generated metadata');
     expect(parsed != null && parsed.apiVersion.toString() == '0.8.7' && parsed.contributors.length == 2,
       'Polymod accepts the generated API version and contributors');
@@ -113,6 +115,9 @@ class ModMetadataRepairTest
     expect(race.ready.contains('race') && !race.created.contains('race'), 'Metadata added while the dialog is open is accepted without replacement');
     expect(File.getContent(racePath) == raceContents, 'Concurrent external metadata is not overwritten');
     expect(errors.length == 0, 'All valid writes completed without errors');
+    File.saveContent(Path.join([loose, polymod.PolymodConfig.modMetadataFile]), metadata('scripts-mod', 'Scripts Mod'));
+    var explicit = repair.scan(root, fs, (name, path) -> false, errors.push);
+    expect(explicit.ready.contains('scripts'), 'An explicitly configured mod named scripts is still recognized');
     Sys.println('ModMetadataRepairTest passed ' + checks + ' checks. Fixture: ' + fixture);
   }
 }

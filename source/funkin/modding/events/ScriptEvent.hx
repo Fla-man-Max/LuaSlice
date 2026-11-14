@@ -10,6 +10,7 @@ import funkin.play.cutscene.dialogue.Conversation;
 import funkin.play.Countdown.CountdownStep;
 import funkin.play.notes.NoteDirection;
 import funkin.ui.freeplay.SongMenuItem;
+import funkin.play.scoring.Scoring.ScoringRank;
 import openfl.events.KeyboardEvent;
 
 /**
@@ -17,6 +18,8 @@ import openfl.events.KeyboardEvent;
  * It can be used to identify the type of event called, store data, and cancel event propagation.
  */
 @:nullSafety
+@:build(funkin.util.macro.ScriptEventPoolMacro.buildPool())
+@:autoBuild(funkin.util.macro.ScriptEventPoolMacro.buildPool())
 class ScriptEvent
 {
   /**
@@ -40,6 +43,13 @@ class ScriptEvent
    * Whether the event has been canceled by one of the scripts that received it.
    */
   public var eventCanceled(default, null):Bool;
+
+  /**
+   * Whether the event has been used in the pool.
+   * In certain cases, such as when switching states in `onStateChangeBegin`, multiple of the same events would be needed,
+   * and this variable signified whether another event instance should be created.
+   */
+  public var isInUse(default, null):Bool = false;
 
   public function new(type:ScriptEventType, cancelable:Bool = false):Void
   {
@@ -76,6 +86,14 @@ class ScriptEvent
   public function stopPropagation():Void
   {
     shouldPropagate = false;
+  }
+
+  /**
+   * Make this event reusable in the pool.
+   */
+  public function finish():Void
+  {
+    isInUse = false;
   }
 
   public function toString():String
@@ -158,8 +176,14 @@ class HitNoteScriptEvent extends NoteScriptEvent
    */
   public var doesNotesplash:Bool = false;
 
-  public function new(note:NoteSprite, healthChange:Float, score:Float, judgement:String, isComboBreak:Bool, comboCount:Int = 0, hitDiff:Float = 0,
-      doesNotesplash:Bool = false):Void
+  public function new(note:NoteSprite,
+    healthChange:Float,
+    score:Float,
+    judgement:String,
+    isComboBreak:Bool,
+    comboCount:Int = 0,
+    hitDiff:Float = 0,
+    doesNotesplash:Bool = false):Void
   {
     super(NOTE_HIT, note, healthChange, comboCount, true);
     this.score = score;
@@ -171,8 +195,22 @@ class HitNoteScriptEvent extends NoteScriptEvent
 
   override public function toString():String
   {
-    return 'HitNoteScriptEvent(note=' + note + ', comboCount=' + comboCount + ', judgement=' + judgement + ', score=' + score + ', isComboBreak='
-      + isComboBreak + ', hitDiff=' + hitDiff + ', doesNotesplash=' + doesNotesplash + ')';
+    return
+      'HitNoteScriptEvent(note='
+      + note
+      + ', comboCount='
+      + comboCount
+      + ', judgement='
+      + judgement
+      + ', score='
+      + score
+      + ', isComboBreak='
+      + isComboBreak
+      + ', hitDiff='
+      + hitDiff
+      + ', doesNotesplash='
+      + doesNotesplash
+      + ')';
   }
 }
 
@@ -275,8 +313,13 @@ class HoldNoteScriptEvent extends NoteScriptEvent
    */
   public var doesNotesplash:Bool = false;
 
-  public function new(type:ScriptEventType, holdNote:SustainTrail, healthChange:Float, score:Float, isComboBreak:Bool, comboCount:Int = 0,
-      cancelable:Bool = false):Void
+  public function new(type:ScriptEventType,
+    holdNote:SustainTrail,
+    healthChange:Float,
+    score:Float,
+    isComboBreak:Bool,
+    comboCount:Int = 0,
+    cancelable:Bool = false):Void
   {
     super(type, null, healthChange, comboCount, true);
     this.holdNote = holdNote;
@@ -418,17 +461,17 @@ class KeyboardInputScriptEvent extends ScriptEvent
   /**
    * The associated keyboard event.
    */
-  public var event(default, null):KeyboardEvent;
+  public var keyEvent(default, null):KeyboardEvent;
 
-  public function new(type:ScriptEventType, event:KeyboardEvent):Void
+  public function new(type:ScriptEventType, keyEvent:KeyboardEvent):Void
   {
     super(type, false);
-    this.event = event;
+    this.keyEvent = keyEvent;
   }
 
   override public function toString():String
   {
-    return 'KeyboardInputScriptEvent(type=' + type + ', event=' + event + ')';
+    return 'KeyboardInputScriptEvent(type=' + type + ', event=' + keyEvent + ')';
   }
 }
 
@@ -573,12 +616,18 @@ class CapsuleScriptEvent extends ScriptEvent
    */
   public var variationId(default, null):String;
 
-  public function new(type:ScriptEventType, capsule:SongMenuItem, difficultyId:String, variationId:String):Void
+  /**
+   * The rank achieved on the selected song.
+   */
+  public var rank(default, null):ScoringRank;
+
+  public function new(type:ScriptEventType, capsule:SongMenuItem, difficultyId:String, variationId:String, ?rank:ScoringRank):Void
   {
     super(type, false);
     this.capsule = capsule;
     this.difficultyId = difficultyId;
     this.variationId = variationId;
+    this.rank = rank;
   }
 
   override public function toString():String

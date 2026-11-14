@@ -1,8 +1,36 @@
 package luaslice.modding;
 
+using Lambda;
+
 @:nullSafety
 class ModSelection
 {
+  /** Normalize legacy folder selections without changing load order or losing invalid installations. */
+  public static function toModIds<T:{id:String, dirName:String}>(entries:Array<String>, mods:Array<T>):Array<String>
+  {
+    var result:Array<String> = [];
+    for (entry in entries)
+    {
+      var mod = mods.find(item -> item.id == entry);
+      if (mod == null) mod = mods.find(item -> item.dirName == entry);
+      var id = mod == null ? entry : mod.id;
+      if (!result.contains(id)) result.push(id);
+    }
+    return result;
+  }
+
+  public static function toModDirs<T:{id:String, dirName:String}>(entries:Array<String>, mods:Array<T>):Array<String>
+  {
+    var result:Array<String> = [];
+    for (entry in entries)
+    {
+      var mod = mods.find(item -> item.id == entry);
+      var dir = mod == null ? entry : mod.dirName;
+      if (!result.contains(dir)) result.push(dir);
+    }
+    return result;
+  }
+
   public static function reconcile(enabled:Array<String>, known:Array<String>, installed:Array<String>, discoverable:Array<String>,
       enableNewMods:Bool):{enabled:Array<String>, known:Array<String>}
   {

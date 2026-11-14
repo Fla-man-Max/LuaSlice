@@ -16,10 +16,11 @@ import funkin.ui.TextMenuList.TextMenuItem;
 import funkin.ui.options.items.CheckboxPreferenceItem;
 import funkin.ui.options.items.NumberPreferenceItem;
 import funkin.ui.options.items.EnumPreferenceItem;
-#if mobile
-import funkin.mobile.ui.FunkinBackButton;
-import funkin.mobile.input.ControlsHandler;
-import funkin.mobile.ui.FunkinHitbox.FunkinHitboxControlSchemes;
+import funkin.ui.debug.FunkinDebugDisplay.DebugDisplayMode;
+#if FEATURE_TOUCH_CONTROLS
+import funkin.touch.ui.FunkinBackButton;
+import funkin.touch.input.ControlsHandler;
+import funkin.touch.ui.FunkinHitbox.FunkinHitboxControlSchemes;
 import funkin.util.TouchUtil;
 import funkin.util.SwipeUtil;
 #end
@@ -89,7 +90,7 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
   {
     itemDescBox.makeSolidColor(1, 1, FlxColor.BLACK);
     itemDescBox.alpha = 0.6;
-    itemDesc.setFormat(Paths.font('vcr.ttf'), 32, FlxColor.WHITE, FlxTextAlign.CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+    itemDesc.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 32, FlxColor.WHITE, FlxTextAlign.CENTER, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
     itemDesc.borderSize = 3;
 
     // Update the text.
@@ -117,7 +118,10 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     createPrefItemCheckbox('Downscroll', 'When enabled, notes move downwards toward the strumline at the bottom of the screen.', function(value:Bool):Void
     {
       Preferences.downscroll = value;
-    }, Preferences.downscroll);
+    }, Preferences.downscroll,
+      #if FEATURE_TOUCH_CONTROLS ControlsHandler.hasExternalInputDevice
+      || Preferences.controlsScheme != FunkinHitboxControlSchemes.Arrows
+      #end);
     #if !mobile
     createPrefItemCheckbox('Middlescroll', 'When enabled, your notes are centered and the opponent notes are faded to the sides.', function(value:Bool):Void
     {
@@ -155,6 +159,7 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
       Preferences.hapticsIntensityMultiplier = value;
     }, null, Preferences.hapticsIntensityMultiplier, 0.1, 5, 0.1, 1);
     #end
+
     #if !mobile
     createPrefItemCheckbox('Pause on Unfocus', 'When enabled, the game automatically pauses when losing focus.', function(value:Bool):Void
     {
@@ -165,6 +170,7 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
       Preferences.autoFullscreen = value;
     }, Preferences.autoFullscreen);
     #end
+
 
     #if FEATURE_SCREENSHOTS
     createPrefItemCheckbox('Hide Mouse', 'When enabled, the mouse is hidden while taking a screenshot.', function(value:Bool):Void
@@ -245,8 +251,12 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
    */
   function createPrefItemCheckbox(prefName:String, prefDesc:String, onChange:Bool->Void, defaultValue:Bool, available:Bool = true):Void
   {
-    var checkbox:CheckboxPreferenceItem = new CheckboxPreferenceItem(funkin.ui.FullScreenScaleMode.gameNotchSize.x, 120 * (items.length - 1 + 1),
-      defaultValue, available);
+    var checkbox:CheckboxPreferenceItem = new CheckboxPreferenceItem(
+      funkin.ui.FullScreenScaleMode.gameNotchSize.x,
+      120 * (items.length - 1 + 1),
+      defaultValue,
+      available
+    );
 
     var item = items.createItem(0, (120 * items.length) + 30, prefName, AtlasFont.BOLD, function()
     {
@@ -271,8 +281,15 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
    * @param step The value to increment/decrement by (default = 0.1)
    * @param precision Rounds decimals up to a `precision` amount of digits (ex: 4 -> 0.1234, 2 -> 0.12)
    */
-  function createPrefItemNumber(prefName:String, prefDesc:String, onChange:Float->Void, ?valueFormatter:Float->String, defaultValue:Float, min:Float,
-      max:Float, step:Float = 0.1, precision:Int):Void
+  function createPrefItemNumber(prefName:String,
+    prefDesc:String,
+    onChange:Float->Void,
+    ?valueFormatter:Float->String,
+    defaultValue:Float,
+    min:Float,
+    max:Float,
+    step:Float = 0.1,
+    precision:Int):Void
   {
     var item = new NumberPreferenceItem(funkin.ui.FullScreenScaleMode.gameNotchSize.x, (120 * items.length) + 30, prefName, defaultValue, min, max, step,
       precision, onChange, valueFormatter);

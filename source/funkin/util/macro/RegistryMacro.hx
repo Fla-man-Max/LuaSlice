@@ -29,6 +29,11 @@ typedef RegistryTypeParams =
    */
   var dataType:Any; // DefType or ClassType
 
+  /**
+   * The type for the params of an entry. This is usually a typedef of a struct.
+   */
+  var paramsType:Any; // DefType or ClassType
+
 }
 
 /**
@@ -38,7 +43,11 @@ typedef RegistryTypeParams =
  */
 class RegistryMacro
 {
-  static final DATA_FILE_BASE_PATH:String = "assets/preload/data";
+  #if ios
+  static final DATA_FILE_BASE_PATH:String = "../../../../../assets";
+  #else
+  static final DATA_FILE_BASE_PATH:String = "assets";
+  #end
 
   /**
    * Builds the registry class.
@@ -59,7 +68,7 @@ class RegistryMacro
     // Build an internal class with static functions that allow the Entry class to call functions on the Registry class.
     buildEntryImpl(typeParams.entryType, cls);
 
-    fields = fields.concat(buildRegistryMethods(cls, fields, typeParams.entryType, typeParams.dataType));
+    fields = fields.concat(buildRegistryMethods(cls, fields, typeParams.entryType, typeParams.dataType, typeParams.paramsType));
 
     // Indicate that the class has been processed so we don't process twice.
     cls.meta.add(":funkinProcessed", [], cls.pos);
@@ -128,7 +137,11 @@ class RegistryMacro
           throw 'Not a class';
       }
     }
-    return {entryType: typeParams[0], dataType: typeParams[1]};
+    return {
+      entryType: typeParams[0],
+      dataType: typeParams[1],
+      paramsType: typeParams[2]
+    };
   }
 
   /**
@@ -140,26 +153,35 @@ class RegistryMacro
    * @param dataType The type of the data for entries in the registry.
    * @return The modified list of fields for the target class.
    */
-  static function buildRegistryMethods(cls:ClassType, fields:Array<Field>, entryType:ClassType, dataType:Dynamic):Array<Field>
+  static function buildRegistryMethods(cls:ClassType, fields:Array<Field>, entryType:ClassType, dataType:DefType, paramsType:DefType):Array<Field>
   {
-    var scriptedEntryClsName:String = entryType.pack.join('.') + '.Scripted' + entryType.name;
+    var clsTypeName:String = '${cls.pack.join('.')}.${cls.name}';
+    var clsTypeExpr:Expr = Context.parse(clsTypeName, cls.pos);
 
-    var getScriptedClassName:String = '${scriptedEntryClsName}';
+    var entryClsName:String = '${entryType.pack.join('.')}.${entryType.name}';
+    var entryTypeExpr:Expr = Context.parse(entryClsName, cls.pos);
 
-    var createScriptedEntry:String = '${scriptedEntryClsName}.scriptInit(clsName, "unknown")';
+    var createScriptedEntry:String = '${entryClsName}.scriptInit(clsName, "unknown")';
 
-    var newJsonParser:String = 'new json2object.JsonParser<${dataType.module}.${dataType.name}>()';
-
+    var dataTypeClassName:String = '${dataType.module}.${dataType.name}';
+    var newJsonParser:String = 'new json2object.JsonParser<${dataTypeClassName}>({ignoreUnknownVariables: false})';
     var dataFilePath:String = getRegistryDataFilePath(cls, fields);
+
+    var paramsTypeClassName:String = '${paramsType.module}.${paramsType.name}';
+    var paramsComplexType:ComplexType = Context.toComplexType(Context.getType(paramsTypeClassName));
+
+    // Doing this here rather than inline lets us set the macro position  to `entryType.pos`,
+    // meaning the entry class gets the error message rather than this macro!
+    var queryAssetsExpr:Expr = Context.parse('${entryClsName}.queryAssets(type, entryId, params)', entryType.pos);
 
     var dataPath:String = DATA_FILE_BASE_PATH;
     #if ios
-    if (!sys.FileSystem.exists(dataPath)) dataPath = "../../../../../" + dataPath;
+    if (!sys.FileSystem.exists(dataPath)) dataPath = '../../../../../' + dataPath;
     #end
 
     var baseGameEntryIds:Array<Expr> = listBaseGameEntryIds('${dataPath}/${dataFilePath}/');
 
-    return (macro class TempClass
+    var result:Array<Field> = (macro class TempClass
       {
         public function listBaseGameEntryIds():Array<String>
         {
@@ -174,12 +196,12 @@ class RegistryMacro
           });
         }
 
-        function getScriptedClassNames()
+        function getScriptedClassNames():Array<String>
         {
-          return ${Context.parse(getScriptedClassName, Context.currentPos())}.listScriptClasses();
+          return ${Context.parse(entryClsName, Context.currentPos())}.listScriptClasses();
         }
 
-        function createScriptedEntry(clsName:String)
+        override function createScriptedEntry(clsName:String)
         {
           return ${Context.parse(createScriptedEntry, Context.currentPos())};
         }
@@ -187,12 +209,14 @@ class RegistryMacro
         public function parseEntryData(id:String)
         {
           var parser = ${Context.parse(newJsonParser, Context.currentPos())};
-          parser.ignoreUnknownVariables = false;
 
           @:privateAccess
           switch (this.loadEntryFile(id))
           {
-            case {fileName: fileName, contents: contents}:
+            case {
+              fileName: fileName,
+              contents: contents
+            }:
               parser.fromJson(funkin.util.SerializerUtil.sanitizeJSON(contents), fileName);
             default:
               return null;
@@ -204,13 +228,13 @@ class RegistryMacro
             this.printErrors(parser.errors, id);
             return null;
           }
+
           return parser.value;
         }
 
         public function parseEntryDataRaw(contents:String, ?fileName:String)
         {
           var parser = ${Context.parse(newJsonParser, Context.currentPos())};
-          parser.ignoreUnknownVariables = false;
           parser.fromJson(contents, fileName);
 
           if (parser.errors.length > 0)
@@ -221,7 +245,63 @@ class RegistryMacro
           }
           return parser.value;
         }
-      }).fields.filter((field) -> return !MacroUtil.fieldAlreadyExists(field.name));
+      }).fields;
+
+    // I had to do this one separate because of the dynamic params argument type.
+    // If you can find a better way please use it.
+    result.push({
+      name: 'queryAssets',
+      doc: 'Retrieves the value of a local variable of a scripted class.',
+      access: [APublic],
+      meta: null,
+      pos: cls.pos,
+      kind: FFun({
+        args: [
+          {
+            name: 'type',
+            type: macro :funkin.assets.Assets.AssetType,
+          },
+          {
+            name: 'entryId',
+            type: macro :String
+          },
+          {
+            name: 'params',
+            type: macro :$paramsComplexType,
+            opt: true
+          },
+        ],
+        params: null,
+        ret: macro :Array<funkin.assets.Paths.AssetPath>,
+        expr: macro
+        {
+          if (entryId == null || entryId == '') return [];
+
+          // Determine if the entry is scripted.
+          var scriptCls:Null<String> = getScriptedEntryClassName(entryId, params);
+
+          if (scriptCls != null)
+          {
+            if (${entryTypeExpr}.scriptStaticHas(scriptCls, 'queryAssets'))
+            {
+              return ${entryTypeExpr}.scriptStaticCall(scriptCls, 'queryAssets', [type, entryId, params]);
+            }
+          }
+
+          // Fallthrough.
+          return ${queryAssetsExpr};
+        },
+      }),
+    });
+
+    result = result.filter(function(field:Field):Bool
+    {
+      // Exclude fields which already exist on the CURRENT class
+      // (use override for the superclass)
+      return !MacroUtil.fieldAlreadyExists(field.name, false);
+    });
+
+    return result;
   }
 
   /**
@@ -278,9 +358,9 @@ class RegistryMacro
 
     return (macro class TempClass
       {
-        public function _fetchData(id:String)
+        public static function _fetchData(id:String)
         {
-          return ${Context.parse(impl, Context.currentPos())}._fetchData(this, id);
+          return ${Context.parse(impl, Context.currentPos())}._fetchData(id);
         }
 
         public function toString()
@@ -313,7 +393,7 @@ class RegistryMacro
       kind: TypeDefKind.TDClass(null, [], false, false, false),
       fields: (macro class TempClass
         {
-          public static inline function _fetchData(me:$clsType, id:String)
+          public static inline function _fetchData(id:String)
           {
             return $
             {
@@ -353,11 +433,25 @@ class RegistryMacro
                 {
                   // Inside the super() call.
                   case ECall(_, args):
-                    // var registryId:String = args[0].toString();
-                    var dataPath:String = args[1].toString().replace('"', '').replace("'", '');
-                    // var versionRule = args[2].toString();
+                    var params:Expr = args[0];
+                    switch (params.expr)
+                    {
+                      case EObjectDecl(fields):
+                        for (field in fields)
+                        {
+                          switch (field.field)
+                          {
+                            // case "registryId":
+                            // case "versionRule":
+                            case "dataFilePath":
+                              var fieldValue:Expr = field.expr;
+                              return fieldValue.toString().replace('"', '').replace("'", '');
+                          }
+                        }
 
-                    return dataPath;
+                      default:
+                        Context.error('${cls.name}.new: RegistryMacro expected super call', field.pos);
+                    }
                   default:
                     Context.error('${cls.name}.new: RegistryMacro expected super call', field.pos);
                 }
@@ -375,15 +469,23 @@ class RegistryMacro
 
   static function listBaseGameEntryIds(dataFilePath:String):Array<Expr>
   {
-    var result:Array<Expr> = [];
+    var results:Array<Expr> = [];
+
+    // Read folder contents, non-recursively.
+    // For nested entries, this will return folder names, and for non-nested entries, it will return file names.
     var files:Array<String> = sys.FileSystem.readDirectory(dataFilePath);
 
     for (file in files)
     {
-      result.push(macro $v{file.replace('.json', '')});
+      var fileExt = haxe.io.Path.extension(file);
+      if (fileExt != '' && fileExt != 'json') continue;
+
+      var entryId = file.replace('.json', '');
+
+      results.push(macro $v{entryId});
     }
 
-    return result;
+    return results;
   }
 
   /**

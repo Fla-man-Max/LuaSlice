@@ -45,6 +45,10 @@ class ChartTouchGestureTest
     expect(ChartEditorTouchGesture.normalizeDuration(0), 1.0, 'minimum duration');
     expect(ChartEditorTouchGesture.normalizeDuration(5), 2.0, 'maximum duration');
     expect(ChartEditorTouchGesture.normalizeDuration(1.26), 1.3, 'duration increments');
+    g.reset();
+    g.step(5, true, 20, 30, 1, 0, true, 1.5);
+    expect(g.step(5, false, 20, 30, 1, Math.NaN, true, 1.5), Waiting, 'invalid frame delta cannot advance hold');
+    expect(g.step(5, false, 20, 30, 1, 1.5, true, 1.5), OpenMenu, 'invalid frame delta cannot poison later hold');
     trace('CHART_TOUCH_GESTURE_OK');
   }
 }

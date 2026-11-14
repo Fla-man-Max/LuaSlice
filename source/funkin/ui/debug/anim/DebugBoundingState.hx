@@ -14,7 +14,7 @@ import flixel.util.FlxColor;
 import funkin.input.Cursor;
 import funkin.play.character.BaseCharacter;
 import funkin.data.character.CharacterData;
-import funkin.data.character.CharacterData.CharacterDataParser;
+import funkin.data.character.CharacterRegistry;
 import funkin.ui.mainmenu.MainMenuState;
 import funkin.util.MouseUtil;
 import funkin.util.SerializerUtil;
@@ -31,8 +31,18 @@ import openfl.events.Event;
 import openfl.events.IOErrorEvent;
 import openfl.geom.Rectangle;
 import openfl.net.FileReference;
-#if mobile
-import funkin.mobile.ui.FunkinBackButton;
+#if FEATURE_TOUCH_CONTROLS
+import funkin.touch.ui.FunkinBackButton;
+#end
+#if (mobile && FEATURE_TOUCH_CONTROLS)
+import haxe.ui.components.Button;
+import haxe.ui.components.CheckBox;
+import haxe.ui.components.Label;
+import haxe.ui.containers.HBox;
+import haxe.ui.containers.ScrollView;
+import haxe.ui.containers.VBox;
+import funkin.util.FileUtil;
+import luaslice.debug.CharacterEditorDrag;
 #end
 
 using flixel.util.FlxSpriteUtil;
@@ -53,9 +63,23 @@ class DebugBoundingState extends FlxState
   var haxeUIFocused(get, default):Bool = false;
   var currentAnimationName(get, never):String;
 
-  #if mobile
+  #if FEATURE_TOUCH_CONTROLS
   var mobileBackButton:FunkinBackButton;
   var pinchDistance:Float = 0;
+  #end
+  #if (mobile && FEATURE_TOUCH_CONTROLS)
+  var touchDrag = new CharacterEditorDrag();
+  var fingerEdit:Bool = false;
+  var fingerSpeed:Float = 1;
+  var fingerOffsetX:Float = 0;
+  var fingerOffsetY:Float = 0;
+  var keyboardShortcuts:VBox;
+  var keyboardPoll:Float = 0;
+  var editorClosed:Bool = false;
+  var touchStatus:Label;
+  var touchOnion:CheckBox;
+  var touchFlip:CheckBox;
+  var touchSpeedControls:HBox;
   #end
 
   function get_currentAnimationName():String
@@ -67,26 +91,22 @@ class DebugBoundingState extends FlxState
   {
     // get the screen position, according to the HUD camera, temp default to FlxG.camera juuust in case?
     var hudMousePos:FlxPoint = FlxG.mouse.getViewPosition(hudCam ?? FlxG.camera);
-    return Screen.instance.hasSolidComponentUnderPoint(hudMousePos.x, hudMousePos.y);
+    final focused = Screen.instance.hasSolidComponentUnderPoint(hudMousePos.x, hudMousePos.y);
+    hudMousePos.put();
+    return focused;
   }
 
   override function create():Void
   {
-    Paths.setCurrentLevel('week1');
-    
     FlxG.sound.music?.stop();
 
     Cursor.show();
-    FunkinSound.playMusic('chartEditorLoop', {
+    FunkinSound.playMusic('ui/editors/chart-editor/artistic-expression/artistic-expression', {
       startingVolume: 0.0
     });
     FlxG.sound.music.fadeIn(10, 0, 1);
 
-    #if mobile
-    WindowUtil.setWindowTitle('${Constants.TITLE} Animation Editor [WIP]');
-    #else
     WindowUtil.setWindowTitle('${Constants.TITLE} Animation Editor');
-    #end
 
     hudCam = new FlxCamera();
     hudCam.bgColor.alpha = 0;
@@ -97,8 +117,10 @@ class DebugBoundingState extends FlxState
     // we are setting this as the default draw camera only temporarily, to trick haxeui
     FlxG.cameras.add(hudCam);
 
-    var str = Paths.xml('ui/animation-editor/offset-editor-view');
+    var str = Paths.xml('ui/editors/animation-editor/offset-editor-view');
     offsetEditorDialog = cast RuntimeComponentBuilder.fromAsset(str);
+
+    if (offsetEditorDialog == null) throw "Could not build editor UI, check the layout file.";
 
     // offsetEditorDialog.findComponent("btnViewSpriteSheet").onClick = _ -> curView = SPRITESHEET;
     var viewDropdown:DropDown = offsetEditorDialog.findComponent("swapper", DropDown);
@@ -125,12 +147,15 @@ class DebugBoundingState extends FlxState
 
     initSpritesheetView();
     initOffsetView();
+    #if (mobile && FEATURE_TOUCH_CONTROLS)
+    buildTouchControls();
+    #end
 
     Cursor.show();
 
     super.create();
 
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
     mobileBackButton = new FunkinBackButton(FlxG.width - 230, FlxG.height - 200, FlxColor.WHITE, exitEditor, 0.2, true);
     mobileBackButton.cameras = [hudCam];
     add(mobileBackButton);
@@ -145,7 +170,7 @@ class DebugBoundingState extends FlxState
     spriteSheetView = new FlxGroup();
     add(spriteSheetView);
 
-    var tex = Paths.getSparrowAtlas('characters/BOYFRIEND');
+    var tex = Paths.getSparrowAtlas('gameplay/characters/bf-pixel/bf-pixel');
     // tex.frames[0].uv
 
     bf = new FlxSprite();
@@ -175,7 +200,10 @@ class DebugBoundingState extends FlxState
 
     for (i in frameShit)
     {
-      var lineStyle:LineStyle = {color: FlxColor.RED, thickness: 2};
+      var lineStyle:LineStyle = {
+        color: FlxColor.RED,
+        thickness: 2
+      };
 
       var uvW:Float = (i.uv.right * i.parent.width) - (i.uv.left * i.parent.width);
       var uvH:Float = (i.uv.bottom * i.parent.height) - (i.uv.top * i.parent.height);
@@ -218,18 +246,20 @@ class DebugBoundingState extends FlxState
     add(offsetView);
 
     txtOffsetShit = new FlxText(20, 20, 0, "", 20);
-    txtOffsetShit.setFormat(Paths.font("vcr.ttf"), 26, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+    txtOffsetShit.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 26, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
     txtOffsetShit.cameras = [hudCam];
     txtOffsetShit.y = FlxG.height - 20 - txtOffsetShit.height;
     offsetView.add(txtOffsetShit);
 
-    var characters:Array<String> = CharacterDataParser.listCharacterIds();
+    var characters:Array<String> = CharacterRegistry.instance.listEntryIds();
     characters.sort(SortUtil.alphabetically);
 
     var charDropdown:DropDown = offsetEditorDialog.findComponent('characterDropdown', DropDown);
     for (char in characters)
     {
-      charDropdown.dataSource.add({text: char});
+      charDropdown.dataSource.add({
+        text: char
+      });
     }
 
     charDropdown.onChange = function(e:UIEvent)
@@ -282,7 +312,7 @@ class DebugBoundingState extends FlxState
   function addInfo(str:String, value:Dynamic)
   {
     var swagText:FlxText = new FlxText(10, FlxG.height - 32);
-    swagText.setFormat(Paths.font("vcr.ttf"), 26, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
+    swagText.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 26, FlxColor.WHITE, LEFT, FlxTextBorderStyle.OUTLINE, FlxColor.BLACK);
     swagText.scrollFactor.set();
 
     for (text in txtGrp.members)
@@ -301,10 +331,19 @@ class DebugBoundingState extends FlxState
 
   override function update(elapsed:Float)
   {
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
     final pinching:Bool = handlePinchZoom();
     #else
     final pinching:Bool = false;
+    #end
+    #if (mobile && FEATURE_TOUCH_CONTROLS)
+    keyboardPoll -= elapsed;
+    if (keyboardPoll <= 0)
+    {
+      keyboardPoll = 0.5;
+      refreshKeyboardShortcuts();
+    }
+    handleFingerDrag(pinching);
     #end
 
     if (FlxG.keys.justPressed.ONE)
@@ -339,7 +378,7 @@ class DebugBoundingState extends FlxState
         offsetView.active = true;
         offsetAnimationDropdown.show();
         offsetControls();
-        if (!pinching) mouseOffsetMovement();
+        if (!pinching #if (mobile && FEATURE_TOUCH_CONTROLS) && FlxG.touches.list.length == 0 #end) mouseOffsetMovement();
     }
 
     if (FlxG.keys.justPressed.H) hudCam.visible = !hudCam.visible;
@@ -349,10 +388,10 @@ class DebugBoundingState extends FlxState
       exitEditor();
     }
 
-    if (FlxG.mouse.justPressed || FlxG.mouse.justPressedMiddle) FunkinSound.playOnce(Paths.sound("chartingSounds/ClickDown"));
-    if (FlxG.mouse.justReleased || FlxG.mouse.justReleasedMiddle) FunkinSound.playOnce(Paths.sound("chartingSounds/ClickUp"));
+    if (FlxG.mouse.justPressed || FlxG.mouse.justPressedMiddle) FunkinSound.playOnce(Paths.sound('ui/editors/chart-editor/charting-sounds/click-down'));
+    if (FlxG.mouse.justReleased || FlxG.mouse.justReleasedMiddle) FunkinSound.playOnce(Paths.sound('ui/editors/chart-editor/charting-sounds/click-up'));
 
-    if (!pinching)
+    if (!pinching #if (mobile && FEATURE_TOUCH_CONTROLS) && FlxG.touches.list.length == 0 #end)
     {
       MouseUtil.mouseCamDrag();
       if (!haxeUIFocused) handleTrackpadScroll();
@@ -366,7 +405,7 @@ class DebugBoundingState extends FlxState
     super.update(elapsed);
   }
 
-  #if mobile
+  #if FEATURE_TOUCH_CONTROLS
   function handlePinchZoom():Bool
   {
     final touches = FlxG.touches.list.filter((touch) -> touch != null && touch.pressed);
@@ -381,6 +420,11 @@ class DebugBoundingState extends FlxState
     final deltaY:Float = touches[0].gameY - touches[1].gameY;
     final currentDistance:Float = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
 
+    #if mobile
+    if (pinchDistance <= 0 && ((touchDrag.finger == null && !(touches[0].justPressed && touches[1].justPressed))
+        || overTouchControls(touches[0].gameX, touches[0].gameY)
+        || overTouchControls(touches[1].gameX, touches[1].gameY))) return true;
+    #end
     if (pinchDistance > 0 && currentDistance > 0)
     {
       FlxG.camera.zoom = flixel.math.FlxMath.bound(FlxG.camera.zoom * currentDistance / pinchDistance, 0.1, 4);
@@ -388,6 +432,241 @@ class DebugBoundingState extends FlxState
 
     pinchDistance = currentDistance;
     return true;
+  }
+  #end
+
+  #if (mobile && FEATURE_TOUCH_CONTROLS)
+  function refreshKeyboardShortcuts():Void
+  {
+    final connected = #if android funkin.external.android.KeyboardUtil.keyboardConnected
+      #elseif ios funkin.external.apple.KeyboardUtil.isKeyboardConnected() #else false #end;
+    if (keyboardShortcuts.hidden == connected) keyboardShortcuts.hidden = !connected;
+  }
+
+  function buildTouchControls():Void
+  {
+    offsetEditorDialog.findComponent('characterPanelScroll', ScrollView).scrollMode = DRAG;
+    resizeTouchPanel();
+    keyboardShortcuts = offsetEditorDialog.findComponent('keyboardShortcuts', VBox);
+    refreshKeyboardShortcuts();
+    final panel = offsetEditorDialog.findComponent('touchControls', VBox);
+    panel.hidden = false;
+    addTouchLabel(panel, 'Controls');
+    addTouchToggle(panel, 'Finger Edit', false, enabled ->
+    {
+      fingerEdit = enabled;
+      touchDrag.cancel();
+      if (touchSpeedControls != null) touchSpeedControls.disabled = !enabled;
+      if (enabled) showAnimationView();
+      if (touchStatus != null) touchStatus.text = enabled ? 'Drag to edit the animation offset.' : 'Drag to move the camera.';
+    });
+    addTouchLabel(panel, 'Finger Edit Speed');
+    touchSpeedControls = new HBox();
+    panel.addComponent(touchSpeedControls);
+    final speedText = new Label();
+    speedText.text = '1x';
+    speedText.width = 45;
+    final changeSpeed = (amount:Float) ->
+    {
+      fingerSpeed = flixel.math.FlxMath.bound(fingerSpeed + amount, 0.25, 4);
+      speedText.text = '${fingerSpeed}x';
+    };
+    addTouchButton(touchSpeedControls, '−', changeSpeed.bind(-0.25));
+    touchSpeedControls.addComponent(speedText);
+    addTouchButton(touchSpeedControls, '+', changeSpeed.bind(0.25));
+    touchSpeedControls.disabled = true;
+    final zoom = new HBox();
+    panel.addComponent(zoom);
+    addTouchButton(zoom, 'Zoom In', () -> zoomPreview(1.2));
+    addTouchButton(zoom, 'Zoom Out', () -> zoomPreview(1 / 1.2));
+    addTouchButton(panel, 'Save Character', saveCharacterFile);
+    addTouchButton(panel, 'Load Character', loadCharacterFile);
+    addTouchLabel(panel, 'Toggles');
+    touchOnion = addTouchToggle(panel, 'Onion Skin', true, visible ->
+    {
+      if (onionSkinChar == null) return;
+      onionSkinChar.visible = visible;
+      if (visible) updateOnionSkin();
+    });
+    touchFlip = addTouchToggle(panel, 'Flip Horizontally', false, flipped ->
+    {
+      if (swagChar == null) return;
+      swagChar.flipX = flipped;
+      if (onionSkinChar?.visible == true) updateOnionSkin();
+    });
+    addTouchButton(panel, 'Play Idle', () ->
+    {
+      if (swagChar != null) playTouchAnimation(swagChar.hasAnimation('danceLeft') ? 'danceLeft' : 'idle');
+    });
+    final arrows = new HBox();
+    panel.addComponent(arrows);
+    for (item in [{text: '←', anim: 'singLEFT'}, {text: '↓', anim: 'singDOWN'}, {text: '↑', anim: 'singUP'}, {text: '→', anim: 'singRIGHT'}])
+      addTouchButton(arrows, item.text, playTouchAnimation.bind(item.anim));
+    touchStatus = addTouchLabel(panel, 'Drag to move the camera.');
+    touchStatus.percentWidth = 100;
+    touchStatus.wordWrap = true;
+  }
+
+  function resizeTouchPanel():Void
+  {
+    if (offsetEditorDialog != null)
+      offsetEditorDialog.height = Math.min(500, FlxG.height / haxe.ui.Toolkit.scaleY - 32);
+  }
+
+  override public function onResize(width:Int, height:Int):Void
+  {
+    super.onResize(width, height);
+    resizeTouchPanel();
+  }
+
+  function overTouchControls(x:Float, y:Float):Bool
+  {
+    final uiX = x / haxe.ui.Toolkit.scaleX;
+    final uiY = y / haxe.ui.Toolkit.scaleY;
+    return (offsetEditorDialog.visible && hudCam.visible
+        && (offsetEditorDialog.hitTest(uiX, uiY) || Screen.instance.hasSolidComponentUnderPoint(uiX, uiY)))
+      || (mobileBackButton != null && x >= mobileBackButton.x && x <= mobileBackButton.x + mobileBackButton.width
+        && y >= mobileBackButton.y && y <= mobileBackButton.y + mobileBackButton.height);
+  }
+
+  function handleFingerDrag(pinching:Bool):Void
+  {
+    if (pinching)
+    {
+      touchDrag.cancel();
+      return;
+    }
+    for (touch in FlxG.touches.list)
+    {
+      if (!touch.pressed) continue;
+      if (touchDrag.finger == null && touch.justPressed && !overTouchControls(touch.gameX, touch.gameY))
+      {
+        touchDrag.begin(touch.touchPointID, touch.gameX, touch.gameY, fingerEdit && curView == ANIMATIONS && swagChar != null);
+        final offsets = swagChar?.animOffsets;
+        fingerOffsetX = offsets == null ? 0 : offsets[0];
+        fingerOffsetY = offsets == null ? 0 : offsets[1];
+      }
+      if (touch.touchPointID != touchDrag.finger) continue;
+      final delta = touchDrag.move(touch.touchPointID, touch.gameX, touch.gameY, FlxG.camera.zoom, fingerSpeed);
+      if (delta == null) return;
+      if (delta.edit && swagChar != null)
+      {
+        fingerOffsetX += delta.x;
+        fingerOffsetY += delta.y;
+        final x = Math.round(fingerOffsetX);
+        final y = Math.round(fingerOffsetY);
+        if (swagChar.animOffsets[0] == x && swagChar.animOffsets[1] == y) return;
+        swagChar.animOffsets = [x, y];
+        swagChar.animationOffsets.set(swagChar.getCurrentAnimation(), swagChar.animOffsets);
+        txtOffsetShit.text = 'Offset: ' + swagChar.animOffsets;
+        txtOffsetShit.y = FlxG.height - 20 - txtOffsetShit.height;
+      }
+      else if (!delta.edit) FlxG.camera.scroll.add(delta.x, delta.y);
+      return;
+    }
+    touchDrag.cancel();
+  }
+
+  function showAnimationView():Void
+  {
+    if (curView == ANIMATIONS) return;
+    final view = offsetEditorDialog.findComponent('swapper', DropDown);
+    view.selectedIndex = 1;
+    curView = ANIMATIONS;
+    if (swagChar != null) FlxG.camera.focusOn(swagChar.getMidpoint(FlxPoint.weak()));
+  }
+
+  function playTouchAnimation(name:String):Void
+  {
+    if (swagChar == null || !swagChar.hasAnimation(name)) return;
+    showAnimationView();
+    offsetAnimationDropdown.selectItemBy(item -> item.id == name);
+    playCharacterAnimation(name, true);
+  }
+
+  function zoomPreview(factor:Float):Void
+  {
+    FlxG.camera.zoom = flixel.math.FlxMath.bound(FlxG.camera.zoom * factor, 0.1, 4);
+  }
+
+  function saveCharacterFile():Void
+  {
+    if (swagChar == null) return;
+    FileUtil.saveFile('Save Character', haxe.io.Bytes.ofString(buildOutputStringNew()), [FileUtil.FILE_FILTER_JSON], _ ->
+    {
+      if (!editorClosed) touchStatus.text = 'Character saved.';
+    }, null, haxe.io.Path.withoutDirectory(swagChar.characterId) + '.json');
+  }
+
+  function loadCharacterFile():Void
+  {
+    FileUtil.browseForFile('Load Character', [FileUtil.FILE_FILTER_JSON], file ->
+    {
+      if (editorClosed) return;
+      var id = file.name;
+      #if android
+      if (StringTools.startsWith(file.fullPath, 'content://'))
+      {
+        final displayName = funkin.external.android.JNIUtil.createStaticMethod('funkin/util/DocumentUtil', 'getDisplayName',
+          '(Ljava/lang/String;)Ljava/lang/String;');
+        final name:Null<String> = displayName == null ? null : displayName(file.fullPath);
+        if (name != null) id = haxe.io.Path.withoutExtension(name);
+      }
+      #end
+      var preview:BaseCharacter = null;
+      var onion:BaseCharacter = null;
+      try
+      {
+        final parser = new json2object.JsonParser<CharacterData>({ignoreUnknownVariables: false});
+        parser.fromJson(SerializerUtil.sanitizeJSON(file.bytes.toString()), file.name);
+        final data = parser.errors.length == 0 ? CharacterData.validateCharacterData(id, parser.value) : null;
+        if (data == null) throw 'Invalid character JSON.';
+        preview = CharacterRegistry.instance.createPreviewCharacter(id, data);
+        onion = CharacterRegistry.instance.createPreviewCharacter(id, data);
+      }
+      catch (error:Dynamic)
+      {
+        preview?.destroy();
+        onion?.destroy();
+        touchStatus.text = Std.string(error);
+        return;
+      }
+      installCharacterPreview(preview, onion);
+      showAnimationView();
+      FlxG.camera.focusOn(swagChar.getMidpoint(FlxPoint.weak()));
+      touchStatus.text = 'Loaded ' + id + '.';
+    }, null, null, error ->
+    {
+      if (!editorClosed) touchStatus.text = error;
+    });
+  }
+
+  static function addTouchButton(parent:haxe.ui.core.Component, text:String, run:Void->Void):Void
+  {
+    final control = new Button();
+    control.text = text;
+    control.height = 36;
+    control.onClick = _ -> run();
+    parent.addComponent(control);
+  }
+
+  static function addTouchLabel(parent:VBox, text:String):Label
+  {
+    final control = new Label();
+    control.text = text;
+    parent.addComponent(control);
+    return control;
+  }
+
+  static function addTouchToggle(parent:VBox, text:String, selected:Bool, change:Bool->Void):CheckBox
+  {
+    final control = new CheckBox();
+    control.text = text;
+    control.height = 32;
+    control.selected = selected;
+    control.onChange = _ -> change(control.selected);
+    parent.addComponent(control);
+    return control;
   }
   #end
 
@@ -411,7 +690,7 @@ class DebugBoundingState extends FlxState
   function exitEditor():Void
   {
     resetWindowTitle();
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
     FlxG.switchState(() -> new funkin.ui.debug.DebugMenuState());
     #else
     FlxG.switchState(() -> new MainMenuState());
@@ -425,6 +704,11 @@ class DebugBoundingState extends FlxState
 
   override function destroy()
   {
+    #if (mobile && FEATURE_TOUCH_CONTROLS)
+    editorClosed = true;
+    #end
+    mouseOffset.put();
+    oldPos.put();
     super.destroy();
 
     // Hide the mouse cursor on other states.
@@ -438,6 +722,7 @@ class DebugBoundingState extends FlxState
 
   function offsetControls():Void
   {
+    if (swagChar == null) return;
     // CTRL + S = Save Character Data
     // CTRL + SHIFT + S = Save Offsets
     // "WINDOWS" key code is the same keycode as COMMAND on mac
@@ -494,7 +779,10 @@ class DebugBoundingState extends FlxState
 
       if (targetLabel != currentAnimationName)
       {
-        offsetAnimationDropdown.value = {id: targetLabel, text: targetLabel};
+        offsetAnimationDropdown.value = {
+          id: targetLabel,
+          text: targetLabel
+        };
 
         // Play the new animation if the IDs are different.
         // Override the onion skin.
@@ -511,21 +799,33 @@ class DebugBoundingState extends FlxState
     if (FlxG.keys.justPressed.F)
     {
       onionSkinChar.visible = !onionSkinChar.visible;
+      #if (mobile && FEATURE_TOUCH_CONTROLS)
+      touchOnion.selected = onionSkinChar.visible;
+      #end
       if (onionSkinChar.visible) updateOnionSkin();
     }
 
     if (FlxG.keys.justPressed.G)
     {
       swagChar.flipX = !swagChar.flipX;
+      #if (mobile && FEATURE_TOUCH_CONTROLS)
+      touchFlip.selected = swagChar.flipX;
+      #end
       if (onionSkinChar.visible) updateOnionSkin();
     }
 
     // Plays the idle animation
     if (FlxG.keys.justPressed.SPACE)
     {
-      if (swagChar?.hasAnimation('danceLeft')) offsetAnimationDropdown.value = {id: 'danceLeft', text: 'danceLeft'};
+      if (swagChar?.hasAnimation('danceLeft')) offsetAnimationDropdown.value = {
+        id: 'danceLeft',
+        text: 'danceLeft'
+      };
       else
-        offsetAnimationDropdown.value = {id: 'idle', text: 'idle'};
+        offsetAnimationDropdown.value = {
+          id: 'idle',
+          text: 'idle'
+        };
 
       playCharacterAnimation(currentAnimationName, true);
     }
@@ -578,13 +878,12 @@ class DebugBoundingState extends FlxState
 
   function buildOutputStringNew():String
   {
-    final copiedData:Dynamic = SerializerUtil.fromJSON(SerializerUtil.toJSON(swagChar._data, false));
-    if (copiedData == null) return SerializerUtil.toJSON(swagChar._data, true);
+    final charData:Dynamic = SerializerUtil.fromJSON(SerializerUtil.toJSON(swagChar._data, false));
+    if (charData == null) return SerializerUtil.toJSON(swagChar._data, true);
+    charData.flipX = swagChar.flipX;
+    final characterIsPixel:Bool = charData.isPixel ?? CharacterData.DEFAULT_ISPIXEL;
 
-    var charData:CharacterData = cast copiedData;
-    final characterIsPixel:Bool = charData.isPixel ?? CharacterDataParser.DEFAULT_ISPIXEL;
-
-    if (charData.renderType == CharacterDataParser.DEFAULT_RENDERTYPE) Reflect.deleteField(charData, 'renderType');
+    if (charData.renderType == CharacterData.DEFAULT_RENDERTYPE) Reflect.deleteField(charData, 'renderType');
     if (isZeroPair(charData.offsets)) Reflect.deleteField(charData, 'offsets');
     if (isZeroPair(charData.cameraOffsets)) Reflect.deleteField(charData, 'cameraOffsets');
 
@@ -592,34 +891,34 @@ class DebugBoundingState extends FlxState
     if (healthIcon != null)
     {
       if (healthIcon.id == swagChar.characterId) Reflect.deleteField(healthIcon, 'id');
-      if (healthIcon.shouldBop == CharacterDataParser.DEFAULT_SHOULDBOP) Reflect.deleteField(healthIcon, 'shouldBop');
-      if (healthIcon.scale == CharacterDataParser.DEFAULT_SCALE) Reflect.deleteField(healthIcon, 'scale');
-      if (healthIcon.flipX == CharacterDataParser.DEFAULT_FLIPX) Reflect.deleteField(healthIcon, 'flipX');
+      if (healthIcon.shouldBop == CharacterData.DEFAULT_SHOULDBOP) Reflect.deleteField(healthIcon, 'shouldBop');
+      if (healthIcon.scale == CharacterData.DEFAULT_SCALE) Reflect.deleteField(healthIcon, 'scale');
+      if (healthIcon.flipX == CharacterData.DEFAULT_FLIPX) Reflect.deleteField(healthIcon, 'flipX');
       if (healthIcon.isPixel == characterIsPixel) Reflect.deleteField(healthIcon, 'isPixel');
       if (isZeroPair(healthIcon.offsets)) Reflect.deleteField(healthIcon, 'offsets');
       if (Reflect.fields(healthIcon).length == 0) Reflect.deleteField(charData, 'healthIcon');
     }
 
-    if (charData.startingAnimation == CharacterDataParser.DEFAULT_STARTINGANIM) Reflect.deleteField(charData, 'startingAnimation');
-    if (charData.scale == CharacterDataParser.DEFAULT_SCALE) Reflect.deleteField(charData, 'scale');
-    if (charData.isPixel == CharacterDataParser.DEFAULT_ISPIXEL) Reflect.deleteField(charData, 'isPixel');
-    if (charData.danceEvery == CharacterDataParser.DEFAULT_DANCEEVERY) Reflect.deleteField(charData, 'danceEvery');
-    if (charData.singTime == CharacterDataParser.DEFAULT_SINGTIME) Reflect.deleteField(charData, 'singTime');
-    if (charData.flipX == CharacterDataParser.DEFAULT_FLIPX) Reflect.deleteField(charData, 'flipX');
-    if (charData.applyStageMatrix == CharacterDataParser.DEFAULT_APPLYSTAGEMATRIX) Reflect.deleteField(charData, 'applyStageMatrix');
+    if (charData.startingAnimation == CharacterData.DEFAULT_STARTINGANIM) Reflect.deleteField(charData, 'startingAnimation');
+    if (charData.scale == CharacterData.DEFAULT_SCALE) Reflect.deleteField(charData, 'scale');
+    if (charData.isPixel == CharacterData.DEFAULT_ISPIXEL) Reflect.deleteField(charData, 'isPixel');
+    if (charData.danceEvery == CharacterData.DEFAULT_DANCEEVERY) Reflect.deleteField(charData, 'danceEvery');
+    if (charData.singTime == CharacterData.DEFAULT_SINGTIME) Reflect.deleteField(charData, 'singTime');
+    if (charData.flipX == CharacterData.DEFAULT_FLIPX) Reflect.deleteField(charData, 'flipX');
+    if (charData.applyStageMatrix == CharacterData.DEFAULT_APPLYSTAGEMATRIX) Reflect.deleteField(charData, 'applyStageMatrix');
     if (hasDefaultAtlasSettings(charData.atlasSettings)) Reflect.deleteField(charData, 'atlasSettings');
 
-    for (charDataAnim in charData.animations)
+    for (charDataAnim in (cast charData.animations:Array<Dynamic>))
     {
       var animName:String = charDataAnim.name;
       charDataAnim.offsets = swagChar.animationOffsets.get(animName);
 
-      if (charDataAnim.animType == CharacterDataParser.DEFAULT_ANIMTYPE) Reflect.deleteField(charDataAnim, 'animType');
-      if (charDataAnim.frameRate == CharacterDataParser.DEFAULT_FRAMERATE) Reflect.deleteField(charDataAnim, 'frameRate');
+      if (charDataAnim.animType == CharacterData.DEFAULT_ANIMTYPE) Reflect.deleteField(charDataAnim, 'animType');
+      if (charDataAnim.frameRate == CharacterData.DEFAULT_FRAMERATE) Reflect.deleteField(charDataAnim, 'frameRate');
       if (isZeroPair(charDataAnim.offsets)) Reflect.deleteField(charDataAnim, 'offsets');
-      if (charDataAnim.looped == CharacterDataParser.DEFAULT_LOOP) Reflect.deleteField(charDataAnim, 'looped');
-      if (charDataAnim.flipX == CharacterDataParser.DEFAULT_FLIPX) Reflect.deleteField(charDataAnim, 'flipX');
-      if (charDataAnim.flipY == CharacterDataParser.DEFAULT_FLIPY) Reflect.deleteField(charDataAnim, 'flipY');
+      if (charDataAnim.looped == CharacterData.DEFAULT_LOOP) Reflect.deleteField(charDataAnim, 'looped');
+      if (charDataAnim.flipX == CharacterData.DEFAULT_FLIPX) Reflect.deleteField(charDataAnim, 'flipX');
+      if (charDataAnim.flipY == CharacterData.DEFAULT_FLIPY) Reflect.deleteField(charDataAnim, 'flipY');
     }
 
     return SerializerUtil.toJSON(charData, true);
@@ -648,6 +947,21 @@ class DebugBoundingState extends FlxState
    */
   function loadAnimShit(char:String)
   {
+    final registry = CharacterRegistry.instance;
+    final preview = registry.fetchEntry(char, {debug: true});
+    final onion = registry.fetchEntry(char, {debug: true});
+    if (preview == null || preview.frames == null || onion == null)
+    {
+      preview?.destroy();
+      onion?.destroy();
+      trace('ERROR: Failed to load character ${char}!');
+      return;
+    }
+    installCharacterPreview(preview, onion);
+  }
+
+  function installCharacterPreview(preview:BaseCharacter, onion:BaseCharacter):Void
+  {
     if (swagChar != null)
     {
       offsetView.remove(swagChar);
@@ -660,25 +974,24 @@ class DebugBoundingState extends FlxState
       onionSkinChar.destroy();
     }
 
-    swagChar = CharacterDataParser.fetchCharacter(char, true);
+    swagChar = preview;
     swagChar.x = 100;
     swagChar.y = 100;
 
-    onionSkinChar = CharacterDataParser.fetchCharacter(char, true);
+    onionSkinChar = onion;
     onionSkinChar.x = swagChar.x;
     onionSkinChar.y = swagChar.y;
 
     // Enable `useRenderTexture` for texture atlas sprites so the alpha renders properly for them.
     // This doesn't do anything for sparrows, don't worry!
     onionSkinChar.useRenderTexture = true;
+    #if (mobile && FEATURE_TOUCH_CONTROLS)
+    if (touchOnion != null) onionSkinChar.visible = touchOnion.selected;
+    if (touchFlip != null) touchFlip.selected = swagChar.flipX;
+    #end
 
     offsetView.add(onionSkinChar);
     offsetView.add(swagChar);
-
-    if (swagChar == null || swagChar.frames == null)
-    {
-      trace('ERROR: Failed to load character ${char}!');
-    }
 
     updateOnionSkin();
     generateOutlines(swagChar.frames.frames);
@@ -700,7 +1013,10 @@ class DebugBoundingState extends FlxState
 
     for (charAnim in characterAnimNames)
     {
-      offsetAnimationDropdown.dataSource.add({id: charAnim, text: charAnim});
+      offsetAnimationDropdown.dataSource.add({
+        id: charAnim,
+        text: charAnim
+      });
     }
 
     offsetAnimationDropdown.selectedIndex = 0;

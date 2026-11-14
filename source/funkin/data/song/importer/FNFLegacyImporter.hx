@@ -14,8 +14,9 @@ class FNFLegacyImporter
 {
   public static function parseLegacyDataRaw(input:String, fileName:String = 'raw'):Null<FNFLegacyData>
   {
-    var parser = new json2object.JsonParser<FNFLegacyData>();
-    parser.ignoreUnknownVariables = true; // Set to true to ignore extra variables that might be included in the JSON.
+    var parser = new json2object.JsonParser<FNFLegacyData>({
+      ignoreUnknownVariables: true // Set to true to ignore extra variables that might be included in the JSON.
+    });
     parser.fromJson(input, fileName);
 
     if (parser.errors.length > 0)
@@ -36,7 +37,7 @@ class FNFLegacyImporter
   {
     trace('Migrating song metadata from FNF Legacy.');
 
-    var songMetadata:SongMetadata = new SongMetadata('Import', Constants.DEFAULT_ARTIST, Constants.DEFAULT_CHARTER, Constants.DEFAULT_VARIATION);
+    var songMetadata:SongMetadata = new SongMetadata('Import', "", "", Constants.DEFAULT_VARIATION);
 
     // Set generatedBy string for debugging.
     songMetadata.generatedBy = 'Chart Editor Import (FNF Legacy)';
@@ -63,7 +64,7 @@ class FNFLegacyImporter
 
     songMetadata.timeChanges = rebuildTimeChanges(songData);
 
-    songMetadata.playData.characters = new SongCharacterData(songData.song?.player1 ?? 'bf', 'gf', songData.song?.player2 ?? 'dad');
+    songMetadata.playData.characters = new SongCharacterData(songData.song?.player1 ?? 'bf', 'gf', songData.song?.player2 ?? 'dad', '', [], null, null);
 
     return songMetadata;
   }
@@ -140,7 +141,9 @@ class FNFLegacyImporter
 
         var firstNote:LegacyNote = section.sectionNotes[0];
 
-        result.push(new SongEventData(firstNote.time, 'FocusCamera', {char: section.mustHitSection ? 0 : 1}));
+        result.push(new SongEventData(firstNote.time, 'FocusCamera', {
+          char: section.mustHitSection ? 0 : 1
+        }));
       }
     }
 

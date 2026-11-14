@@ -4,6 +4,8 @@ import funkin.data.dialogue.ConversationRegistry;
 import funkin.data.event.SongEventSchema;
 import funkin.data.event.SongEventSchema.SongEventFieldType;
 import funkin.data.song.SongData.SongEventData;
+import funkin.assets.Assets.AssetType;
+import funkin.assets.Paths.AssetPath;
 
 class PlayDialogueSongEvent extends SongEvent
 {
@@ -14,6 +16,13 @@ class PlayDialogueSongEvent extends SongEvent
   {
     PlayState.instance?.songEventRuntime?.showDialogue(data.getString('conversation') ?? '', data.getFloat('fadeOut') ?? 0.5,
       data.getFloat('volume') ?? 0.2, data.getFloat('fadeIn') ?? 0.5, true, data.getBool('keepHud') ?? false);
+  }
+
+  public override function queryAssets(type:AssetType, data:SongEventData):Array<AssetPath>
+  {
+    final id = data.getString('conversation') ?? '';
+    if (id == '' || !ConversationRegistry.instance.hasEntry(id)) return [];
+    return ConversationRegistry.instance.queryAssets(type, id);
   }
 
   public override function getEventSchema():SongEventSchema

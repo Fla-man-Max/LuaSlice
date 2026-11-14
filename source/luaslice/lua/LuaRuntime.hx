@@ -5,13 +5,16 @@ import hxluajit.Lua;
 import hxluajit.LuaL;
 import hxluajit.Types.Lua_State;
 
-class LuaRuntime
+@:unreflective
+final class LuaRuntime
 {
+  @:unreflective
   public static inline function absoluteIndex(state:cpp.RawPointer<Lua_State>, index:Int):Int
   {
     return index > 0 || index <= Lua.REGISTRYINDEX ? index : Lua.gettop(state) + index + 1;
   }
 
+  @:unreflective
   public static function openLibraries(state:cpp.RawPointer<Lua_State>):Void
   {
     if (state == null) throw 'Could not create LuaJIT state';

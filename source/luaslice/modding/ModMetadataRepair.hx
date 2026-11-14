@@ -32,10 +32,11 @@ class ModMetadataRepair
       if (!isDirectChild(dir) || installed.contains(dir)) continue;
       var modPath = Path.join([root, dir]);
       if (!fileSystem.exists(modPath) || !fileSystem.isDirectory(modPath)) continue;
+      var metadataPath = Path.join([modPath, polymod.PolymodConfig.modMetadataFile]);
+      if (dir.toLowerCase() == 'scripts' && !fileSystem.exists(metadataPath)) continue;
       installed.push(dir);
       present.set(modPath, true);
 
-      var metadataPath = Path.join([modPath, polymod.PolymodConfig.modMetadataFile]);
       if (hasMetadata(fileSystem, metadataPath))
       {
         try

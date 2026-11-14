@@ -1,0 +1,7 @@
+{
+  "title": "Preview 4 gameplay regression fixture",
+  "description": "Native gameplay lifecycle, pooling, stage and timer ownership checks.",
+  "api_version": "0.8.7",
+  "mod_version": "1.0.0",
+  "license": "Apache-2.0"
+}

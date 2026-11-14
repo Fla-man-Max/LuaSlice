@@ -1,9 +1,7 @@
 package funkin.ui.debug;
 
-import flixel.FlxSprite;
 import funkin.ui.mainmenu.MainMenuState;
 import funkin.ui.MusicBeatState;
-import funkin.ui.FullScreenScaleMode;
 
 class DebugMenuState extends MusicBeatState
 {
@@ -12,14 +10,6 @@ class DebugMenuState extends MusicBeatState
   override function create():Void
   {
     super.create();
-
-    var menuBG = new FlxSprite().loadGraphic(Paths.image('menuDesat'));
-    menuBG.color = 0xFF4CAF50;
-    menuBG.setGraphicSize(Std.int(menuBG.width * 1.1 * FullScreenScaleMode.wideScale.x));
-    menuBG.updateHitbox();
-    menuBG.screenCenter();
-    menuBG.scrollFactor.set(0, 0);
-    add(menuBG);
 
     persistentUpdate = false;
     persistentDraw = true;

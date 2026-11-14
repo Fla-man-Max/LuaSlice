@@ -2,6 +2,8 @@ package funkin.graphics.shaders;
 
 import flixel.addons.display.FlxRuntimeShader;
 import flixel.math.FlxPoint;
+import funkin.assets.Paths;
+import funkin.assets.Assets;
 
 @:nullSafety
 class MosaicEffect extends FlxRuntimeShader
@@ -10,7 +12,7 @@ class MosaicEffect extends FlxRuntimeShader
 
   public function new()
   {
-    super(Assets.getText(Paths.frag('mosaic')));
+    super(Assets.getText(Paths.frag('ui/shaders/mosaic')));
     setBlockSize(1.0, 1.0);
   }
 

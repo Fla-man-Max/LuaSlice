@@ -1,7 +1,6 @@
 package funkin.ui.options;
 
 import funkin.ui.Page.PageName;
-import funkin.ui.transition.LoadingState;
 import funkin.ui.TextMenuList;
 import funkin.ui.TextMenuList.TextMenuItem;
 import flixel.math.FlxPoint;
@@ -9,6 +8,7 @@ import funkin.ui.TextMenuList;
 import funkin.ui.TextMenuList.TextMenuItem;
 import flixel.FlxSprite;
 import flixel.FlxObject;
+import flixel.FlxState;
 import flixel.FlxSubState;
 import flixel.group.FlxGroup;
 import flixel.util.FlxSignal;
@@ -17,17 +17,23 @@ import funkin.ui.mainmenu.MainMenuState;
 import funkin.ui.MusicBeatState;
 import funkin.graphics.shaders.HSVShader;
 import funkin.input.Controls;
-#if mobile
+#if FEATURE_NEWGROUNDS
+import funkin.api.newgrounds.NewgroundsClient;
+#end
+#if FEATURE_TOUCH_CONTROLS
 import funkin.util.TouchUtil;
-import funkin.mobile.ui.FunkinBackButton;
-import funkin.mobile.input.ControlsHandler;
-import funkin.mobile.ui.options.ControlsSchemeMenu;
+import funkin.touch.ui.FunkinBackButton;
+import funkin.touch.input.ControlsHandler;
+import funkin.touch.ui.options.ControlsSchemeMenu;
 #end
 #if FEATURE_MOBILE_IAP
-import funkin.mobile.util.InAppPurchasesUtil;
+import funkin.util.mobile.InAppPurchasesUtil;
 #end
 import flixel.util.FlxColor;
 import flixel.addons.transition.FlxTransitionableState;
+import funkin.assets.Assets;
+import funkin.assets.Paths;
+import funkin.ui.transition.Transition;
 
 /**
  * The main options menu
@@ -46,6 +52,7 @@ class OptionsState extends MusicBeatState
   public var drumsBG:FunkinSound;
 
   public static var rememberedSelectedIndex:Int = 0;
+  public static var backState:Null<String> = null;
 
   public static var requestedPage:OptionsMenuPageName = Options;
 
@@ -55,9 +62,11 @@ class OptionsState extends MusicBeatState
 
     persistentUpdate = true;
 
-    drumsBG = FunkinSound.load(Paths.music('offsetsLoop/drumsLoop'), 0, true, false, false, false);
+    #if FEATURE_LAG_ADJUSTMENT
+    drumsBG = FunkinSound.load(Paths.music('ui/input-offsets/drums-loop').audio().toFlxSoundAsset(), 0, true, false, false, false);
+    #end
 
-    var menuBG = new FlxSprite().loadGraphic(Paths.image('menuBG'));
+    var menuBG = new FlxSprite().loadGraphic(Paths.image('ui/main-menu/menu-bg').toFlxGraphicAsset());
     var hsv = new HSVShader(-0.6, 0.9, 3.6);
     menuBG.shader = hsv;
     menuBG.setGraphicSize(Std.int(FlxG.width * 1.1));
@@ -75,7 +84,7 @@ class OptionsState extends MusicBeatState
     var options:OptionsMenu = optionsCodex.addPage(Options, new OptionsMenu());
     var preferences:PreferencesMenu = optionsCodex.addPage(Preferences, new PreferencesMenu());
     var performance:PerformanceMenu = optionsCodex.addPage(Performance, new PerformanceMenu());
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
     var arrows:ArrowsMenu = optionsCodex.addPage(Arrows, new ArrowsMenu());
     #end
     var controls:ControlsMenu = optionsCodex.addPage(Controls, new ControlsMenu());
@@ -93,7 +102,7 @@ class OptionsState extends MusicBeatState
       controls.onExit.add(exitControls);
       preferences.onExit.add(optionsCodex.switchPage.bind(Options));
       performance.onExit.add(optionsCodex.switchPage.bind(Options));
-      #if mobile
+      #if FEATURE_TOUCH_CONTROLS
       arrows.onExit.add(optionsCodex.switchPage.bind(Options));
       #end
       #if FEATURE_LAG_ADJUSTMENT
@@ -104,7 +113,7 @@ class OptionsState extends MusicBeatState
     else
     {
       // No need to show Options page
-      #if mobile
+      #if FEATURE_TOUCH_CONTROLS
       preferences.onExit.add(exitToMainMenu);
       optionsCodex.setPage(Preferences);
       #else
@@ -114,7 +123,7 @@ class OptionsState extends MusicBeatState
     }
 
     super.create();
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
     addHitbox();
     hitbox.visible = false;
     #end
@@ -128,7 +137,7 @@ class OptionsState extends MusicBeatState
     }
     FlxG.sound.music.fadeOut(0.5, 0, function(tw)
     {
-      FunkinSound.playMusic('freakyMenu', {
+      FunkinSound.playMusic('ui/main-menu/freaky-menu/freaky-menu', {
         startingVolume: 0,
         overrideExisting: true,
         restartTrack: true,
@@ -152,9 +161,88 @@ class OptionsState extends MusicBeatState
   {
     funkin.save.Save.system.flush();
     optionsCodex.currentPage.enabled = false;
-    // TODO: Animate this transition?
-    FlxG.keys.enabled = false;
-    FlxG.switchState(() -> new MainMenuState());
+
+    var goToState = function(state:flixel.util.typeLimit.NextState, ?assetQuery:(funkin.assets.Assets.AssetType) -> Array<funkin.assets.Paths.AssetPath>)
+    {
+      funkin.ui.transition.Transition.switchState(state, {
+        transition: BlackScreen(Fade(North), Fade(South)),
+        assetQuery: assetQuery ?? funkin.ui.transition.Transition.NO_ASSETS,
+        shouldPurgeCache: false,
+      });
+    }
+
+    var targetState:Null<String> = backState;
+    backState = null;
+    if (targetState != null)
+    {
+      funkin.ui.quickpanel.QuickPanelGroup.stopMusic();
+      var isCompiled:Bool = funkin.modding.CppiaScripts.exists(targetState);
+      var state:MusicBeatState = isCompiled ? cast funkin.modding.CppiaScripts.create(targetState) : MusicBeatState.scriptInit(targetState);
+      var queryAssetsFunc = MusicBeatState.scriptStaticHasFunc(
+        targetState,
+        "queryAssets"
+      ) ? (assetType) -> MusicBeatState.scriptStaticCall(targetState, "queryAssets", [assetType]) : null;
+      if (state != null) goToState(() -> state, queryAssetsFunc);
+      else
+      {
+        FlxG.keys.enabled = false;
+        goToState(() -> new MainMenuState(), MainMenuState.queryAssets);
+      }
+    }
+    else
+    {
+      FlxG.keys.enabled = false;
+      goToState(() -> new MainMenuState(), MainMenuState.queryAssets);
+    }
+  }
+
+  /**
+   * Return a list of all AssetPaths that this state depends on to load.
+   * @param type The type of AssetPath to return a list of paths for.
+   * @param params The parameters to use when constructing the Options State.
+   * @return The assets that the loading screen should cache.
+   */
+  public static function queryAssets(type:AssetType):Array<AssetPath>
+  {
+    var results:Array<AssetPath> = [];
+
+    results.appendUnique(funkin.ui.options.items.CheckboxPreferenceItem.queryAssets(type));
+
+    #if FEATURE_LAG_ADJUSTMENT
+    results.appendUnique(OffsetMenu.queryAssets(type));
+    #end
+
+    switch (type)
+    {
+      case JSON:
+        results.appendUnique([Paths.music('ui/main-menu/freaky-menu').metadata()]);
+
+        #if FEATURE_LAG_ADJUSTMENT
+        results.appendUnique([
+          Paths.music('ui/input-offsets/offsets-loop').metadata(),
+          Paths.music('ui/input-offsets/drums-loop').metadata()
+        ]);
+        #end
+
+      case IMAGE:
+        results.appendUnique([Paths.image('ui/main-menu/menu-bg')]);
+
+      case SOUND:
+        results.appendUnique([Paths.music('ui/main-menu/freaky-menu').audio()]);
+
+        #if FEATURE_LAG_ADJUSTMENT
+        results.appendUnique([
+          Paths.music('ui/input-offsets/offsets-loop').audio(),
+          Paths.music('ui/input-offsets/drums-loop').audio()
+        ]);
+        #end
+
+      case SHADER:
+        return [Paths.frag('ui/shaders/hsv')];
+
+      default:
+    }
+    return results;
   }
 
   override function destroy():Void
@@ -189,10 +277,10 @@ class OptionsMenu extends Page<OptionsMenuPageName>
 
     createItem('PREFERENCES', function() codex.switchPage(Preferences));
     createItem('PERFORMANCE', function() codex.switchPage(Performance));
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
     createItem('ARROWS', function() codex.switchPage(Arrows));
     #end
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
     if (ControlsHandler.hasExternalInputDevice)
     #end
     createItem('CONTROLS', function() codex.switchPage(Controls));
@@ -204,7 +292,7 @@ class OptionsMenu extends Page<OptionsMenuPageName>
     {
       var switchToOffsets = function()
       {
-        FunkinSound.playMusic('offsetsLoop', {
+        FunkinSound.playMusic('ui/input-offsets/offsets-loop/offsets-loop', {
           startingVolume: 0,
           overrideExisting: true,
           restartTrack: true,
@@ -234,12 +322,25 @@ class OptionsMenu extends Page<OptionsMenuPageName>
       InAppPurchasesUtil.restorePurchases();
     });
     #end
-    #if (mobile && FEATURE_DEBUG_MENU)
-    createItem('DEBUG MENU', function()
+    #if android
+    #if FEATURE_DEBUG_MENU
+    createItem('OPEN DEBUG MENU', function()
     {
-      FlxTransitionableState.skipNextTransIn = true;
-      FlxTransitionableState.skipNextTransOut = true;
-      FlxG.switchState(() -> new funkin.ui.debug.DebugMenuState());
+      OptionsState.backState = null;
+      Transition.switchState(() -> new funkin.ui.debug.DebugMenuState(), {
+        assetQuery: funkin.ui.debug.DebugMenuSubState.queryAssets,
+        transition: None,
+        shouldPurgeCache: false
+      });
+    });
+    #end
+    #elseif (FEATURE_TOUCH_CONTROLS || web)
+    createItem('OPEN MOD MENU', function()
+    {
+      funkin.ui.transition.Transition.switchState(() -> new funkin.ui.modmenu.ModMenuState(), {
+        assetQuery: funkin.ui.modmenu.ModMenuState.queryAssets,
+        transition: Throbber
+      });
     });
     #end
     // Create an object for the camera to track.
@@ -333,6 +434,36 @@ class OptionsMenu extends Page<OptionsMenuPageName>
   public function hasMultipleOptions():Bool
   {
     return items.length > 2;
+  }
+
+  var prompt:Prompt;
+
+  function promptClearSaveData():Void
+  {
+    if (prompt != null) return;
+    prompt = new Prompt('This will delete
+      /nALL your save data.
+      /nAre you sure?
+    ', Custom('Delete', 'Cancel'));
+    prompt.create();
+    prompt.createBgFromMargin(100, 0xFFFAFD6D);
+    prompt.back.scrollFactor.set(0, 0);
+    add(prompt);
+    prompt.onYes = function()
+    {
+      // Clear the save data.
+      funkin.save.Save.clearData();
+      Transition.switchState(() -> new InitState(), {
+        assetQuery: Transition.NO_ASSETS,
+        transition: None
+      });
+    };
+    prompt.onNo = function()
+    {
+      prompt.close();
+      prompt.destroy();
+      prompt = null;
+    };
   }
 }
 

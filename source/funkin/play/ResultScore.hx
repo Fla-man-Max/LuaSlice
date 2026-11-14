@@ -76,6 +76,17 @@ class ResultScore extends FlxTypedSpriteGroup<ScoreNum>
     this.scoreShit = scoreShit;
   }
 
+  function setScale(scale:Float):Void
+  {
+    var index:Int = 0;
+    for (i in group.members)
+    {
+      i.scale.set(scale, scale);
+      i.x = (x + (65 * index) * scale);
+      index++;
+    }
+  }
+
   public function updateScore(scoreNew:Int)
   {
     scoreShit = scoreNew;
@@ -173,6 +184,7 @@ class ScoreNum extends FlxSprite
       {
         new FlxTimer().start((finalDelay) / 24, _ ->
         {
+          if (animation?.curAnim == null) return;
           animation.play(animation.curAnim.name, true, false, 0);
         });
         // fuck
@@ -209,7 +221,7 @@ class ScoreNum extends FlxSprite
     baseY = y;
     baseX = x;
 
-    frames = Paths.getSparrowAtlas('resultScreen/score-digital-numbers');
+    frames = Paths.getSparrowAtlas('ui/results/interface/score-digital-numbers');
 
     for (i in 0...10)
     {

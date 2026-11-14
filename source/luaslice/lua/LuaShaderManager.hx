@@ -14,7 +14,6 @@ import funkin.graphics.shaders.DropShadowShader;
 import funkin.graphics.shaders.RuntimePostEffectShader;
 import funkin.graphics.shaders.RuntimeRainShader;
 import funkin.play.PlayState;
-import funkin.modding.base.ScriptedFlxRuntimeShader;
 import haxe.io.Path;
 import openfl.Assets;
 import openfl.filters.ShaderFilter;
@@ -77,7 +76,7 @@ class LuaShaderManager
     final resolvedTag = tag == '' ? className : tag;
     try
     {
-      final shader = ScriptedFlxRuntimeShader.scriptInit(className);
+      final shader = FlxRuntimeShader.scriptInit(className);
       if (shader == null) return false;
       shaders.set(resolvedTag, shader);
       return true;

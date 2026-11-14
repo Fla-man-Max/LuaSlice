@@ -7,6 +7,8 @@ import flixel.util.FlxColor;
 import flixel.math.FlxMath;
 import flixel.group.FlxSpriteGroup;
 import flixel.util.FlxColor;
+import funkin.assets.Paths;
+import funkin.assets.Assets;
 
 enum DotType
 {
@@ -45,19 +47,43 @@ class DifficultyDot extends FlxSpriteGroup
 
   // var newColors:Array<FlxColor> = [0xFFE86D09, 0xFFE54400, 0xFFE83509, 0xFFF3D48A, 0xFFFAF269, 0xFFF9F0C2];
 
+  /**
+   * Get the list of assets that are required to display the difficulty dot.
+   *
+   * @param type The type of asset to query for.
+   * @return A list of asset paths.
+   */
+  public static function queryAssets(type:AssetType):Array<funkin.assets.Paths.AssetPath>
+  {
+    var results:Array<funkin.assets.Paths.AssetPath> = [];
+
+    switch (type)
+    {
+      case IMAGE:
+        results.appendUnique([Paths.image('ui/freeplay/interface/dot-pulse')]);
+      case XML:
+        results.appendUnique([Paths.xml('ui/freeplay/interface/dot-pulse')]);
+
+      default:
+        // Nothing
+    }
+
+    return results;
+  }
+
   public function new(id:String, num:Int)
   {
     super(0, 0);
 
     difficultyId = id;
 
-    dot = new FlxSprite().loadGraphic(Paths.image('freeplay/seperator'));
+    dot = new FlxSprite().loadGraphic(Paths.image('ui/freeplay/interface/separator').toFlxGraphicAsset());
     add(dot);
 
     dot.alpha = 0;
 
     pulse = new FlxSprite(0, 0);
-    pulse.frames = Paths.getSparrowAtlas('freeplay/dotPulse');
+    pulse.frames = Paths.getSparrowAtlas('ui/freeplay/interface/dot-pulse');
     pulse.animation.addByPrefix('pulse', 'pulse', 12, true);
     pulse.animation.play('pulse', true, false, FlxMath.wrap(num * -2, 0, 11));
     pulse.visible = false;
@@ -154,7 +180,9 @@ class DifficultyDot extends FlxSpriteGroup
             color = normalColors[1];
 
           case DESELECTING:
-            colorTween = FlxTween.color(this, 0.5, normalColors[1], normalColors[0], {ease: FlxEase.quartOut});
+            colorTween = FlxTween.color(this, 0.5, normalColors[1], normalColors[0], {
+              ease: FlxEase.quartOut
+            });
 
           case DESELECTED:
             color = normalColors[0];
@@ -172,7 +200,9 @@ class DifficultyDot extends FlxSpriteGroup
             color = nightColors[1];
 
           case DESELECTING:
-            colorTween = FlxTween.color(this, 0.5, nightColors[1], nightColors[0], {ease: FlxEase.quartOut});
+            colorTween = FlxTween.color(this, 0.5, nightColors[1], nightColors[0], {
+              ease: FlxEase.quartOut
+            });
 
           case DESELECTED:
             color = nightColors[0];
@@ -205,11 +235,19 @@ class DifficultyDot extends FlxSpriteGroup
 
     if (type == INACTIVE)
     {
-      fadeTween = FlxTween.tween(dot, {alpha: 0.33}, 0.5, {ease: FlxEase.quartOut});
+      fadeTween = FlxTween.tween(dot, {
+        alpha: 0.33
+      }, 0.5, {
+        ease: FlxEase.quartOut
+      });
     }
     else
     {
-      fadeTween = FlxTween.tween(dot, {alpha: 1}, 0.5, {ease: FlxEase.quartOut});
+      fadeTween = FlxTween.tween(dot, {
+        alpha: 1
+      }, 0.5, {
+        ease: FlxEase.quartOut
+      });
     }
   }
 
@@ -223,7 +261,11 @@ class DifficultyDot extends FlxSpriteGroup
       fadeTween.cancel();
     }
 
-    fadeTween = FlxTween.tween(dot, {alpha: 0}, 0.25, {ease: FlxEase.quartOut});
+    fadeTween = FlxTween.tween(dot, {
+      alpha: 0
+    }, 0.25, {
+      ease: FlxEase.quartOut
+    });
     pulse.alpha = 0;
   }
 

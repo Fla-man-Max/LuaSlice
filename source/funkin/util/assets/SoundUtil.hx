@@ -23,7 +23,7 @@ class SoundUtil
       var buffer:Null<AudioBuffer> = AudioBuffer.fromBytes(input);
       if (buffer == null) return null;
       #if (cpp && !macro)
-      if (buffer.data == null || buffer.data.length == 0 || buffer.channels <= 0 || buffer.sampleRate <= 0)
+      if (!buffer.isValid() || buffer.channels <= 0 || buffer.sampleRate <= 0)
       {
         buffer.dispose();
         return null;
@@ -35,7 +35,7 @@ class SoundUtil
         buffer.dispose();
         return null;
       }
-      return FunkinSound.load(openflSound, 1.0, false, false, false, false, null, null, true);
+      return FunkinSound.load(openflSound, 1.0, false, false, false, false, null, null);
     }
     catch (error:haxe.Exception)
     {

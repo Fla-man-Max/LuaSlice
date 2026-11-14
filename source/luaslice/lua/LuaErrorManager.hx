@@ -19,6 +19,9 @@ class LuaErrorManager
 
   public static function report(kind:String, scriptPath:String, hookName:Null<String>, message:String, ?fromFiles:Array<String>):String
   {
+    final session = luaslice.debug.ModDebugSession.current;
+    session?.diagnostics.record('error', scriptPath, kind + ': ' + message, haxe.Timer.stamp());
+    session?.scripts.note('LuaSlice Lua', '', scriptPath, kind);
     final key = makeKey(kind, scriptPath, hookName, message, fromFiles);
     if (reportPaths.exists(key)) return reportPaths.get(key);
 
@@ -27,7 +30,7 @@ class LuaErrorManager
     catch (error:Dynamic) { trace('[LuaSlice] Cannot save script error report: ${error}'); }
     reportPaths.set(key, reportPath);
     LuaLogger.error(kind, scriptPath, hookName, message, reportPath);
-    showPopup(kind, scriptPath, hookName, message, reportPath, fromFiles);
+    if (session?.suppressScriptPopups != true) showPopup(kind, scriptPath, hookName, message, reportPath, fromFiles);
     return reportPath;
   }
 

@@ -114,7 +114,7 @@ if ($BaseGameProject -eq '' -and -not $CheckEditor) {
     $taskMetadataBinary = Join-Path $taskRuntime 'metadata-regression.n'
     Push-Location -LiteralPath $taskSource
     try {
-        & haxe -cp (Join-Path $taskSource 'source') -cp $taskTestCode -lib polymod -lib thx.semver -lib lime -D lime_cffi --macro "haxe.macro.Compiler.nullSafety('polymod.hscript._internal.PolymodStaticAbstractReference', Off)" -main ModMetadataRepairTest -neko $taskMetadataBinary
+        & haxe -cp (Join-Path $taskSource 'source') -cp $taskTestCode -lib polymod -lib thx.semver -lib lime -D lime_cffi --macro "haxe.macro.Compiler.nullSafety('polymod.hscript._internal.PolymodStaticAbstractReference', Off)" --macro "haxe.macro.Compiler.addGlobalMetadata('luaslice.modding.ModMetadataRepair', '@:hscriptBaseCreated', false, true, false)" -main ModMetadataRepairTest -neko $taskMetadataBinary
         if ($LASTEXITCODE -ne 0) { throw 'Could not compile trusted metadata regression test.' }
         & neko $taskMetadataBinary | Tee-Object -FilePath (Join-Path $taskRuntime 'metadata-regression.log')
         if ($LASTEXITCODE -ne 0) { throw 'Trusted metadata regression test failed.' }
@@ -186,7 +186,7 @@ try {
                     if (-not $taskOutput.Contains('NOTE_POOL_AND_SAVE_REGRESSION_OK')) { throw "Note recycling/save regression did not pass. See $taskRuntime" }
                     if (-not $taskOutput.Contains('PSYCH_ATLAS_HOLD_REGRESSION_OK')) { throw "Sparrow hold regression did not pass. See $taskRuntime" }
                     if (-not $taskOutput.Contains('NOTE_COPY_AND_JUDGEMENT_REGRESSION_OK')) { throw "Copy/paste or judgement regression did not pass. See $taskRuntime" }
-                    if (-not (Get-Content -LiteralPath (Join-Path $taskRuntime 'metadata-regression.log') -Raw).Contains('ModMetadataRepairTest passed 20 checks')) { throw "Trusted metadata repair regression did not pass. See $taskRuntime" }
+                    if (-not (Get-Content -LiteralPath (Join-Path $taskRuntime 'metadata-regression.log') -Raw).Contains('ModMetadataRepairTest passed 21 checks')) { throw "Trusted metadata repair regression did not pass. See $taskRuntime" }
                     if (-not $taskOutput.Contains('NXSCRIPT_RUNTIME_OK')) { throw "NxScript coexistence did not pass. See $taskRuntime" }
                     foreach ($taskNewMarker in @('CUSTOM_EVENT_REGRESSION_OK','CHARACTER_GETTER_REGRESSION_OK','LUASLICE_NATIVE_EVENT_OK','LUASLICE_HOLD_EVENT_OK','LUASLICE_CUSTOM_EVENT_OK','PSYCH_CUSTOM_EVENT_OK','SSCRIPT_CUSTOM_EVENT_OK','NXSCRIPT_CUSTOM_EVENT_OK')) {
                         if (-not $taskOutput.Contains($taskNewMarker)) { throw "Missing regression marker: $taskNewMarker. See $taskRuntime" }

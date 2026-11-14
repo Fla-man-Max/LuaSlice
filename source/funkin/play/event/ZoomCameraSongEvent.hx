@@ -130,7 +130,7 @@ class ZoomCameraSongEvent extends SongEvent
         type: SongEventFieldType.ENUM,
         keys: [
           'Linear' => 'linear',
-          'Instant (Ignores duration)' => 'INSTANT',
+          'Instant' => 'INSTANT',
           'Sine' => 'sine',
           'Quad' => 'quad',
           'Cube' => 'cube',
@@ -151,7 +151,11 @@ class ZoomCameraSongEvent extends SongEvent
         tooltip: 'Rate of change of parameter over time.',
         defaultValue: SongEvent.DEFAULT_EASE_DIR,
         type: SongEventFieldType.ENUM,
-        keys: ['In' => 'In', 'Out' => 'Out', 'In/Out' => 'InOut']
+        keys: [
+          'In' => 'In',
+          'Out' => 'Out',
+          'In/Out' => 'InOut'
+        ]
       },
       {
         name: 'advanced',

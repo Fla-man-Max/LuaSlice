@@ -75,7 +75,7 @@ class CLIUtil
           case '--chart':
             if (args.length == 0)
             {
-              trace('No chart path provided.');
+              trace('No chart path provided for Chart Editor.');
               printUsage();
             }
             else
@@ -83,10 +83,21 @@ class CLIUtil
               result.chart.shouldLoadChart = true;
               result.chart.chartPath = args.shift();
             }
+          case '--camera':
+            if (args.length == 0)
+            {
+              trace('No chart path provided for Camera Editor.');
+              printUsage();
+            }
+            else
+            {
+              result.camera.shouldLoadChart = true;
+              result.camera.chartPath = args.shift();
+            }
           case '--stage':
             if (args.length == 0)
             {
-              trace('No stage path provided.');
+              trace('No stage path provided for Stage Editor.');
               printUsage();
             }
             else
@@ -97,7 +108,7 @@ class CLIUtil
           case '--song':
             if (args.length == 0)
             {
-              trace('No chart path provided.');
+              trace('No chart path provided for playback.');
               printUsage();
             }
             else
@@ -111,7 +122,11 @@ class CLIUtil
       {
         // Make an attempt to interpret the argument.
 
-        if (arg.endsWith(Constants.EXT_CHART))
+        if (arg.toLowerCase().startsWith('${Constants.ONE_CLICK_SCHEME}:'))
+        {
+          result.oneClickUrl = arg;
+        }
+        else if (arg.endsWith(Constants.EXT_CHART))
         {
           result.chart.shouldLoadChart = true;
           result.chart.chartPath = arg;
@@ -134,15 +149,20 @@ class CLIUtil
 
   static function printUsage():Void
   {
-    trace('Usage: Funkin.exe [--chart <chart>] [--stage <stage>] [--song <song>] [--help] [--version]');
+    trace('Usage: Funkin.exe [--chart <chart>] [--camera <chart>] [--stage <stage>] [--song <song>] [--help] [--version]');
   }
 
   static function buildDefaultParams():CLIParams
   {
     return {
       args: [],
+      oneClickUrl: null,
 
       chart: {
+        shouldLoadChart: false,
+        chartPath: null
+      },
+      camera: {
         shouldLoadChart: false,
         chartPath: null
       },
@@ -183,7 +203,14 @@ class CLIUtil
 typedef CLIParams =
 {
   var args:Array<String>;
+
+  /**
+   * A `funkin:` link the shell handed us, if the game was launched by a one-click install.
+   */
+  var oneClickUrl:Null<String>;
+
   var chart:CLIChartParams;
+  var camera:CLIChartParams;
   var stage:CLIStageParams;
   var song:CLISongParams;
 }

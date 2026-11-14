@@ -1,0 +1,228 @@
+{
+  "date": "2026-11-07",
+  "target": "5a63f2062bfc95a1fe35f83405acdee1f8c845ec",
+  "livePatchReview": {
+    "date": "2026-11-10",
+    "scope": "Read-only comparison of GitHub PR patches with the current migration. The pinned snapshot below is unchanged. No additional PR has been applied in this pass.",
+    "8304": "Patch retrieved. Preserve the existing split-editor downscroll/Vortex implementation; compare remaining grid, waveform and event positioning with native tests before adding overlapping changes.",
+    "8374": "Applicable: PasteItemsCommand.undo removes the pasted notes, then SelectItemsCommand appends restored notes without discarding the obsolete selection. Needs native paste/undo/flip regression.",
+    "8315": "Applicable with adaptation: playVocals still decides legacy fallback from the requested ID count rather than actual available audio. Preserve explicit legacyVoiceId overrides and typed asset resolution when integrating.",
+    "8394": "Patch retrieved. Cross-cutting clock and judgement changes are deferred until reproducible frame-rate timing checks exist; keep the pinned Conductor behavior.",
+    "8402": "Wrapper-only refactor: getFileStat still throws if a recent chart or backup disappears. Review the intended missing-file behavior and sandbox wrapper before integrating.",
+    "8384": "Candidate: live patch now includes cursor down/up events and a chart playbar reset; the snapshot listed one changed file. Confirm the revision and test input priority and touch behavior before applying.",
+    "8343": "Existing source already has measured character bounds, preview positioning/padding and title-height sizing. Do not replace the pinned flixel-animate revision with the older PR pin. Native preview validation pending.",
+    "8397": "Not a direct port: LuaSlice keeps enabled mod IDs in its save on desktop and mobile; this PR only gates upstream enabled.txt access to desktop.",
+    "8398": "Existing source uses both the loading-character directory and JSON suffix filters. No duplicate patch needed.",
+    "8399": "Existing editor state has zero-volume unmute restoration for metronome, hitsounds, vocals and instrumental. Verify editor controls natively before claiming complete parity."
+  },
+  "prs": [
+    {
+      "number": 8304,
+      "title": "[ENHANCEMENT] Complete Downscroll Support in Chart Editor",
+      "state": "open",
+      "merged": false,
+      "merged_at": null,
+      "merge_commit_sha": null,
+      "head": "ca62b3e7a9d251274530b3eedb47bece84d68513",
+      "base": "preview/public-playtest",
+      "changed_files": 11
+    },
+    {
+      "number": 8374,
+      "title": "[BUGFIX] Fix deleted notes reappearing when flipping",
+      "state": "open",
+      "merged": false,
+      "merged_at": null,
+      "merge_commit_sha": "0cd7dca4aa22112f5960e2645ad66e93ffaa564d",
+      "head": "0d1c3b50a7e3f20b7b8fd8b0201f78c88357b1de",
+      "base": "preview/public-playtest",
+      "changed_files": 1
+    },
+    {
+      "number": 8315,
+      "title": "[BUGFIX] Fix loading legacy vocals fails in chart editor",
+      "state": "open",
+      "merged": false,
+      "merged_at": null,
+      "merge_commit_sha": null,
+      "head": "91060e7fb8e02f2a38551857921bac163a6d0d71",
+      "base": "preview/public-playtest",
+      "changed_files": 2
+    },
+    {
+      "number": 8394,
+      "title": "[BUGFIX] New interpolated Conductor clock to fix FPS-dependent judgement timing",
+      "state": "open",
+      "merged": false,
+      "merged_at": null,
+      "merge_commit_sha": "4e1b4ef78cff9eeee66b282d0bad356b0d118b70",
+      "head": "2d4d0d16ab08677435b2b00cc581b36f0bda8a9e",
+      "base": "preview/public-playtest",
+      "changed_files": 7
+    },
+    {
+      "number": 8402,
+      "title": "[ENHANCEMENT] Add `getFileStat` function to FileUtil",
+      "state": "open",
+      "merged": false,
+      "merged_at": null,
+      "merge_commit_sha": "4b92aadc146dde01c57611f8f9b920f8902e7ad3",
+      "head": "11bf53cd6334cd08140a05e7ab2cd41482c61b3f",
+      "base": "preview/public-playtest",
+      "changed_files": 7
+    },
+    {
+      "number": 8384,
+      "title": "[BUGFIX] Update grabbing cursor on press and release",
+      "state": "open",
+      "merged": false,
+      "merged_at": null,
+      "merge_commit_sha": "4a1d2c307e390c2befacfea7ff7e72a3dac486b1",
+      "head": "4c5cedd2f424dfb8f2e605d4b7b1a34e07b6d23c",
+      "base": "preview/public-playtest",
+      "changed_files": 1
+    },
+    {
+      "number": 8343,
+      "title": "[BUGFIX] Fix Chart Editor character preview window sizes",
+      "state": "closed",
+      "merged": true,
+      "merged_at": "2026-11-07T07:49:17Z",
+      "merge_commit_sha": "c65299728ea155698de1a0fa9a4bff1306499619",
+      "head": "f521e2764ca84dd88bccdf6c8b3f8de638b41b35",
+      "base": "preview/public-playtest",
+      "changed_files": 4
+    },
+    {
+      "number": 8397,
+      "title": "[BUGFIX] Only load enabled mods from local list if using `desktop` target",
+      "state": "closed",
+      "merged": true,
+      "merged_at": "2026-11-07T07:49:24Z",
+      "merge_commit_sha": "135ac7a091e6d36d13225eb77aa4e0fc83d6f68c",
+      "head": "42e3218c4915fd5861b9914cd8b1c21c70f03a9a",
+      "base": "preview/public-playtest",
+      "changed_files": 1
+    },
+    {
+      "number": 8398,
+      "title": "[BUGFIX] Loading Characters Paths Filter",
+      "state": "closed",
+      "merged": true,
+      "merged_at": "2026-11-07T07:49:33Z",
+      "merge_commit_sha": "6ecd520257ff28375126cc0b09389cdc5c414882",
+      "head": "1cb79120840040ebc1d95a6e9a86e6b8953f0879",
+      "base": "preview/public-playtest",
+      "changed_files": 1
+    },
+    {
+      "number": 8399,
+      "title": "Fix mute audio toggles having no effect at 0% volume",
+      "state": "closed",
+      "merged": true,
+      "merged_at": "2026-11-07T07:49:39Z",
+      "merge_commit_sha": "68b5d023e13e60956bfc76542a15c6169e40cf15",
+      "head": "81f5131746d0f04d279b1dbe28f5698e7d89ce9d",
+      "base": "preview/public-playtest",
+      "changed_files": 2
+    }
+  ],
+  "recent": [
+    {
+      "number": 8394,
+      "title": "[BUGFIX] New interpolated Conductor clock to fix FPS-dependent judgement timing",
+      "state": "open",
+      "merged_at": null,
+      "base": "preview/public-playtest",
+      "head": "2d4d0d16ab08677435b2b00cc581b36f0bda8a9e"
+    },
+    {
+      "number": 8402,
+      "title": "[ENHANCEMENT] Add `getFileStat` function to FileUtil",
+      "state": "open",
+      "merged_at": null,
+      "base": "preview/public-playtest",
+      "head": "11bf53cd6334cd08140a05e7ab2cd41482c61b3f"
+    },
+    {
+      "number": 7191,
+      "title": "[OPTIMIZATION] Cache `DataAssets` to slightly improve load times",
+      "state": "closed",
+      "merged_at": null,
+      "base": "develop",
+      "head": "1d7cc213cd69c9d89e6363172fe5c98be9d3171a"
+    },
+    {
+      "number": 7434,
+      "title": "[ENHANCEMENT] Implement SetCameraBop event and camera bopping for CameraEditor ",
+      "state": "closed",
+      "merged_at": null,
+      "base": "preview/camera-editor",
+      "head": "bbded03da8b5b175a7ad1315d4a89fdc27ccc492"
+    },
+    {
+      "number": 6391,
+      "title": "[POLISH] Fix double hold note confirm animations / small StrumlineNote rewrite",
+      "state": "closed",
+      "merged_at": null,
+      "base": "develop",
+      "head": "b1457f1ef5fccc825a084d17185f2b471093028a"
+    },
+    {
+      "number": 6806,
+      "title": "[ENHANCEMENT] ScriptedBaseFreeplayDJ",
+      "state": "closed",
+      "merged_at": "2026-03-09T15:35:33Z",
+      "base": "dummy/develop-v0.8.3",
+      "head": "a0c8dd3444bffc3355175b05e82c2c44c21fca29"
+    },
+    {
+      "number": 6522,
+      "title": "[ENHANCEMENT] Implement character's variations selection in Chart Editor",
+      "state": "closed",
+      "merged_at": null,
+      "base": "develop",
+      "head": "3ceb62e08da2b51ce1deb4b9cb607ce7dddede78"
+    },
+    {
+      "number": 6906,
+      "title": "[OPTIMIZATION] Remove dead objects from capsule batching",
+      "state": "closed",
+      "merged_at": "2026-02-14T10:40:22Z",
+      "base": "dummy/develop-v0.8.1",
+      "head": "46fa24b4db90ba7b1606c3604b490853d519c13b"
+    },
+    {
+      "number": 5746,
+      "title": "[ENHANCEMENT] [MODS] Freeplay difficulty dots rework [FREEPLAY]",
+      "state": "closed",
+      "merged_at": null,
+      "base": "develop",
+      "head": "501222d5ea1c5103c62683e902555f2b4476ef3f"
+    },
+    {
+      "number": 6102,
+      "title": "[ENHANCEMENT] Custom per-character CharSelect and Random Capsule themes",
+      "state": "closed",
+      "merged_at": null,
+      "base": "develop",
+      "head": "d862c5ad65963b1a1fbfd8d2794564f9fc30236b"
+    },
+    {
+      "number": 6239,
+      "title": "[ENHANCEMENT] DefineUtil [MODS]",
+      "state": "closed",
+      "merged_at": null,
+      "base": "develop",
+      "head": "1d43083cae73365b8aaca1cf7087622f7486d01f"
+    },
+    {
+      "number": 6374,
+      "title": "[ENHANCEMENT] Chart Editor Event Easing Preview Graphs",
+      "state": "closed",
+      "merged_at": "2026-01-21T00:48:37Z",
+      "base": "dummy/develop-v0.8.1",
+      "head": "2ab6f02493fd856606cd3070cd438b625063241b"
+    }
+  ]
+}

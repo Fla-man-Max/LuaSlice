@@ -1,0 +1,164 @@
+import flixel.FlxG;
+import flixel.util.FlxColor;
+import funkin.graphics.FunkinSprite;
+import funkin.modding.module.Module;
+import funkin.touch.ui.FunkinBackButton;
+import funkin.touch.ui.FunkinButton;
+import funkin.ui.MenuList.MenuTypedList;
+import funkin.ui.MenuList.MenuListItem;
+import funkin.ui.MusicBeatState;
+import funkin.modding.events.ScriptEvent;
+import funkin.modding.events.ScriptEventDispatcher;
+import funkin.modding.events.ScriptEventType;
+import funkin.modding.IScriptedClass;
+import funkin.play.stage.StageProp;
+import funkin.data.character.CharacterRegistry;
+import funkin.save.Save;
+import luaslice.lua.LuaScriptManager;
+
+/** Native fixture: run only against the rebuilt preview binary, not the preserved v0.8.6 executable. */
+class Preview4TouchRegression extends Module
+{
+  var checked:Bool = false;
+
+  public function new() { super('preview4-touch-regression', 500); }
+
+  override function onUpdate(event)
+  {
+    if (checked || FlxG.state == null) return;
+    checked = true;
+    try
+    {
+      var characters = CharacterRegistry.instance;
+      if (characters.getScriptedEntryClassName('pico-dark') != 'PicoDarkCharacter'
+        || characters.getScriptedEntryClassName('nene-christmas') != 'NeneChristmasCharacter')
+        throw 'Scripted character inheritance did not survive startup';
+
+      var list = new MenuTypedList();
+      list.selectItem(0);
+      list.accept();
+      var first = new MenuListItem(0, 0, 'first', () -> {}, false);
+      var second = new MenuListItem(0, 0, 'second', () -> {}, false);
+      list.addItem('first', first);
+      list.addItem('second', second);
+      list.selectItem(1);
+      if (list.selectedIndex != 0) throw 'All-disabled list selected an unavailable item';
+      second.available = true;
+      list.selectItem(0);
+      if (list.selectedIndex != 1) throw 'Disabled-item search did not find the available item';
+      list.selectItem(999);
+      list.selectItem(-1);
+      list.destroy();
+
+      var confirms:Int = 0;
+      var preview = new FunkinBackButton(0, 0, () -> confirms++, 0.7);
+      if (preview.restingOpacity != 0.7 || preview.color != FlxColor.WHITE) throw 'Preview back-button arguments changed';
+      preview.onConfirmEnd.dispatch();
+      preview.destroy();
+      var withoutCallback = new FunkinBackButton(0, 0, null, 0.6);
+      if (withoutCallback.restingOpacity != 0.6) throw 'Preview optional callback was treated as a color';
+      withoutCallback.destroy();
+      var legacy = new FunkinBackButton(0, 0, FlxColor.RED, () -> confirms++, 0.4, true);
+      if (legacy.restingOpacity != 0.4 || legacy.color != FlxColor.RED) throw 'Legacy back-button arguments changed';
+      legacy.onConfirmEnd.dispatch();
+      legacy.destroy();
+      if (confirms != 2) throw 'Back-button callbacks were lost or duplicated';
+
+      var zone = new Preview4BorrowedZone();
+      var left = new FunkinButton();
+      var right = new FunkinButton();
+      left.deadZones = [zone];
+      right.deadZones = [zone];
+      left.destroy();
+      right.destroy();
+      if (zone.destroyCount != 0) throw 'Buttons destroyed a borrowed dead zone';
+      zone.destroy();
+      if (zone.destroyCount != 1) throw 'Dead-zone owner did not destroy its own resource';
+
+      var state = new MusicBeatState();
+      var addBack = Reflect.field(state, 'addBackButton');
+      if (addBack != null)
+      {
+        Reflect.callMethod(state, addBack, []);
+        var oldBack = Reflect.field(state, 'backButton');
+        Reflect.callMethod(state, addBack, []);
+        if (oldBack.exists || state.members.indexOf(oldBack) >= 0) throw 'Replacing back button retained the old owner';
+      }
+      var counted = new Preview4CountedEvent();
+      state.dispatchEvent(counted, false);
+      if (counted.finishes != 0) throw 'Caller-owned event was finished during dispatch';
+      state.dispatchEvent(counted);
+      if (counted.finishes != 1) throw 'Event dispatch did not finish exactly once';
+      var manager = LuaScriptManager.loadClassScriptsForState(state);
+      if (manager == null) throw 'No original Lua state scripts were loaded';
+      manager.destroy();
+      state.destroy();
+
+      var prop = new StageProp();
+      var holdEvent = new ScriptEvent(ScriptEventType.NOTE_HOLD_HIT);
+      ScriptEventDispatcher.callEvent(prop, holdEvent);
+      prop.destroy();
+
+      var rejected = false;
+      try
+      {
+        ScriptEventDispatcher.callEvent(new Preview4PlainScript(), holdEvent);
+      }
+      catch (error:Dynamic)
+      {
+        rejected = Std.string(error).indexOf('native IScriptedClass interface') >= 0;
+      }
+      if (!rejected) throw 'A script-only event target was not rejected with a catchable error';
+
+      var save = Save.instance;
+      if (save.chartEditorPlaybackSpeed.value != 1.0) throw 'Fresh editor playback speed was not 1x';
+      save.chartEditorInstVolume.value = 0.25;
+      save.chartEditorPlaybackSpeed.value = 1.5;
+      save = Save.load(true);
+      if (save.chartEditorInstVolume.value != 0.25 || save.chartEditorPlaybackSpeed.value != 1.5)
+        throw 'First editor audio settings write did not persist';
+      save.chartEditorInstVolume.value = 0.75;
+      save.chartEditorPlaybackSpeed.value = 0.5;
+      save = Save.load(true);
+      if (save.chartEditorInstVolume.value != 0.75 || save.chartEditorPlaybackSpeed.value != 0.5)
+        throw 'Second editor audio settings write reverted';
+      trace('PREVIEW4_TOUCH_NATIVE_OK');
+    }
+    catch (error:Dynamic)
+    {
+      trace('PREVIEW4_TOUCH_NATIVE_FAILED: ' + error);
+    }
+  }
+}
+
+class Preview4CountedEvent extends ScriptEvent
+{
+  public var finishes:Int = 0;
+  public function new() { super(ScriptEventType.STATE_CREATE); }
+  override public function finish():Void
+  {
+    finishes++;
+    super.finish();
+  }
+}
+
+class Preview4PlainScript implements IScriptedClass
+{
+  public function new() {}
+  public function onScriptEvent(event:ScriptEvent):Void {}
+  public function onCreate(event:ScriptEvent):Void {}
+  public function onDestroy(event:ScriptEvent):Void {}
+  public function onUpdate(event:UpdateScriptEvent):Void {}
+  public function onCustom(event:CustomScriptEvent):Void {}
+}
+
+class Preview4BorrowedZone extends FunkinSprite
+{
+  public var destroyCount:Int = 0;
+  public function new() { super(); }
+  override public function destroy():Void
+  {
+    destroyCount++;
+    super.destroy();
+  }
+}

@@ -1,12 +1,16 @@
 package funkin.play.character;
 
-import funkin.graphics.FunkinSprite;
-import funkin.util.assets.FlxAnimationUtil;
 import animate.FlxAnimateFrames;
 import flixel.graphics.frames.FlxAtlasFrames;
-import funkin.modding.events.ScriptEvent;
+import funkin.assets.Assets.AssetType;
+import funkin.assets.Paths.AssetPath;
 import funkin.data.animation.AnimationData;
 import funkin.data.character.CharacterData.CharacterRenderType;
+import funkin.data.character.CharacterData;
+import funkin.data.character.CharacterRegistry;
+import funkin.graphics.FunkinSprite;
+import funkin.modding.events.ScriptEvent;
+import funkin.util.assets.FlxAnimationUtil;
 
 /**
  * This render type is the most complex, and is used by characters which use
@@ -20,9 +24,90 @@ class MultiAnimateAtlasCharacter extends BaseCharacter
 {
   var _usedAtlases:Array<FlxAtlasFrames> = [];
 
-  public function new(id:String)
+  /**
+   * Retrieve a list of all the asset paths required to load the character.
+   *
+   * If you have a scripted class which initializes sprites, or plays sounds or something,
+   * make sure you add them here so they get cached in the loading screen.
+   *
+   * @param type The type of asset to query
+   * @param charId The character ID, used to look up the specific assets.
+   * @return An array of asset paths, or empty if no assets of that type are required.
+   */
+  public static function queryAssets(type:funkin.assets.Assets.AssetType,
+    entryId:String,
+    ?params:CharacterEntryParams):Array<funkin.assets.Paths.AssetPath>
   {
-    super(id, CharacterRenderType.MultiAnimateAtlas);
+    trace('ASSETS: Querying assets for Multi-Animate Atlas character "$entryId"');
+    // Specific implementations handle figuring out which assets to load.
+    var results:Array<AssetPath> = BaseCharacter.queryBaseAssets(type, entryId, params);
+
+    var _data:Null<CharacterData> = CharacterRegistry.instance.fetchCharacterData(entryId);
+    if (_data == null) return results;
+
+    switch (type)
+    {
+      case IMAGE:
+        var assetPath = funkin.assets.Paths.animateAtlas(_data.assetPath);
+        results.append(assetPath.image());
+
+        for (animation in _data.animations)
+        {
+          if (animation.assetPath == null) continue;
+
+          switch (animation.renderType)
+          {
+            case 'sparrow':
+              results.push(funkin.assets.Paths.image(animation.assetPath));
+            default:
+              var assetPath = funkin.assets.Paths.animateAtlas(animation.assetPath);
+              results.append(assetPath.image());
+          }
+        }
+
+      case XML:
+        for (animation in _data.animations)
+        {
+          if (animation.assetPath == null) continue;
+
+          switch (animation.renderType)
+          {
+            case 'sparrow':
+              results.push(funkin.assets.Paths.xml(animation.assetPath));
+            default:
+              // Nothing
+          }
+        }
+
+      case JSON:
+        var assetPath = funkin.assets.Paths.animateAtlas(_data.assetPath);
+        results.appendUnique(assetPath.json());
+
+        for (animation in _data.animations)
+        {
+          if (animation.assetPath == null) continue;
+
+          switch (animation.renderType)
+          {
+            default:
+              var assetPath = funkin.assets.Paths.animateAtlas(animation.assetPath);
+              results.appendUnique(assetPath.json());
+          }
+        }
+
+      default:
+        // Nothing
+    }
+
+    return results;
+  }
+
+  public function new(id:String, ?previewData:CharacterData)
+  {
+    super(id, {
+      renderType: CharacterRenderType.MultiAnimateAtlas,
+      previewData: previewData
+    });
   }
 
   override function onCreate(event:ScriptEvent):Void
@@ -42,19 +127,21 @@ class MultiAnimateAtlasCharacter extends BaseCharacter
 
   function loadAtlases():Void
   {
-    log('Loading sprite atlases for ${characterId}.');
+    log('Loading texture atlases for ${characterId}.');
 
     var textureList:Array<FlxAtlasFrames> = [];
     var addedAssetPaths:Array<String> = [];
 
-    var baseAssetLibrary:String = Paths.getLibrary(getAssetPath());
-    var baseAssetPath:String = Paths.stripLibrary(getAssetPath());
+    var assetPath:String = funkin.assets.Paths.formatRelative(getAssetPath(), 'gameplay/characters/$characterId');
 
-    var mainTexture:FlxAnimateFrames = Paths.getAnimateAtlas(baseAssetPath, baseAssetLibrary, cast _data.atlasSettings);
+    var baseAssetLibrary:String = Paths.getLibrary(assetPath);
+    var baseAssetPath:String = Paths.stripLibrary(assetPath);
+
+    var mainTexture:FlxAnimateFrames = Paths.getAnimateAtlas(baseAssetPath, baseAssetLibrary, getAtlasSettings());
     textureList.push(mainTexture);
 
-    this.useRenderTexture = _data.atlasSettings.useRenderTexture;
-    this.applyStageMatrix = _data.atlasSettings.applyStageMatrix;
+    this.useRenderTexture = getAtlasSettings().useRenderTexture;
+    this.applyStageMatrix = getAtlasSettings().applyStageMatrix;
 
     mainTexture.parent.destroyOnNoUse = false;
 
@@ -66,7 +153,8 @@ class MultiAnimateAtlasCharacter extends BaseCharacter
       switch (animation.renderType)
       {
         case "sparrow":
-          var subTexture:FlxAtlasFrames = Paths.getSparrowAtlas(animation.assetPath);
+          var sparrowPath:String = funkin.assets.Paths.formatRelative(animation.assetPath, 'gameplay/characters/$characterId', Constants.EXT_IMAGE);
+          var subTexture:FlxAtlasFrames = Paths.getSparrowAtlas(sparrowPath);
           // If we don't do this, the unused textures will be removed as soon as they're loaded.
 
           if (subTexture == null)
@@ -82,17 +170,19 @@ class MultiAnimateAtlasCharacter extends BaseCharacter
             // This breaks mix-and-match for some reason.
             // TODO: Re-enable this line once a proper fix is found.
             // - Abnormal
-            // FunkinMemory.cacheTexture(Paths.image(animation.assetPath));
+            // funkin.assets.Assets.cacheFlxGraphic(Paths.image(animation.assetPath));
           }
 
           textureList.push(subTexture);
 
           if (!_usedAtlases.contains(subTexture)) _usedAtlases.push(subTexture);
         default:
-          var subAssetLibrary:String = Paths.getLibrary(animation.assetPath);
-          var subAssetPath:String = Paths.stripLibrary(animation.assetPath);
+          var atlasPath:String = funkin.assets.Paths.formatRelative(animation.assetPath, 'gameplay/characters/$characterId');
 
-          var subTexture:FlxAnimateFrames = Paths.getAnimateAtlas(subAssetPath, subAssetLibrary, cast animation.atlasSettings ?? _data.atlasSettings);
+          var subAssetLibrary:String = Paths.getLibrary(atlasPath);
+          var subAssetPath:String = Paths.stripLibrary(atlasPath);
+
+          var subTexture:FlxAnimateFrames = Paths.getAnimateAtlas(subAssetPath, subAssetLibrary, cast animation.atlasSettings ?? getAtlasSettings());
 
           log('Concatenating texture atlas: ${animation.assetPath}');
           subTexture.parent.destroyOnNoUse = false;
@@ -120,7 +210,7 @@ class MultiAnimateAtlasCharacter extends BaseCharacter
 
   function loadAnimations():Void
   {
-    log('[MULTIATLASCHAR] Loading ${getCharacterAnimations().length} animations for ${characterId}');
+    log('Loading ${getCharacterAnimations().length} animations for ${characterId}');
 
     for (anim in getCharacterAnimations())
     {
@@ -143,7 +233,7 @@ class MultiAnimateAtlasCharacter extends BaseCharacter
     }
 
     var animationNames:Array<String> = this.animation.getNameList();
-    log('[MULTIATLASCHAR] Successfully loaded ${animationNames.length} animations for ${characterId}');
+    log('Successfully loaded ${animationNames.length} animations for ${characterId}');
   }
 
   /**
@@ -171,5 +261,10 @@ class MultiAnimateAtlasCharacter extends BaseCharacter
     _usedAtlases.clear();
 
     super.destroy();
+  }
+
+  public override function toString():String
+  {
+    return 'MultiAnimateAtlasCharacter($characterName ($characterId), pos=[$x, $y])';
   }
 }

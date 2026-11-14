@@ -97,4 +97,3 @@ typedef StartFrameData =
   @:optional @:default(0)
   var gf:Int;
 }
-

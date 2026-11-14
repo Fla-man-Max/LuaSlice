@@ -8,9 +8,11 @@ import flixel.util.FlxColor;
 import flixel.util.FlxTimer;
 import flixel.text.FlxText;
 import flixel.text.FlxText.FlxTextAlign;
-#if mobile
+#if FEATURE_TOUCH_CONTROLS
 import funkin.util.TouchUtil;
 #end
+import funkin.assets.Paths;
+import funkin.assets.Assets;
 
 @:nullSafety
 class CapsuleOptionsMenu extends FlxSpriteGroup
@@ -32,6 +34,23 @@ class CapsuleOptionsMenu extends FlxSpriteGroup
     rightArrow.busy = b;
   }
 
+  public static function queryAssets(type:AssetType):Array<AssetPath>
+  {
+    var results:Array<AssetPath> = [];
+
+    switch (type)
+    {
+      case IMAGE:
+        results.push(Paths.image('ui/freeplay/interface/freeplay-capsule/box-inst'));
+      case XML:
+        results.push(Paths.xml('ui/freeplay/interface/freeplay-capsule/box-inst'));
+      default:
+        // Nothing
+    }
+
+    return results;
+  }
+
   public function new(parent:FreeplayState, x:Float = 0, y:Float = 0, instIds:Array<String>):Void
   {
     super(x, y);
@@ -39,14 +58,14 @@ class CapsuleOptionsMenu extends FlxSpriteGroup
     this.parent = parent;
     this.instrumentalIds = instIds;
 
-    capsuleMenuBG = FunkinSprite.createSparrow(0, 0, 'freeplay/instBox/instBox');
+    capsuleMenuBG = new FunkinSprite().loadSparrow('ui/freeplay/interface/freeplay-capsule/box-inst');
 
     capsuleMenuBG.animation.addByPrefix('open', 'open0', 24, false);
     capsuleMenuBG.animation.addByPrefix('idle', 'idle0', 24, true);
     capsuleMenuBG.animation.addByPrefix('open', 'open0', 24, false);
 
     currentInstrumental = new FlxText(0, 36, capsuleMenuBG.width, '');
-    currentInstrumental.setFormat('VCR OSD Mono', 40, FlxTextAlign.CENTER, true);
+    currentInstrumental.setFormat(Paths.font('ui/fonts/VCR OSD Mono'), 40, FlxTextAlign.CENTER, true);
 
     final PAD = 4;
 
@@ -56,7 +75,7 @@ class CapsuleOptionsMenu extends FlxSpriteGroup
     rightArrow = new InstrumentalSelector(parent, capsuleMenuBG.width - leftArrow.width - PAD, 30, true, parent.controls);
 
     var label:FlxText = new FlxText(0, 5, capsuleMenuBG.width, 'INSTRUMENTAL');
-    label.setFormat('VCR OSD Mono', 24, FlxTextAlign.CENTER, true);
+    label.setFormat(Paths.font('ui/fonts/VCR OSD Mono'), 24, FlxTextAlign.CENTER, true);
 
     add(capsuleMenuBG);
     add(leftArrow);
@@ -84,26 +103,27 @@ class CapsuleOptionsMenu extends FlxSpriteGroup
     @:privateAccess
     if (!busy)
     {
-      if (parent.controls.BACK_P #if mobile || TouchUtil.pressAction(parent.backButton) #end)
+      if (parent.controls.BACK_P #if FEATURE_TOUCH_CONTROLS || TouchUtil.pressAction(parent.backButton) #end)
       {
         setBusy(true);
         close();
         return;
       }
 
-      if (parent.controls.UI_LEFT_P #if mobile || TouchUtil.pressAction(leftArrow) #end)
+      if (parent.controls.UI_LEFT_P #if FEATURE_TOUCH_CONTROLS || TouchUtil.pressAction(leftArrow) #end)
       {
         currentInstrumentalIndex = (currentInstrumentalIndex + 1) % instrumentalIds.length;
         changedInst = true;
       }
-      if (parent.controls.UI_RIGHT_P #if mobile || TouchUtil.pressAction(rightArrow) #end)
+      if (parent.controls.UI_RIGHT_P #if FEATURE_TOUCH_CONTROLS || TouchUtil.pressAction(rightArrow) #end)
       {
         currentInstrumentalIndex = (currentInstrumentalIndex - 1 + instrumentalIds.length) % instrumentalIds.length;
         changedInst = true;
       }
-      if (parent.controls.ACCEPT_P #if mobile
-        || ((TouchUtil.pressAction(currentInstrumental))
-          && !(TouchUtil.overlapsComplex(leftArrow) || TouchUtil.overlapsComplex(rightArrow))) #end)
+      if (parent.controls.ACCEPT_P
+        #if FEATURE_TOUCH_CONTROLS
+        || ((TouchUtil.pressAction(currentInstrumental)) && !(TouchUtil.overlapsComplex(leftArrow) || TouchUtil.overlapsComplex(rightArrow)))
+        #end)
       {
         setBusy(true);
         onConfirm(instrumentalIds[currentInstrumentalIndex] ?? '');
@@ -166,7 +186,7 @@ class InstrumentalSelector extends FunkinSprite
 
     whiteShader = new PureColor(FlxColor.WHITE);
 
-    frames = Paths.getSparrowAtlas('freeplay/freeplaySelector');
+    frames = Paths.getSparrowAtlas('ui/freeplay/interface/difficulty-selector');
     animation.addByPrefix('shine', 'arrow pointer loop', 24);
     animation.play('shine');
 

@@ -1,6 +1,8 @@
 package funkin.graphics.shaders;
 
 import flixel.addons.display.FlxRuntimeShader;
+import funkin.assets.Paths;
+import funkin.assets.Assets;
 
 /**
  * Create a little dotting effect.
@@ -12,7 +14,7 @@ class InverseDotsShader extends FlxRuntimeShader
 
   public function new(amount:Float = 1.0)
   {
-    super(Assets.getText(Paths.frag('InverseDots')));
+    super(Assets.getText(Paths.frag('ui/shaders/inverse-dots')));
     setAmount(amount);
   }
 

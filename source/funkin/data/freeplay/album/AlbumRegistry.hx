@@ -2,7 +2,6 @@ package funkin.data.freeplay.album;
 
 import funkin.ui.freeplay.Album;
 import funkin.data.freeplay.album.AlbumData;
-import funkin.ui.freeplay.ScriptedAlbum;
 import funkin.util.tools.ISingleton;
 import funkin.data.DefaultRegistryImpl;
 
@@ -20,7 +19,12 @@ class AlbumRegistry extends BaseRegistry<Album, AlbumData, AlbumEntryParams> imp
 
   public function new()
   {
-    super('ALBUM', 'ui/freeplay/albums', ALBUM_DATA_VERSION_RULE);
+    super({
+      registryId: 'ALBUM',
+      dataFilePath: 'ui/freeplay/albums/',
+      nestedEntries: false,
+      versionRule: ALBUM_DATA_VERSION_RULE
+    });
   }
 }
 

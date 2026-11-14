@@ -1,14 +1,16 @@
 package funkin.play;
 
+import funkin.assets.FunkinAssetCache;
 import flixel.math.FlxAngle;
 import flixel.FlxState;
-import funkin.ui.transition.stickers.StickerSubState;
+import funkin.ui.transition.Transition;
 import flixel.addons.display.FlxBackdrop;
 import flixel.effects.FlxFlicker;
 import flixel.FlxSprite;
 import flixel.FlxSubState;
 import flixel.graphics.frames.FlxBitmapFont;
 import flixel.group.FlxGroup.FlxTypedGroup;
+import flixel.util.FlxSignal;
 import flixel.math.FlxPoint;
 import flixel.math.FlxRect;
 import flixel.text.FlxBitmapText;
@@ -16,10 +18,17 @@ import flixel.tweens.FlxEase;
 import flixel.tweens.FlxTween;
 import flixel.util.FlxColor;
 import flixel.util.FlxGradient;
+import flixel.util.FlxSignal;
 import flixel.util.FlxTimer;
+import flixel.util.typeLimit.NextState;
+import funkin.assets.Assets.AssetType;
+import funkin.assets.FunkinAssetCache;
+import funkin.assets.Paths.AssetPath;
+import funkin.assets.Paths.MusicAssetPathBuilder;
 import funkin.audio.FunkinSound;
 import funkin.data.freeplay.player.PlayerData.PlayerResultsAnimationData;
 import funkin.data.freeplay.player.PlayerRegistry;
+import funkin.data.freeplay.style.FreeplayStyleRegistry;
 import funkin.data.song.SongRegistry;
 import funkin.graphics.FunkinCamera;
 import funkin.graphics.FunkinSprite;
@@ -29,47 +38,51 @@ import funkin.play.components.TallyCounter;
 import funkin.play.scoring.Scoring;
 import funkin.play.song.Song;
 import funkin.save.Save.SaveScoreData;
-import funkin.ui.freeplay.charselect.PlayableCharacter;
-import funkin.ui.freeplay.FreeplayState;
 import funkin.ui.FullScreenScaleMode;
 import funkin.ui.MusicBeatSubState;
-import funkin.ui.story.StoryMenuState;
-import funkin.util.HapticUtil;
-import funkin.graphics.ScriptedFunkinSprite;
 import funkin.ui.debug.charting.ChartEditorState;
+import funkin.ui.freeplay.FreeplayState;
+import funkin.ui.freeplay.charselect.PlayableCharacter;
+import funkin.ui.story.StoryMenuState;
+import funkin.ui.transition.NextSubState;
+import funkin.ui.transition.Transition.TransitionType;
+import funkin.ui.transition.Transition;
+import funkin.util.DeviceUtil;
+import funkin.util.HapticUtil;
 #if FEATURE_NEWGROUNDS
 import funkin.api.newgrounds.Medals;
 #end
-#if mobile
+#if FEATURE_TOUCH_CONTROLS
 import funkin.util.TouchUtil;
 #if FEATURE_MOBILE_ADVERTISEMENTS
-import funkin.mobile.util.AdMobUtil;
+import funkin.util.mobile.AdMobUtil;
 #end
 #if FEATURE_MOBILE_IAR
-import funkin.mobile.util.InAppReviewUtil;
+import funkin.util.mobile.InAppReviewUtil;
 #end
 #end
 import funkin.util.DeviceUtil;
+import funkin.assets.Paths;
+import funkin.assets.Assets;
 
 /**
  * The state for the results screen after a song or week is finished.
  */
-@:nullSafety
 class ResultState extends MusicBeatSubState
 {
   final params:ResultsStateParams;
-  final rank:ScoringRank;
-  final songName:FlxBitmapText;
-  final difficulty:FlxSprite;
-  final clearPercentSmall:ClearPercentCounter;
-  final maskShaderSongName:LeftMaskShader = new LeftMaskShader();
-  final maskShaderDifficulty:LeftMaskShader = new LeftMaskShader();
-  final resultsAnim:FunkinSprite;
-  final ratingsPopin:FunkinSprite;
-  final scorePopin:FunkinSprite;
-  final bgFlash:FlxSprite;
-  final highscoreNew:FlxSprite;
-  final score:ResultScore;
+  var rank:ScoringRank;
+  var songName:FlxBitmapText;
+  var difficulty:FlxSprite;
+  var clearPercentSmall:ClearPercentCounter;
+  var maskShaderSongName:LeftMaskShader = new LeftMaskShader();
+  var maskShaderDifficulty:LeftMaskShader = new LeftMaskShader();
+  var resultsAnim:FunkinSprite;
+  var ratingsPopin:FunkinSprite;
+  var scorePopin:FunkinSprite;
+  var bgFlash:FlxSprite;
+  var highscoreNew:FlxSprite;
+  var score:ResultScore;
   var characterAtlasAnimations:Array<
     {
       sprite:FunkinSprite,
@@ -93,11 +106,14 @@ class ResultState extends MusicBeatSubState
   var resultsMusic:Null<FunkinSound> = null;
 
   var rankBg:FunkinSprite;
-  final cameraBG:FunkinCamera;
-  final cameraScroll:FunkinCamera;
-  final cameraEverything:FunkinCamera;
+  var cameraBG:FunkinCamera;
+  var cameraScroll:FunkinCamera;
+  var cameraEverything:FunkinCamera;
   var blackTopBar:FlxSprite = new FlxSprite();
   var busy:Bool = false;
+  var soundSystem:FlxSprite = new FlxSprite();
+  var ratingGrp:FlxTypedGroup<TallyCounter> = new FlxTypedGroup<TallyCounter>();
+  var textChange:FlxTypedSignal<Void->Void> = new FlxTypedSignal<Void->Void>();
 
   public var isChartingMode(get, never):Bool;
 
@@ -108,6 +124,122 @@ class ResultState extends MusicBeatSubState
       return false;
   }
 
+  /**
+   * Return a list of all AssetPaths that this state depends on to load.
+   * @param type The type of AssetPath to return a list of paths for.
+   * @param params The parameters for the Results state we are moving to.
+   * @return A list of assets of the matching type.
+   */
+  public static function queryAssets(type:funkin.assets.Assets.AssetType,
+    params:ResultsStateParams):Array<funkin.assets.Paths.AssetPath>
+  {
+    var results:Array<Null<funkin.assets.Paths.AssetPath>> = [];
+
+    // Load assets based on the current player character
+    var entryPlayerCharacterId:Null<String> = PlayerRegistry.instance.getCharacterOwnerId(params.characterId);
+    var entryPlayerCharacter:Null<PlayableCharacter> = PlayerRegistry.instance.fetchEntry(entryPlayerCharacterId ?? Constants.DEFAULT_CHARACTER);
+
+    // Load assets based on the rank earned
+    var rank:Null<ScoringRank> = Scoring.calculateRank(params.scoreData) ?? SHIT;
+    var playerAnimationDatas:Array<PlayerResultsAnimationData> = entryPlayerCharacter != null ? entryPlayerCharacter.getResultsAnimationDatas(rank) : [];
+
+    // Load assets for the sticker transition after this results screen.
+    results.append(funkin.ui.transition.loading.StickerLoadingState.queryAssets(type, Constants.DEFAULT_STICKER_PACK));
+
+    switch (type)
+    {
+      case IMAGE:
+        var difficultyImage:AssetPath = Paths.image('ui/results/difficulty/${params?.difficultyId ?? 'normal'}');
+        // TODO: Refactor these.
+        @:privateAccess
+        var rankImageVer:AssetPath = Paths.raw(rank.getVerTextAsset());
+        @:privateAccess
+        var rankImageHor:AssetPath = Paths.raw(rank.getHorTextAsset());
+        for (animData in playerAnimationDatas)
+        {
+          if (animData?.assetPath == null) continue;
+
+          switch (animData.renderType)
+          {
+            case 'animateatlas':
+              results.append(Paths.animateAtlas(animData?.assetPath ?? '').image());
+            case 'sparrow':
+              results.push(Paths.image(animData?.assetPath ?? ''));
+            default:
+              // Nothing
+          }
+        }
+        results.append([
+          difficultyImage,
+          rankImageVer,
+          rankImageHor,
+          Paths.image('ui/fonts/tardling'),
+          Paths.image('ui/results/interface/top-bar-black'),
+          Paths.image('ui/results/clear-percent/percent'),
+          Paths.image('ui/results/clear-percent/percent-small'),
+          Paths.image('ui/results/interface/results'),
+          Paths.image('ui/results/interface/ratings-popin'),
+          Paths.image('ui/results/interface/score-popin'),
+          Paths.image('ui/results/interface/sound-system'),
+          Paths.image('ui/results/interface/highscore-new'),
+          Paths.image('ui/results/clear-percent/number-left'),
+          Paths.image('ui/results/clear-percent/number-right'),
+          Paths.image('ui/results/clear-percent/number-small'),
+          Paths.image('ui/results/interface/score-digital-numbers'),
+          Paths.image('ui/results/interface/tallie-number'),
+        ]);
+      case XML:
+        for (animData in playerAnimationDatas)
+        {
+          if (animData?.assetPath == null) continue;
+
+          switch (animData.renderType)
+          {
+            case 'sparrow':
+              results.push(Paths.xml(animData?.assetPath ?? ''));
+            default:
+              // Nothing
+          }
+        }
+        results.append([
+          Paths.xml('ui/results/interface/results'),
+          Paths.xml('ui/results/interface/ratings-popin'),
+          Paths.xml('ui/results/interface/score-popin'),
+          Paths.xml('ui/results/interface/sound-system'),
+          Paths.xml('ui/results/interface/highscore-new'),
+          Paths.xml('ui/results/clear-percent/number-left'),
+          Paths.xml('ui/results/clear-percent/number-right'),
+          Paths.xml('ui/results/clear-percent/number-small'),
+          Paths.xml('ui/results/interface/score-digital-numbers'),
+          Paths.xml('ui/results/interface/tallie-number'),
+        ]);
+      case SOUND:
+        var musicPath:MusicAssetPathBuilder = getMusicPath(entryPlayerCharacter, rank);
+        var introMusicPath:MusicAssetPathBuilder = musicPath.withSuffix('-intro');
+        if (introMusicPath.audioExists()) results.push(introMusicPath.audio());
+        results.push(musicPath.audio());
+      case JSON:
+        var musicPath:MusicAssetPathBuilder = getMusicPath(entryPlayerCharacter, rank);
+        if (musicPath.metadataExists()) results.push(musicPath.metadata());
+        for (animData in playerAnimationDatas)
+        {
+          if (animData?.assetPath == null) continue;
+          
+          switch (animData.renderType)
+          {
+            case 'animateatlas':
+              results.append(Paths.animateAtlas(animData?.assetPath ?? '').json());
+            default:
+              // Nothing
+          }
+        }
+      default:
+        // Nothing.
+    }
+
+    return results.filterNull();
+  }
+
   public function new(params:ResultsStateParams)
   {
     super();
@@ -116,6 +248,9 @@ class ResultState extends MusicBeatSubState
 
     rank = Scoring.calculateRank(params.scoreData) ?? SHIT;
 
+    rankVertAsset = rank.getVerTextAsset();
+    rankBackAsset = rank.getHorTextAsset();
+
     cameraBG = new FunkinCamera('resultsBG', 0, 0, FlxG.width, FlxG.height);
     cameraScroll = new FunkinCamera('resultsScroll', 0, 0, FlxG.width, Math.round(FlxG.height * 1.2));
     cameraEverything = new FunkinCamera('resultsEverything', 0, 0, FlxG.width, FlxG.height);
@@ -123,8 +258,8 @@ class ResultState extends MusicBeatSubState
     // We build a lot of this stuff in the constructor, then place it in create().
     // This prevents having to do `null` checks everywhere.
 
-    var fontLetters:String = "AaBbCcDdEeFfGgHhiIJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz:1234567890().-";
-    songName = new FlxBitmapText(FlxBitmapFont.fromMonospace(Paths.image("resultScreen/tardlingSpritesheet"), fontLetters, FlxPoint.get(49, 61)));
+    var fontLetters:String = 'AaBbCcDdEeFfGgHhiIJjKkLlMmNnOoPpQqRrSsTtUuVvWwXxYyZz:1234567890().-';
+    songName = new FlxBitmapText(Assets.getMonospaceBitmapFont(Paths.image('ui/fonts/tardling'), fontLetters, FlxPoint.get(49, 61)));
     songName.text = params.title;
     songName.letterSpacing = -15;
     songName.angle = -4.4;
@@ -140,15 +275,15 @@ class ResultState extends MusicBeatSubState
 
     bgFlash = FlxGradient.createGradientFlxSprite(FlxG.width, FlxG.height, [0xFFFFF1A6, 0xFFFFF1BE], 90);
 
-    resultsAnim = FunkinSprite.createSparrow(FlxG.width - (1480 + (FullScreenScaleMode.gameCutoutSize.x / 2)), -10, "resultScreen/results");
+    resultsAnim = new FunkinSprite(FlxG.width - (1480 + (FullScreenScaleMode.gameCutoutSize.x / 2)), -10).loadSparrow("ui/results/interface/results");
 
-    ratingsPopin = FunkinSprite.createSparrow(-135 + FullScreenScaleMode.gameNotchSize.x, 135, "resultScreen/ratingsPopin");
+    ratingsPopin = new FunkinSprite(-135 + FullScreenScaleMode.gameNotchSize.x, 135).loadSparrow("ui/results/interface/ratings-popin");
 
-    scorePopin = FunkinSprite.createSparrow(-180 + FullScreenScaleMode.gameNotchSize.x, 515, "resultScreen/scorePopin");
+    scorePopin = new FunkinSprite(-180 + FullScreenScaleMode.gameNotchSize.x, 515).loadSparrow("ui/results/interface/score-popin");
 
     highscoreNew = new FlxSprite(44 + FullScreenScaleMode.gameNotchSize.x, 557);
 
-    score = new ResultScore(35 + FullScreenScaleMode.gameNotchSize.x, 305, 10, params.scoreData.score);
+    score = new ResultScore(35 + FullScreenScaleMode.gameNotchSize.x #if mobile - 10 #end, 305, 10, params.scoreData.score);
 
     rankBg = new FunkinSprite(0, 0);
   }
@@ -158,7 +293,7 @@ class ResultState extends MusicBeatSubState
     if (FlxG.sound.music != null) FlxG.sound.music.stop();
 
     // We need multiple cameras so we can put one at an angle.
-    cameraScroll.canvas.rotation = -3.8;
+    cameraScroll.scrollAngle = -3.8;
 
     cameraBG.bgColor = FlxColor.MAGENTA;
     cameraScroll.bgColor = FlxColor.TRANSPARENT;
@@ -187,7 +322,7 @@ class ResultState extends MusicBeatSubState
     add(bgFlash);
 
     // The sound system which falls into place behind the score text. Plays every time!
-    var soundSystem:FlxSprite = FunkinSprite.createSparrow(-15 + FullScreenScaleMode.gameNotchSize.x, -180, 'resultScreen/soundSystem');
+    soundSystem = new FunkinSprite(-15 + FullScreenScaleMode.gameNotchSize.x, -180).loadSparrow('ui/results/interface/sound-system');
     soundSystem.animation.addByPrefix("idle", "sound system", 24, false);
     soundSystem.visible = false;
     new FlxTimer().start(8 / 24, _ ->
@@ -203,141 +338,148 @@ class ResultState extends MusicBeatSubState
     playerCharacter = PlayerRegistry.instance.fetchEntry(playerCharacterId);
 
     trace('Got playable character: ${playerCharacter?.getName()}');
+
     // Query JSON data based on the rank, then use that to build the animation(s) the player sees.
     var playerAnimationDatas:Array<PlayerResultsAnimationData> = playerCharacter != null ? playerCharacter.getResultsAnimationDatas(rank) : [];
 
-    for (animData in playerAnimationDatas)
+    for (animationData in playerAnimationDatas)
     {
-      if (animData == null) continue;
+      if (animationData == null) continue;
 
-      if (animData.filter != "both")
+      if (animationData.filter != "both")
       {
-        if (Preferences.naughtyness && animData.filter != "naughty" || !Preferences.naughtyness && animData.filter != "safe") continue;
+        if (Preferences.naughtyness && animationData.filter != "naughty" || !Preferences.naughtyness && animationData.filter != "safe") continue;
       }
 
-      var animPath:String = "";
-      var animLibrary:String = "";
+      var assetPath:String = "";
+      var offsets:Array<Float> = animationData.offsets ?? [0, 0];
 
-      if (animData.assetPath != null)
+      var xPosition:Float = offsets[0] + (FullScreenScaleMode.gameCutoutSize.x / 2);
+      var yPosition:Float = offsets[1];
+
+      var animation:Null<FunkinSprite> = null;
+
+      if (animationData.assetPath != null)
       {
-        animPath = Paths.stripLibrary(animData.assetPath);
-        animLibrary = Paths.getLibrary(animData.assetPath);
+        assetPath = animationData.assetPath;
       }
-      var offsets = animData.offsets ?? [0, 0];
-      switch (animData.renderType)
+
+      switch (animationData.renderType)
       {
         case 'animateatlas':
-          @:nullSafety(Off)
-          var animation:FunkinSprite = null;
-
-          var xPos = offsets[0] + (FullScreenScaleMode.gameCutoutSize.x / 2);
-          var yPos = offsets[1];
-
-          if (animData.scriptClass != null) animation = ScriptedFunkinSprite.scriptInit(animData.scriptClass, xPos, yPos);
+          if (animationData.scriptClass != null) animation = FunkinSprite.scriptInit(animationData.scriptClass, xPosition, yPosition);
           else
-            animation = FunkinSprite.createTextureAtlas(xPos, yPos, animPath, animLibrary);
+            animation = new FunkinSprite(xPosition, yPosition).loadTextureAtlas(assetPath);
 
           if (animation == null) continue;
 
-          if (animData?.applyStageMatrix ?? false)
+          if (animationData?.applyStageMatrix ?? false)
           {
             animation.applyStageMatrix = true;
           }
 
-          animation.zIndex = animData.zIndex ?? 500;
+          animation.zIndex = animationData.zIndex ?? 500;
+          animation.scale.set(animationData.scale ?? 1.0, animationData.scale ?? 1.0);
 
-          animation.scale.set(animData.scale ?? 1.0, animData.scale ?? 1.0);
+          animation.anim.addBySymbol('wholeTimeline', animation.getDefaultSymbol(), animation.library.frameRate, false);
 
-          if (!(animData.looped ?? true))
+          if (animationData.startFrameLabel != null && animationData.startFrameLabel != '')
+          {
+            animation.anim.addByFrameLabel('startLabel', animationData.startFrameLabel, animation.library.frameRate, false);
+          }
+
+          if (animationData.loopFrameLabel != null)
+          {
+            animation.anim.addByFrameLabel('loopLabel', animationData.loopFrameLabel, animation.library.frameRate);
+          }
+
+          if (!(animationData.looped ?? true))
           {
             // Animation is not looped.
-            animation.anim.onFinish.add((_name:String) ->
+            animation.animation.onFinish.add((_name:String) ->
             {
               if (animation != null)
               {
-                animation.anim.pause();
+                animation.animation.pause();
               }
             });
           }
-          else if (animData.loopFrameLabel != null)
+          else if (animationData.loopFrameLabel != null)
           {
-            animation.anim.onFinish.add((_name:String) ->
-            {
-              if (animation != null)
-              {
-                animation.anim.play(animData.loopFrameLabel ?? '', true); // unpauses this anim, since it's on PlayOnce!
-                animation.anim.curAnim.looped = true;
-              }
-            });
+            animation.animation.onFinish.add((_name:String) -> animation.animation.play('loopLabel', true));
           }
-          else if (animData.loopFrame != null)
+          else if (animationData.loopFrame != null)
           {
-            animation.anim.onFinish.add((_name:String) ->
-            {
-              if (animation != null)
-              {
-                animation.anim.play("", true, false, animData.loopFrame ?? 0); // unpauses this anim, since it's on PlayOnce!
-              }
-            });
+            animation.animation.onFinish.add((_name:String) -> animation.animation.play('wholeTimeline', true, false, animationData.loopFrame ?? 0));
           }
 
           // Hide until ready to play.
           animation.visible = false;
+
           // Queue to play.
           characterAtlasAnimations.push({
             sprite: animation,
-            delay: animData.delay ?? 0.0,
-            forceLoop: (animData.loopFrame ?? -1) == 0,
-            startFrameLabel: (animData.startFrameLabel ?? ""),
-            sound: (animData.sound ?? "")
+            delay: animationData.delay ?? 0.0,
+            forceLoop: (animationData.loopFrame ?? -1) == 0,
+            startFrameLabel: (animationData.startFrameLabel ?? ""),
+            sound: (animationData.sound ?? "")
           });
+
           // Add to the scene.
           add(animation);
         case 'sparrow':
-          @:nullSafety(Off)
-          var animation:FunkinSprite = null;
-
-          if (animData.scriptClass != null) animation = ScriptedFunkinSprite.scriptInit(animData.scriptClass,
-            offsets[0] + (FullScreenScaleMode.gameCutoutSize.x / 2), offsets[1]);
+          if (animationData.scriptClass != null)
+          {
+            animation = FunkinSprite.scriptInit(animationData.scriptClass, xPosition, yPosition);
+          }
           else
-            animation = FunkinSprite.createSparrow(offsets[0] + (FullScreenScaleMode.gameCutoutSize.x / 2), offsets[1], animPath);
+          {
+            animation = new FunkinSprite(xPosition, yPosition).loadSparrow(assetPath);
+          }
 
           if (animation == null) continue;
 
           animation.animation.addByPrefix('idle', '', 24, false, false, false);
 
-          if (animData.loopFrame != null)
+          if (animationData.loopFrame != null)
           {
             animation.animation.onFinish.add((_name:String) ->
             {
               if (animation != null)
               {
-                animation.animation.play('idle', true, false, animData.loopFrame ?? 0);
+                animation.animation.play('idle', true, false, animationData.loopFrame ?? 0);
               }
             });
           }
 
           // Hide until ready to play.
           animation.visible = false;
+
           // Queue to play.
           characterSparrowAnimations.push({
             sprite: animation,
-            delay: animData.delay ?? 0.0
+            delay: animationData.delay ?? 0.0
           });
+
           // Add to the scene.
           add(animation);
       }
     }
 
-    var diffSpr:String = 'diff_${params?.difficultyId ?? Constants.DEFAULT_DIFFICULTY}';
-    difficulty.loadGraphic(Paths.image("resultScreen/" + diffSpr));
+    difficulty.loadGraphic(Paths.image("ui/results/difficulty/" + (params?.difficultyId ?? Constants.DEFAULT_DIFFICULTY)).toFlxGraphicAsset());
     add(difficulty);
 
     add(songName);
 
     blackTopBar.loadGraphic(funkin.util.BitmapUtil.createResultsBar());
     blackTopBar.y = -blackTopBar.height;
-    FlxTween.tween(blackTopBar, {y: 0}, 7 / 24, {ease: FlxEase.quartOut, startDelay: 3 / 24, onComplete: _ -> songName.visible = true});
+    FlxTween.tween(blackTopBar, {
+      y: 0
+    }, 7 / 24, {
+      ease: FlxEase.quartOut,
+      startDelay: 3 / 24,
+      onComplete: _ -> songName.visible = true
+    });
     blackTopBar.zIndex = 1010;
     add(blackTopBar);
 
@@ -405,7 +547,7 @@ class ResultState extends MusicBeatSubState
       displayRankText();
     });
 
-    highscoreNew.frames = Paths.getSparrowAtlas("resultScreen/highscoreNew");
+    highscoreNew.frames = Paths.getSparrowAtlas("ui/results/interface/highscore-new");
     highscoreNew.animation.addByPrefix("new", "highscoreAnim0", 24, false);
     highscoreNew.visible = false;
     // highscoreNew.setGraphicSize(Std.int(highscoreNew.width * 0.8));
@@ -429,7 +571,6 @@ class ResultState extends MusicBeatSubState
 
     var hStuf:Int = 50;
 
-    var ratingGrp:FlxTypedGroup<TallyCounter> = new FlxTypedGroup<TallyCounter>();
     ratingGrp.zIndex = 1200;
     add(ratingGrp);
 
@@ -454,24 +595,44 @@ class ResultState extends MusicBeatSubState
 
     hStuf += 2;
 
-    var tallySick:TallyCounter = new TallyCounter(230 + FullScreenScaleMode.gameNotchSize.x, (hStuf * 5) + extraYOffset, params.scoreData.tallies.sick,
-      0xFF89E59E);
+    var tallySick:TallyCounter = new TallyCounter(
+      230 + FullScreenScaleMode.gameNotchSize.x,
+      (hStuf * 5) + extraYOffset,
+      params.scoreData.tallies.sick,
+      0xFF89E59E
+    );
     ratingGrp.add(tallySick);
 
-    var tallyGood:TallyCounter = new TallyCounter(210 + FullScreenScaleMode.gameNotchSize.x, (hStuf * 6) + extraYOffset, params.scoreData.tallies.good,
-      0xFF89C9E5);
+    var tallyGood:TallyCounter = new TallyCounter(
+      210 + FullScreenScaleMode.gameNotchSize.x,
+      (hStuf * 6) + extraYOffset,
+      params.scoreData.tallies.good,
+      0xFF89C9E5
+    );
     ratingGrp.add(tallyGood);
 
-    var tallyBad:TallyCounter = new TallyCounter(190 + FullScreenScaleMode.gameNotchSize.x, (hStuf * 7) + extraYOffset, params.scoreData.tallies.bad,
-      0xFFE6CF8A);
+    var tallyBad:TallyCounter = new TallyCounter(
+      190 + FullScreenScaleMode.gameNotchSize.x,
+      (hStuf * 7) + extraYOffset,
+      params.scoreData.tallies.bad,
+      0xFFE6CF8A
+    );
     ratingGrp.add(tallyBad);
 
-    var tallyShit:TallyCounter = new TallyCounter(220 + FullScreenScaleMode.gameNotchSize.x, (hStuf * 8) + extraYOffset, params.scoreData.tallies.shit,
-      0xFFE68C8A);
+    var tallyShit:TallyCounter = new TallyCounter(
+      220 + FullScreenScaleMode.gameNotchSize.x,
+      (hStuf * 8) + extraYOffset,
+      params.scoreData.tallies.shit,
+      0xFFE68C8A
+    );
     ratingGrp.add(tallyShit);
 
-    var tallyMissed:TallyCounter = new TallyCounter(260 + FullScreenScaleMode.gameNotchSize.x, (hStuf * 9) + extraYOffset, params.scoreData.tallies.missed,
-      0xFFC68AE6);
+    var tallyMissed:TallyCounter = new TallyCounter(
+      260 + FullScreenScaleMode.gameNotchSize.x,
+      (hStuf * 9) + extraYOffset,
+      params.scoreData.tallies.missed,
+      0xFFC68AE6
+    );
     ratingGrp.add(tallyMissed);
 
     score.visible = false;
@@ -484,41 +645,35 @@ class ResultState extends MusicBeatSubState
       new FlxTimer().start((0.3 * ind) + 1.20, _ ->
       {
         rating.visible = true;
-        FlxTween.tween(rating, {curNumber: rating.neededNumber}, 0.5, {ease: FlxEase.quartOut});
+        FlxTween.tween(rating, {
+          curNumber: rating.neededNumber
+        }, 0.5, {
+          ease: FlxEase.quartOut
+        });
       });
     }
 
-    // if (params.isNewHighscore ?? false)
-    // {
-    //   highscoreNew.visible = true;
-    //   highscoreNew.animation.play("new");
-    //   //FlxTween.tween(highscoreNew, {y: highscoreNew.y + 10}, 0.8, {ease: FlxEase.quartOut});
-    // }
-    // else
-    // {
-    //   highscoreNew.visible = false;
-    // }
-
     new FlxTimer().start(rank.getMusicDelay(), _ ->
     {
-      var musicPath = getMusicPath(playerCharacter, rank);
-      var introMusic:String = Paths.music('$musicPath/$musicPath-intro');
+      var musicPath:MusicAssetPathBuilder = getMusicPath(playerCharacter, rank);
+      var introMusicPath:MusicAssetPathBuilder = musicPath.withSuffix('-intro');
 
-      if (Assets.exists(introMusic))
+      if (introMusicPath.audioExists())
       {
-        var mainMusic:String = Paths.music('$musicPath/$musicPath'); // wraps how FunkinSound load audios
-
         // preload the loop music
         @:nullSafety(Off)
-        var musicLoop:FunkinSound = FunkinSound.load(mainMusic, 1.0, true, true, false, false, null, null, true);
+        var musicLoop:FunkinSound = FunkinSound.load(musicPath.audio().toFlxSoundAsset(), 1.0, true, true, false, false, null, null);
 
         // Play the intro music.
-        introMusicAudio = FunkinSound.load(introMusic, 1.0, false, true, true, () ->
+        introMusicAudio = FunkinSound.load(introMusicPath.audio().toFlxSoundAsset(), 1.0, false, true, true, () ->
         {
           introMusicAudio = null;
           musicLoop.play();
-          if (!isChartingMode) // Don't override the music and cause problems on the chart editor
+          if (!isChartingMode)
+          {
+            // Don't override the music and cause problems on the chart editor
             FunkinSound.setMusic(musicLoop);
+          }
           else // Play the results music as a looped sound instead (that we cancel before closing and returning to the chart editor)
           {
             resultsMusic = musicLoop;
@@ -528,14 +683,17 @@ class ResultState extends MusicBeatSubState
       }
       else
       {
-        if (!isChartingMode) FunkinSound.playMusic(musicPath, {
-          startingVolume: 1.0,
-          overrideExisting: true,
-          restartTrack: true
-        });
+        if (!isChartingMode)
+        {
+          FunkinSound.playMusic(musicPath.audio().toFlxSoundAsset(), {
+            startingVolume: 1.0,
+            overrideExisting: true,
+            restartTrack: true
+          });
+        }
         else
         {
-          resultsMusic = FunkinSound.load(Paths.music(getMusicPath(playerCharacter, rank) + '/' + getMusicPath(playerCharacter, rank)), 1.0, true, false, true);
+          resultsMusic = FunkinSound.load(musicPath.audio().toFlxSoundAsset(), 1.0, true, false, true);
         }
       }
     });
@@ -561,9 +719,12 @@ class ResultState extends MusicBeatSubState
     super.destroy();
   }
 
-  function getMusicPath(playerCharacter:Null<PlayableCharacter>, rank:ScoringRank):String
+  static function getMusicPath(playerCharacter:Null<PlayableCharacter>,
+    rank:ScoringRank):MusicAssetPathBuilder
   {
-    return playerCharacter?.getResultsMusicPath(rank) ?? 'resultsNORMAL';
+    if (playerCharacter != null) return playerCharacter.getResultsMusicPath(rank);
+
+    return Paths.music('gameplay/playable-characters/bf/results/music/results-normal');
   }
 
   var clearPercentTarget:Int = 100;
@@ -572,7 +733,9 @@ class ResultState extends MusicBeatSubState
   function startRankTallySequence():Void
   {
     bgFlash.visible = true;
-    FlxTween.tween(bgFlash, {alpha: 0}, 5 / 24);
+    FlxTween.tween(bgFlash, {
+      alpha: 0
+    }, 5 / 24);
     // NOTE: Only divide if totalNotes > 0 to prevent divide-by-zero errors.
     var clearPercentFloat = params.scoreData.tallies.totalNotes == 0 ? 0.0 : Scoring.tallyCompletion(params.scoreData.tallies) * 100;
     clearPercentTarget = Math.floor(clearPercentFloat);
@@ -582,9 +745,14 @@ class ResultState extends MusicBeatSubState
 
     trace('Clear percent target: ' + clearPercentFloat + ', round: ' + clearPercentTarget);
 
-    var clearPercentCounter:ClearPercentCounter = new ClearPercentCounter((FlxG.width / 2 + 190) + (FullScreenScaleMode.gameCutoutSize.x / 2),
-      FlxG.height / 2 - 70, clearPercentLerp);
-    FlxTween.tween(clearPercentCounter, {curNumber: clearPercentTarget}, 58 / 24, {
+    var clearPercentCounter:ClearPercentCounter = new ClearPercentCounter(
+      (FlxG.width / 2 + 190) + (FullScreenScaleMode.gameCutoutSize.x / 2),
+      FlxG.height / 2 - 70,
+      clearPercentLerp
+    );
+    FlxTween.tween(clearPercentCounter, {
+      curNumber: clearPercentTarget
+    }, 58 / 24, {
       ease: FlxEase.quartOut,
       onUpdate: _ ->
       {
@@ -595,7 +763,7 @@ class ResultState extends MusicBeatSubState
         {
           // trace('$clearPercentLerp and ${clearPercentCounter.curNumber}');
           clearPercentLerp = clearPercentCounter.curNumber;
-          FunkinSound.playOnce(Paths.sound('scrollMenu'));
+          FunkinSound.playOnce(Paths.sound('ui/main-menu/scroll-menu').toFlxSoundAsset());
 
           // Weak vibration each number increase.
           HapticUtil.vibrate(0, 0.01);
@@ -607,7 +775,7 @@ class ResultState extends MusicBeatSubState
         HapticUtil.vibrate(Constants.DEFAULT_VIBRATION_PERIOD, Constants.DEFAULT_VIBRATION_DURATION * 5, Constants.MAX_VIBRATION_AMPLITUDE);
 
         // Play confirm sound.
-        FunkinSound.playOnce(Paths.sound('confirmMenu'));
+        FunkinSound.playOnce(Paths.sound('ui/main-menu/confirm-menu').toFlxSoundAsset());
 
         // Just to be sure that the lerp didn't mess things up.
         clearPercentCounter.curNumber = clearPercentTarget;
@@ -629,7 +797,9 @@ class ResultState extends MusicBeatSubState
         // previously 2.0 seconds
         new FlxTimer().start(0.25, _ ->
         {
-          FlxTween.tween(clearPercentCounter, {alpha: 0}, 0.5, {
+          FlxTween.tween(clearPercentCounter, {
+            alpha: 0
+          }, 0.5, {
             startDelay: 0.5,
             ease: FlxEase.quartOut,
             onComplete: _ ->
@@ -649,28 +819,24 @@ class ResultState extends MusicBeatSubState
     {
       trace("Could not build ratingsPopin!");
     }
-    else
-    {
-      // ratingsPopin.animation.play("idle");
-      // ratingsPopin.visible = true;
-
-      ratingsPopin.animation.onFinish.add(anim -> {
-        // scorePopin.animation.play("score");
-
-        // scorePopin.visible = true;
-      });
-    }
 
     refresh();
   }
+
+  var rankTextVert:FlxBackdrop = new FlxBackdrop();
+  var rankTextBack:FlxBackdrop = new FlxBackdrop();
+  var rankVertAsset:String = "";
+  var rankBackAsset:String = "";
 
   function displayRankText():Void
   {
     bgFlash.visible = true;
     bgFlash.alpha = 1;
-    FlxTween.tween(bgFlash, {alpha: 0}, 14 / 24);
+    FlxTween.tween(bgFlash, {
+      alpha: 0
+    }, 14 / 24);
 
-    var rankTextVert:FlxBackdrop = new FlxBackdrop(Paths.image(rank.getVerTextAsset()), Y, 0, 30);
+    rankTextVert = new FlxBackdrop(rankVertAsset, Y, 0, 30);
     rankTextVert.x = FlxG.width - 44;
     rankTextVert.y = 100;
     rankTextVert.zIndex = 990;
@@ -686,7 +852,7 @@ class ResultState extends MusicBeatSubState
 
     for (i in 0...12)
     {
-      var rankTextBack:FlxBackdrop = new FlxBackdrop(Paths.image(rank.getHorTextAsset()), X, 10, 0);
+      rankTextBack = new FlxBackdrop(rankBackAsset, X, 10, 0);
       rankTextBack.x = FlxG.width / 2 - 320;
       rankTextBack.y = 50 + (135 * i / 2) + 10;
       // rankTextBack.angle = -3.8;
@@ -710,14 +876,21 @@ class ResultState extends MusicBeatSubState
       new FlxTimer().start(atlas.delay, _ ->
       {
         if (atlas.sprite == null) return;
+
         atlas.sprite.visible = true;
-        atlas.sprite.anim.play(atlas.startFrameLabel);
+
+        if (atlas.sprite.hasAnimation('startLabel'))
+        {
+          atlas.sprite.animation.play('startLabel');
+        }
+        else
+        {
+          atlas.sprite.animation.play('wholeTimeline');
+        }
+
         if (atlas.sound != "")
         {
-          var sndPath:String = Paths.stripLibrary(atlas.sound);
-          var sndLibrary:String = Paths.getLibrary(atlas.sound);
-
-          FunkinSound.playOnce(Paths.sound(sndPath, sndLibrary), 1.0);
+          FunkinSound.playOnce(Paths.sound(atlas.sound).toFlxSoundAsset(), 1.0);
         }
       });
     }
@@ -727,6 +900,7 @@ class ResultState extends MusicBeatSubState
       new FlxTimer().start(sprite.delay, _ ->
       {
         if (sprite.sprite == null) return;
+
         sprite.sprite.visible = true;
         sprite.sprite.animation.play('idle', true);
       });
@@ -742,18 +916,33 @@ class ResultState extends MusicBeatSubState
     var diffYTween:Float = 122;
 
     difficulty.y = -difficulty.height;
-    FlxTween.tween(difficulty, {y: diffYTween + (blackTopBar.height - 148)}, 0.5, {ease: FlxEase.expoOut, startDelay: 0.8});
+    FlxTween.tween(difficulty, {
+      y: diffYTween + (blackTopBar.height - 148)
+    }, 0.5, {
+      ease: FlxEase.expoOut,
+      startDelay: 0.8
+    });
 
     if (clearPercentSmall != null)
     {
       clearPercentSmall.x = (difficulty.x + difficulty.width) + 60;
       clearPercentSmall.y = -clearPercentSmall.height;
-      FlxTween.tween(clearPercentSmall, {y: (122 - 5) + (blackTopBar.height - 148)}, 0.5, {ease: FlxEase.expoOut, startDelay: 0.85});
+      FlxTween.tween(clearPercentSmall, {
+        y: (122 - 5) + (blackTopBar.height - 148)
+      }, 0.5, {
+        ease: FlxEase.expoOut,
+        startDelay: 0.85
+      });
     }
 
     songName.y = -songName.height;
     var fuckedupnumber:Float = -(songName.width * 0.5) * Math.sin(songName.angle * FlxAngle.TO_RAD) - 10;
-    FlxTween.tween(songName, {y: (diffYTween - 25 - fuckedupnumber) + ((blackTopBar.height - 148) / 1)}, 0.5, {ease: FlxEase.expoOut, startDelay: 0.9});
+    FlxTween.tween(songName, {
+      y: (diffYTween - 25 - fuckedupnumber) + ((blackTopBar.height - 148) / 1)
+    }, 0.5, {
+      ease: FlxEase.expoOut,
+      startDelay: 0.9
+    });
     songName.x = clearPercentSmall.x + 94;
 
     new FlxTimer().start(timerLength, _ ->
@@ -761,10 +950,17 @@ class ResultState extends MusicBeatSubState
       var tempSpeed = FlxPoint.get(speedOfTween.x, speedOfTween.y);
 
       speedOfTween.set(0, 0);
-      FlxTween.tween(speedOfTween, {x: tempSpeed.x, y: tempSpeed.y}, 0.7, {ease: FlxEase.quadIn});
+      FlxTween.tween(speedOfTween, {
+        x: tempSpeed.x,
+        y: tempSpeed.y
+      }, 0.7, {
+        ease: FlxEase.quadIn
+      });
 
       movingSongStuff = (autoScroll);
     });
+
+    textChange.dispatch();
   }
 
   function showSmallClearPercent():Void
@@ -792,14 +988,22 @@ class ResultState extends MusicBeatSubState
 
   var movingSongStuff:Bool = false;
   var speedOfTween:FlxPoint = FlxPoint.get(-1, 1);
+  var shouldClipSongName:Bool = true;
 
   override function draw():Void
   {
     super.draw();
 
-    songName.clipRect = FlxRect.get(Math.max(0, 520 - songName.x), 0, FlxG.width, songName.height);
-    clearPercentSmall.forEachAlive(spr -> spr.clipRect = FlxRect.get(Math.max(0, 520 - spr.x), 0, FlxG.width, spr.height));
-
+    if (shouldClipSongName)
+    {
+      songName.clipRect = FlxRect.get(Math.max(0, 520 - songName.x), 0, FlxG.width, songName.height);
+      clearPercentSmall.forEachAlive(spr -> spr.clipRect = FlxRect.get(Math.max(0, 520 - spr.x), 0, FlxG.width, spr.height));
+    }
+    else
+    {
+      songName.clipRect = null;
+      clearPercentSmall.forEachAlive(spr -> spr.clipRect = null);
+    }
     // PROBABLY SHOULD FIX MEMORY FREE OR WHATEVER THE PUT() FUNCTION DOES !!!! FEELS LIKE IT STUTTERS!!!
 
     // if (songName != null && songName.frame != null)
@@ -808,7 +1012,7 @@ class ResultState extends MusicBeatSubState
 
   override function update(elapsed:Float):Void
   {
-    maskShaderDifficulty.swagSprX = difficulty.x;
+    maskShaderDifficulty.swagSprX = difficulty.x + difficulty.offset.x;
 
     if (movingSongStuff)
     {
@@ -828,7 +1032,7 @@ class ResultState extends MusicBeatSubState
       }
     }
 
-    if (controls.PAUSE_P || controls.ACCEPT_P #if mobile || TouchUtil.pressAction() #end)
+    if (controls.PAUSE_P || controls.ACCEPT_P #if FEATURE_TOUCH_CONTROLS || TouchUtil.pressAction() #end)
     {
       if (busy) return;
       if (_parentState is funkin.ui.debug.results.ResultsDebugSubState)
@@ -846,7 +1050,9 @@ class ResultState extends MusicBeatSubState
         @:nullSafety(Off)
         introMusicAudio.onComplete = null;
 
-        FlxTween.tween(introMusicAudio, {volume: 0}, 0.8, {
+        FlxTween.tween(introMusicAudio, {
+          volume: 0
+        }, 0.5, {
           onComplete: _ ->
           {
             if (introMusicAudio != null)
@@ -857,35 +1063,47 @@ class ResultState extends MusicBeatSubState
             }
           }
         });
-        FlxTween.tween(introMusicAudio, {pitch: 3}, 0.1, {
+        FlxTween.tween(introMusicAudio, {
+          pitch: 3
+        }, 0.1, {
           onComplete: _ ->
           {
-            FlxTween.tween(introMusicAudio, {pitch: 0.5}, 0.4);
+            FlxTween.tween(introMusicAudio, {
+              pitch: 0.5
+            }, 0.4);
           }
         });
       }
       else if (FlxG.sound.music != null)
       {
-        FlxTween.tween(FlxG.sound.music, {volume: 0}, 0.8, {
+        FlxTween.tween(FlxG.sound.music, {
+          volume: 0
+        }, 0.5, {
           onComplete: _ ->
           {
             FlxG.sound.music.stop();
             FlxG.sound.music.destroy();
           }
         });
-        FlxTween.tween(FlxG.sound.music, {pitch: 3}, 0.1, {
+        FlxTween.tween(FlxG.sound.music, {
+          pitch: 3
+        }, 0.1, {
           onComplete: _ ->
           {
-            FlxTween.tween(FlxG.sound.music, {pitch: 0.5}, 0.4);
+            FlxTween.tween(FlxG.sound.music, {
+              pitch: 0.5
+            }, 0.4);
           }
         });
       }
 
       // Determining the target state(s) to go to.
       // Default to main menu because that's better than `null`.
-      var targetState:FlxState = new funkin.ui.mainmenu.MainMenuState();
-      var targetStateFactory:Null<Void->StickerSubState> = null;
-      var shouldTween = false;
+      var targetState:Dynamic = () -> new funkin.ui.mainmenu.MainMenuState();
+      var assetQuery:(AssetType) -> Array<AssetPath> = funkin.ui.mainmenu.MainMenuState.queryAssets;
+
+      // If shouldFade is false
+      var transition:TransitionType = None;
       var shouldUseSubstate = false;
 
       var stickerPackId:Null<String> = null;
@@ -903,36 +1121,29 @@ class ResultState extends MusicBeatSubState
         stickerPackId = playerCharacter.getStickerPackID();
       }
 
+      transition = Sticker(stickerPackId);
+
       if (params.storyMode)
       {
+        // New character, display the notif.
+        targetState = () -> new StoryMenuState();
+        assetQuery = StoryMenuState.queryAssets;
+
+        shouldUseSubstate = false;
+        transition = Sticker(stickerPackId);
+
         if (PlayerRegistry.instance.hasNewCharacter())
         {
-          // New character, display the notif.
-          targetState = new StoryMenuState(null);
-
           var newCharacters = PlayerRegistry.instance.listNewCharacters();
 
           for (charId in newCharacters)
           {
-            shouldTween = true;
+            shouldUseSubstate = true;
+            transition = BlackScreen(Fade(North), Fade(South));
             // This works recursively, ehe!
-            targetState = new funkin.ui.charSelect.CharacterUnlockState(charId, targetState);
+            targetState = () -> new funkin.ui.charSelect.CharacterUnlockState(charId, targetState, assetQuery);
+            assetQuery = funkin.ui.charSelect.CharacterUnlockState.queryAssets.bind(_, charId);
           }
-        }
-        else
-        {
-          // No new characters.
-          shouldTween = false;
-          shouldUseSubstate = true;
-          // targetState = new funkin.ui.transition.stickers.StickerSubState(
-          //   {
-          //     targetState: (sticker) -> new StoryMenuState(sticker),
-          //     stickerPack: stickerPackId
-          //   });
-          targetStateFactory = () -> new StickerSubState({
-            targetState: (sticker) -> new StoryMenuState(sticker),
-            stickerPack: stickerPackId
-          });
         }
       }
       else
@@ -940,52 +1151,44 @@ class ResultState extends MusicBeatSubState
         var isScoreValid = !(params?.isPracticeMode ?? false) && !(params?.isBotPlayMode ?? false);
         var isPersonalBest = rank > Scoring.calculateRank(params?.prevScoreData);
 
+        if (isChartingMode)
+        {
+          PlayState.instance?.close();
+          FlxTimer.globalManager.clear();
+          FlxTween.globalManager.clear();
+          if (introMusicAudio != null) introMusicAudio.stop();
+          if (resultsMusic != null) resultsMusic.stop();
+          this.close();
+          return;
+        }
+
         if ((isScoreValid && isPersonalBest) || params.forceRankSlam)
         {
           trace('THE RANK IS Higher.....');
 
-          shouldTween = true;
-          if (isChartingMode)
-          {
-            PlayState.instance?.close();
-            FlxTimer.globalManager.clear();
-            FlxTween.globalManager.clear();
-            if (introMusicAudio != null) introMusicAudio.stop();
-            if (resultsMusic != null) resultsMusic.stop();
-            this.close();
-            return;
-          }
-          targetState = FreeplayState.build({
-            {
-              character: playerCharacterId ?? "bf",
-              fromResults: {
-                oldRank: Scoring.calculateRank(params?.prevScoreData),
-                newRank: rank,
-                songId: params.songId,
-                difficultyId: params.difficultyId,
-                playRankAnim: true
-              }
+          transition = None;
+
+          var freeplayParams = {
+            character: playerCharacterId ?? 'bf',
+            fromResults: {
+              oldRank: Scoring.calculateRank(params?.prevScoreData),
+              newRank: rank,
+              songId: params.songId,
+              difficultyId: params.difficultyId,
+              playRankAnim: true
             }
-          });
+          };
+
+          targetState = () -> FreeplayState.build(freeplayParams);
+          assetQuery = FreeplayState.queryAssets.bind(_, freeplayParams, freeplayParams.character);
         }
         else
         {
-          if (isChartingMode)
-          {
-            PlayState.instance?.close();
-            FlxTimer.globalManager.clear();
-            FlxTween.globalManager.clear();
-            if (introMusicAudio != null) introMusicAudio.stop();
-            if (resultsMusic != null) resultsMusic.stop();
-            this.close();
-            return;
-          }
-          shouldTween = false;
-          shouldUseSubstate = true;
-          targetStateFactory = () -> new StickerSubState({
-            targetState: (sticker) -> FreeplayState.build(null, sticker),
-            stickerPack: stickerPackId
+          transition = Sticker(stickerPackId);
+
+          targetState = () -> FreeplayState.build({
           });
+          assetQuery = FreeplayState.queryAssets.bind(_, {}, playerCharacterId ?? 'bf');
         }
       }
 
@@ -1001,86 +1204,90 @@ class ResultState extends MusicBeatSubState
 
           busy = false;
 
-          transitionToState(targetState, targetStateFactory, shouldTween, shouldUseSubstate);
+          if (shouldUseSubstate)
+          {
+            transitionToSubState(targetState, assetQuery, transition, PlayStatePlaylist.isStoryMode ? null : playerCharacterId);
+          }
+          else
+          {
+            transitionToState(targetState, assetQuery, transition, PlayStatePlaylist.isStoryMode ? null : playerCharacterId);
+          }
         });
       }
       else
       {
-        transitionToState(targetState, targetStateFactory, shouldTween, shouldUseSubstate);
+        if (shouldUseSubstate)
+        {
+          transitionToSubState(targetState, assetQuery, transition, PlayStatePlaylist.isStoryMode ? null : playerCharacterId);
+        }
+        else
+        {
+          transitionToState(targetState, assetQuery, transition, PlayStatePlaylist.isStoryMode ? null : playerCharacterId);
+        }
       }
       #else
-      transitionToState(targetState, targetStateFactory, shouldTween, shouldUseSubstate);
+      if (shouldUseSubstate)
+      {
+        transitionToSubState(targetState, assetQuery, transition, PlayStatePlaylist.isStoryMode ? null : playerCharacterId);
+      }
+      else
+      {
+        transitionToState(targetState, assetQuery, transition, PlayStatePlaylist.isStoryMode ? null : playerCharacterId);
+      }
       #end
     }
 
     super.update(elapsed);
   }
 
-  function transitionToState(targetState:FlxState, targetStateFactory:Null<Void->StickerSubState>, shouldTween:Bool, shouldUseSubstate:Bool):Void
+  function transitionToState(targetState:flixel.util.typeLimit.NextState,
+    assetQuery:(AssetType) -> Array<AssetPath>,
+    transition:TransitionType,
+    ?freeplayCharacterId:String):Void
   {
-    if (shouldTween)
+    var transitionCall:Void->Void = () ->
     {
-      FlxTween.tween(rankBg, {alpha: 1}, 0.5, {
-        ease: FlxEase.expoOut,
-        onComplete: function(_)
-        {
-          requestReview();
-
-          if (targetStateFactory != null)
-          {
-            targetState = targetStateFactory();
-          }
-
-          if (shouldUseSubstate && targetState is FlxSubState)
-          {
-            openSubState(cast targetState);
-          }
-          else
-          {
-            FlxG.signals.preStateSwitch.addOnce(function()
-            {
-              #if ios
-              trace(DeviceUtil.iPhoneNumber);
-              if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
-              else
-                funkin.FunkinMemory.purgeCache();
-              #else
-              funkin.FunkinMemory.purgeCache(true);
-              #end
-            });
-            FlxG.switchState(() -> targetState);
-          }
-        }
+      // TODO: Reimplement asking the player to review the game on the Play Store sometimes!
+      Transition.switchState(targetState, {
+        assetQuery: assetQuery,
+        transition: transition,
+        shouldStopMusic: true,
+        shouldPurgeCache: freeplayCharacterId == null
       });
+    }
+
+    if (transition == None)
+    {
+      cameraEverything.fade(FlxColor.BLACK, 0.5, false, transitionCall);
     }
     else
     {
-      requestReview();
+      transitionCall();
+    }
+  }
 
-      if (targetStateFactory != null)
-      {
-        targetState = targetStateFactory();
-      }
+  function transitionToSubState(targetState:funkin.ui.transition.NextSubState,
+    assetQuery:(AssetType) -> Array<AssetPath>,
+    transition:TransitionType,
+    ?freeplayCharacterId:String):Void
+  {
+    var transitionCall:Void->Void = () ->
+    {
+      Transition.openSubState(targetState, {
+        assetQuery: assetQuery,
+        transition: transition,
+        shouldStopMusic: true,
+        shouldPurgeCache: freeplayCharacterId == null
+      });
+    }
 
-      if (shouldUseSubstate && targetState is FlxSubState)
-      {
-        openSubState(cast targetState);
-      }
-      else
-      {
-        FlxG.signals.preStateSwitch.addOnce(function()
-        {
-          #if ios
-          trace(DeviceUtil.iPhoneNumber);
-          if (DeviceUtil.iPhoneNumber > 12) funkin.FunkinMemory.purgeCache(true);
-          else
-            funkin.FunkinMemory.purgeCache();
-          #else
-          funkin.FunkinMemory.purgeCache(true);
-          #end
-        });
-        FlxG.switchState(() -> targetState);
-      }
+    if (transition == None)
+    {
+      cameraEverything.fade(FlxColor.BLACK, 0.5, false, transitionCall);
+    }
+    else
+    {
+      transitionCall();
     }
   }
 
@@ -1097,6 +1304,9 @@ class ResultState extends MusicBeatSubState
   }
 }
 
+/**
+ * Parameters for initializing the Results screen.
+ */
 typedef ResultsStateParams =
 {
   /**

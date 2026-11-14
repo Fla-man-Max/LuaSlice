@@ -115,7 +115,7 @@ class FunkinBufferSprite extends FunkinSprite
   function set_resolutionScale(value:Float):Float
   {
     if (value == resolutionScale) return value;
-    if (value > 1.0) value = 1.0;
+    if (value > 1.0) value = 1.0; // Clamp it down to 1.0
 
     resolutionScale = value;
 
@@ -147,6 +147,7 @@ class FunkinBufferSprite extends FunkinSprite
 
     useScreenspace = value;
 
+    // Buffer sprite needs to stick with the camera in screen space
     this.scrollFactor.set(0, 0);
 
     return value;
@@ -163,6 +164,7 @@ class FunkinBufferSprite extends FunkinSprite
 
     _usedCamera = camera;
 
+    // We need the previous frame from the camera
     _usedCamera.renderBuffer = true;
 
     this.baseZoom = params.baseZoom ?? -1;
@@ -176,10 +178,14 @@ class FunkinBufferSprite extends FunkinSprite
     this.frames = bufferGraphic.imageFrame;
     this.updateHitbox();
 
+    // Force the filter renderer to use a specific key for its graphic
+    // Allows the buffer renderer to identify the graphic properly
     this.filterRenderer.graphicKey = BUFFER_TEXTURE_KEY;
 
+    // Prevent the buffer from being rendered onto itself.
     this.renderer.blacklistSprite(this);
 
+    // Setting this last since everything else needs to initialize first
     this.resolutionScale = params.resolutionScale ?? 1.0;
   }
 
@@ -216,21 +222,25 @@ class FunkinBufferSprite extends FunkinSprite
 
     if (this.filters != null && this.filters.length > 0)
     {
-      filterRenderer.applyFilters(renderer.texture);
+      if (renderer.justRendered || _renderTextureDirty || !filtered)
+      {
+        filterRenderer.applyFilters(renderer.texture);
+        renderer.justRendered = false;
+        _renderTextureDirty = false;
+      }
 
       if (filtered)
       {
-        camera.drawPixels(filterRenderer.graphic?.imageFrame.frame, null, matrix, colorTransform, blend, antialiasing, shader);
+        camera.drawPixels(filterRenderer.graphic?.imageFrame.frame, null, matrix, colorTransform, blend, antialiasing, shader, blendTarget);
       }
       else
       {
-        camera.drawPixels(frame, framePixels, matrix, colorTransform, blend, antialiasing, shader);
+        camera.drawPixels(frame, framePixels, matrix, colorTransform, blend, antialiasing, shader, blendTarget);
       }
     }
     else
     {
-      camera.drawPixels(frame, framePixels, matrix, colorTransform, blend, antialiasing, shader);
+      camera.drawPixels(frame, framePixels, matrix, colorTransform, blend, antialiasing, shader, blendTarget);
     }
   }
 }
-

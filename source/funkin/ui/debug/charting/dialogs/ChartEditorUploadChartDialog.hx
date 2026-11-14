@@ -5,12 +5,12 @@ import funkin.input.Cursor;
 import funkin.ui.debug.charting.dialogs.ChartEditorBaseDialog.DialogDropTarget;
 import funkin.ui.debug.charting.dialogs.ChartEditorBaseDialog.DialogParams;
 import funkin.util.FileUtil;
-import haxe.io.Path;
 import haxe.ui.containers.dialogs.Dialog.DialogButton;
 import haxe.ui.containers.dialogs.Dialog.DialogEvent;
 
 // @:nullSafety // TODO: Fix null safety when used with HaxeUI build macros.
-@:build(haxe.ui.ComponentBuilder.build('assets/exclude/data/ui/chart-editor/dialogs/upload-chart.xml')) @:access(funkin.ui.debug.charting.ChartEditorState)
+@:build(haxe.ui.ComponentBuilder.build('assets/exclude/ui/editors/chart-editor/dialogs/upload-chart.xml'))
+@:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorUploadChartDialog extends ChartEditorBaseDialog
 {
   var dropHandlers:Array<DialogDropTarget> = [];
@@ -36,7 +36,10 @@ class ChartEditorUploadChartDialog extends ChartEditorBaseDialog
       Cursor.cursorMode = Default;
     }
 
-    dropHandlers.push({component: this.chartBox, handler: this.onDropFileChartBox});
+    dropHandlers.push({
+      component: this.chartBox,
+      handler: this.onDropFileChartBox
+    });
   }
 
   public static function build(state:ChartEditorState, ?closable:Bool, ?modal:Bool):ChartEditorUploadChartDialog
@@ -99,29 +102,33 @@ class ChartEditorUploadChartDialog extends ChartEditorBaseDialog
   /**
    * Called when a file is selected by dropping a file onto the Upload Chart box.
    */
-  function onDropFileChartBox(pathStr:String):Void
+  function onDropFileChartBox(file:lime.utils.DroppedFile):Void
   {
-    var path:Path = new Path(pathStr);
-    trace('Dropped file (${path})');
+    trace('Dropped file (${file.path})');
 
-    try
+    file.readFile().onComplete(function(bytes:haxe.io.Bytes)
     {
-      var result:Null<Array<String>> = ChartEditorImportExportHandler.loadFromFNFCPath(chartEditorState, path.toString());
-      if (result != null)
+      if (bytes == null)
       {
-        chartEditorState.success('Loaded Chart',
-          result.length == 0 ? 'Loaded chart (${path.toString()})' : 'Loaded chart (${path.toString()})\n${result.join("\n")}');
+        chartEditorState.failure('Failed to Load Chart', 'Could not read dropped chart (${file.path})');
+        return;
+      }
+
+      try
+      {
+        ChartEditorImportExportHandler.loadSongFromFNFCBytes(chartEditorState, bytes, file.path);
+        // If we failed, it'd throw.
         this.hideDialog(DialogButton.APPLY);
       }
-      else
+      catch (e)
       {
-        chartEditorState.failure('Failed to Load Chart', 'Failed to load chart (${path.toString()})');
+        chartEditorState.failure('Failed to Load Chart', 'Failed to load chart (${file.path}):\n$e');
+        // Leave the popup open.
       }
-    }
-    catch (err)
+    }).onError(function(error:Dynamic)
     {
-      chartEditorState.failure('Failed to Load Chart', 'Failed to load chart (${path.toString()}): ${err}');
-    }
+        chartEditorState.failure('Failed to Load Chart', 'Failed to read chart (${file.path}):\n$error');
+    });
   }
 
   /**
@@ -135,19 +142,14 @@ class ChartEditorUploadChartDialog extends ChartEditorBaseDialog
     {
       try
       {
-        var result:Null<Array<String>> = ChartEditorImportExportHandler.loadFromFNFC(chartEditorState, selectedFile.bytes);
-        if (result != null)
-        {
-          chartEditorState.success('Loaded Chart',
-            result.length == 0 ? 'Loaded chart (${selectedFile.name})' : 'Loaded chart (${selectedFile.name})\n${result.join("\n")}');
-
-          if (selectedFile.fullPath != null) chartEditorState.currentWorkingFilePath = selectedFile.fullPath;
-          this.hideDialog(DialogButton.APPLY);
-        }
+        ChartEditorImportExportHandler.loadSongFromFNFCBytes(chartEditorState, selectedFile.bytes, selectedFile.fullPath);
+        // If we failed, it'd throw.
+        this.hideDialog(DialogButton.APPLY);
       }
-      catch (err)
+      catch (e)
       {
-        chartEditorState.failure('Failed to Load Chart', 'Failed to load chart (${selectedFile.name}): ${err}');
+        chartEditorState.failure('Failed to Load Chart', 'Failed to load chart (${selectedFile.name}):\n$e');
+        // Leave the popup open.
       }
     }
   }

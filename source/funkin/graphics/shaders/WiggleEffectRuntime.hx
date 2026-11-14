@@ -2,6 +2,8 @@ package funkin.graphics.shaders;
 
 import flixel.addons.display.FlxRuntimeShader;
 import openfl.Assets;
+import funkin.assets.Paths;
+import funkin.assets.Assets;
 
 enum WiggleEffectType
 {
@@ -66,9 +68,12 @@ class WiggleEffectRuntime extends FlxRuntimeShader
     return time = v;
   }
 
-  public function new(speed:Float, freq:Float, amplitude:Float, ?effect:WiggleEffectType = DREAMY):Void
+  public function new(speed:Float,
+    freq:Float,
+    amplitude:Float,
+    ?effect:WiggleEffectType = DREAMY):Void
   {
-    super(Assets.getText(Paths.frag('wiggle')));
+    super(Assets.getText(Paths.frag('ui/shaders/wiggle')));
 
     // These values may not propagate to the shader until later.
     this.waveSpeed = speed;

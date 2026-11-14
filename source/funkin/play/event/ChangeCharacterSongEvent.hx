@@ -3,7 +3,9 @@ package funkin.play.event;
 import funkin.data.event.SongEventSchema;
 import funkin.data.event.SongEventSchema.SongEventFieldType;
 import funkin.data.song.SongData.SongEventData;
-import funkin.data.character.CharacterData.CharacterDataParser;
+import funkin.data.character.CharacterRegistry;
+import funkin.assets.Assets.AssetType;
+import funkin.assets.Paths.AssetPath;
 
 class ChangeCharacterSongEvent extends SongEvent
 {
@@ -25,6 +27,11 @@ class ChangeCharacterSongEvent extends SongEvent
     }
   }
 
+  public override function queryAssets(type:AssetType, data:SongEventData):Array<AssetPath>
+  {
+    return CharacterRegistry.instance.queryAssets(type, data.getString('id') ?? '');
+  }
+
   public override function getTitle():String
   {
     return 'Change Character';
@@ -33,7 +40,7 @@ class ChangeCharacterSongEvent extends SongEvent
   public override function getEventSchema():SongEventSchema
   {
     final characters:Map<String, Dynamic> = [];
-    for (characterId in CharacterDataParser.listCharacterIds())
+    for (characterId in CharacterRegistry.instance.listEntryIds())
       characters.set(characterId, characterId);
 
     return new SongEventSchema([{

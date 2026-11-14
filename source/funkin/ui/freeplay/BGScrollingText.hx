@@ -4,6 +4,7 @@ import flixel.math.FlxPoint;
 import flixel.text.FlxText;
 import flixel.util.FlxColor;
 import flixel.util.FlxSort;
+import funkin.assets.Paths;
 
 // its kinda like marqeee html lol!
 @:nullSafety
@@ -15,7 +16,7 @@ class BGScrollingText extends FlxText
   public var widthShit:Float = FlxG.width;
   public var placementOffset:Float = 20;
   public var speed:Float = 1;
-  @:deprecated("Use color instead")
+  @:deprecated('Use color instead')
   public var funnyColor(get, set):FlxColor;
 
   function get_funnyColor():FlxColor return color;
@@ -29,8 +30,8 @@ class BGScrollingText extends FlxText
   {
     super(x, y, 0, text, size);
     _positionCache = FlxPoint.get(x, y);
-    font = "5by7";
-    this.bold = bold ?? false;
+    font = (bold ?? false) ? Paths.font('ui/fonts/5by7-bold') : Paths.font('ui/fonts/5by7');
+    this.bold = false;
 
     this.widthShit = widthShit;
 

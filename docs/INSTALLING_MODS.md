@@ -21,7 +21,7 @@
 # Android
 1. Start the game at least once. This will create a `mods` folder deep in your system files.
 2. Get an Android file browser that lets you view the app data files, or use Android Studio and open up the Device Explorer.
-3. Locate the `/sdcard/Android/obb/me.funkin.fnf/mods` folder.
+3. In internal storage, open `Android/data/me.luaslice/files/mods`.
 4. Extract the mod you downloaded from its ZIP file, and place the mod folder into the game's `mods` folder.
 5. Restart the game (you may have to [force close](https://support.google.com/android/answer/9079646?hl=en) the app first). The game should detect the mod and start with it.
 

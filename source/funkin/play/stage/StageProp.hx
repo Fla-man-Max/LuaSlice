@@ -43,4 +43,9 @@ class StageProp extends FunkinSprite implements IStateStageProp
   public function onUpdate(event:UpdateScriptEvent)
   {
   }
+
+  public override function toString():String
+  {
+    return 'StageProp($name, pos=[$x, $y])';
+  }
 }

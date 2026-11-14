@@ -10,7 +10,7 @@ class CheckboxPreferenceItem extends FlxSprite
   {
     super(x, y);
 
-    frames = Paths.getSparrowAtlas('checkboxThingie');
+    frames = Paths.getSparrowAtlas('ui/options/checkbox');
     animation.addByPrefix('static', 'Check Box unselected', 24, false);
     animation.addByPrefix('checked', 'Check Box selecting animation', 24, false);
 
@@ -47,5 +47,22 @@ class CheckboxPreferenceItem extends FlxSprite
     }
 
     return currentValue = value;
+  }
+
+  public static function queryAssets(type:funkin.assets.Assets.AssetType):Array<funkin.assets.Paths.AssetPath>
+  {
+    var results:Array<funkin.assets.Paths.AssetPath> = [];
+
+    switch (type)
+    {
+      case IMAGE:
+        results.appendUnique([funkin.assets.Paths.image('ui/options/checkbox')]);
+
+      case XML:
+        results.appendUnique([funkin.assets.Paths.xml('ui/options/checkbox')]);
+
+      default:
+    }
+    return results;
   }
 }

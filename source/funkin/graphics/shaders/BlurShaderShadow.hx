@@ -8,10 +8,15 @@ class BlurShaderShadow extends FlxShader
 {
   @:glFragmentSource('
     #pragma header
+    // literally just offsets the image and colors it
+    // used as the last step in the DropShadowLayer
 
+    // x offset of drop shadow
     uniform float offsetX;
+    // y offset of drop shadow
     uniform float offsetY;
 
+    // color of shadow
     uniform vec4 shadowCol;
 
     void main()
@@ -31,4 +36,3 @@ class BlurShaderShadow extends FlxShader
     offsetY.value = [_distY];
   }
 }
-

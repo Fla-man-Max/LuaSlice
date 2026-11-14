@@ -152,7 +152,10 @@ class StageDataHandler
       }
       else
       {
-        allFiles.push({name: stuff.fileName, data: stuff.data});
+        allFiles.push({
+          name: stuff.fileName,
+          data: stuff.data
+        });
       }
     }
 
@@ -249,27 +252,15 @@ class StageDataHandler
   public static function loadFromDataRaw(state:StageEditorState, data:StageData)
   {
     state.clearAssets();
-    @:privateAccess
-    if (data == null || !LimeAssets.libraryPaths.exists(data.directory))
+
+    if (data == null)
     {
       loadDummyData(state);
       return;
     }
 
-    Paths.setCurrentLevel(data.directory);
-
-    if (OpenFLAssets.getLibrary(data.directory) == null)
-    {
-      OpenFLAssets.loadLibrary(data.directory).onComplete(function(_)
-      {
-        loadFromDataRaw(state, data);
-      });
-      return;
-    }
-
     state.stageName = data.name;
     state.stageZoom = data.cameraZoom;
-    state.stageFolder = data.directory ?? "shared";
 
     state.loadCharDatas(data);
 
@@ -283,24 +274,21 @@ class StageDataHandler
       {
         if (objData.animType == "animateatlas")
         {
-          var checkFor:String = Paths.stripLibrary(Paths.animateAtlas(objData.assetPath, state.stageFolder));
-          for (file in ResourceCache.list())
+          var checkFor:String = Paths.animateAtlas(objData.assetPath);
+          for (file in Assets.list())
           {
             if (!file.startsWith(checkFor)) continue;
 
             var validName:String = objData.assetPath + file.substring(checkFor.length);
-            neededFiles.push(state.createFile(validName, Assets.getBytes('${state.stageFolder}:$file')));
+            neededFiles.push(state.createFile(validName, Assets.getBytes(file)));
           }
         }
         else
         {
           neededFiles.push(state.createFile('${objData.assetPath}.png', Assets.getBytes(Paths.image(objData.assetPath))));
 
-          var animFile:String = '${objData.assetPath}${objData.animType == "packer" ? ".txt" : ".xml"}';
-          if (Assets.exists(Paths.file('images/$animFile')))
-          {
-            neededFiles.push(state.createFile(animFile, Assets.getBytes(Paths.file('images/$animFile'))));
-          }
+          var animFile:String = (objData.animType == 'packer' ? Paths.txt(objData.assetPath) : Paths.xml(objData.assetPath));
+          if (Assets.exists(animFile)) neededFiles.push(state.createFile(animFile, Assets.getBytes(animFile)));
         }
       }
 
@@ -339,7 +327,6 @@ class StageDataHandler
 
     state.stageName = "Unnamed";
     state.stageZoom = 1.0;
-    state.stageFolder = "shared";
 
     state.charCamOffsets = StageEditorState.DEFAULT_CAMERA_OFFSETS.copy();
     state.charPos = StageEditorState.DEFAULT_POSITIONS.copy();

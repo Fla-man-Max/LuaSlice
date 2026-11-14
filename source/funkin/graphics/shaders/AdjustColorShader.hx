@@ -2,6 +2,8 @@ package funkin.graphics.shaders;
 
 import flixel.addons.display.FlxRuntimeShader;
 import flixel.math.FlxAngle;
+import funkin.assets.Paths;
+import funkin.assets.Assets;
 
 /**
  * This shader is a recreation of Adobe Animate/Flash's "Adjust Color" filter.
@@ -85,7 +87,8 @@ class AdjustColorShader extends FlxRuntimeShader
 
   public function new()
   {
-    super(Assets.getText(Paths.frag('adjustColor')));
+    super(Assets.getText(Paths.frag('ui/shaders/adjust-color')));
+
     hue = 0;
     saturation = 0;
     brightness = 0;

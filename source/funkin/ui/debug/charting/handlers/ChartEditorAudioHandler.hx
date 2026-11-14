@@ -1,420 +1,89 @@
 package funkin.ui.debug.charting.handlers;
 
 #if FEATURE_CHART_EDITOR
-import flixel.system.FlxAssets.FlxSoundAsset;
-import funkin.audio.VoicesGroup;
-import funkin.audio.FunkinSound;
+import funkin.ui.debug.charting.ChartEditorState;
+import funkin.ui.debug.charting.handlers.audio.ChartEditorAudioHandler as NativeAudio;
 import funkin.play.character.BaseCharacter.CharacterType;
 import funkin.util.FileUtil;
-import funkin.util.assets.SoundUtil;
-import funkin.audio.waveform.WaveformData;
-import funkin.audio.waveform.WaveformDataParser;
-import funkin.audio.waveform.WaveformSprite;
-import flixel.util.FlxColor;
 import haxe.io.Bytes;
 import haxe.io.Path;
 
-/**
- * Functions for loading audio for the chart editor.
- * Handlers split up the functionality of the Chart Editor into different classes based on focus to limit the amount of code in each class.
- */
-@:nullSafety @:access(funkin.ui.debug.charting.ChartEditorState)
+@:access(funkin.ui.debug.charting.ChartEditorState)
 class ChartEditorAudioHandler
 {
-  /**
-   * Loads and stores byte data for a vocal track from an absolute file path
-   *
-   * @param path The absolute path to the audio file.
-   * @param charId The character this vocal track will be for.
-   * @param instId The instrumental this vocal track will be for.
-   * @return Success or failure.
-   */
   public static function loadVocalsFromPath(state:ChartEditorState, path:Path, charId:String, instId:String = '', wipeFirst:Bool = false):Bool
-  {
-    #if sys
-    var fileBytes:Bytes = sys.io.File.getBytes(path.toString());
-    return loadVocalsFromBytes(state, fileBytes, charId, instId, wipeFirst);
-    #else
-    trace(" WARNING '.bold().bg_yellow() + ' This platform can't load audio from a file path, you'll need to fetch the bytes some other way.");
-    return false;
-    #end
-  }
+    return NativeAudio.loadVocalsFromPath(state, path, charId, instId, wipeFirst);
 
-  /**
-   * Loads and stores byte data for a vocal track from an asset
-   *
-   * @param path The path to the asset. Use `Paths` to build this.
-   * @param charId The character this vocal track will be for.
-   * @param instId The instrumental this vocal track will be for.
-   * @return Success or failure.
-   */
   public static function loadVocalsFromAsset(state:ChartEditorState, path:String, charId:String, instId:String = '', wipeFirst:Bool = false):Bool
-  {
-    var trackData:Null<Bytes> = Assets.getBytes(path);
-    if (trackData != null)
-    {
-      return loadVocalsFromBytes(state, trackData, charId, instId, wipeFirst);
-    }
-    return false;
-  }
+    return NativeAudio.loadVocalsFromBytes(state, funkin.Assets.getBytes(path), charId, instId, wipeFirst);
 
-  /**
-   * Loads and stores byte data for a vocal track
-   *
-   * @param bytes The audio byte data.
-   * @param charId The character this vocal track will be for.
-   * @param instId The instrumental this vocal track will be for.
-   * @param wipeFirst Whether to wipe the existing vocal data before loading.
-   */
   public static function loadVocalsFromBytes(state:ChartEditorState, bytes:Bytes, charId:String, instId:String = '', wipeFirst:Bool = false):Bool
-  {
-    var trackId:String = '${charId}${instId == '' ? '' : '-${instId}'}';
-    if (wipeFirst) wipeVocalData(state);
-    state.audioVocalTrackData.set(trackId, bytes);
-    return true;
-  }
+    return NativeAudio.loadVocalsFromBytes(state, bytes, charId, instId, wipeFirst);
 
-  /**
-   * Loads and stores byte data for an instrumental track from an absolute file path
-   *
-   * @param path The absolute path to the audio file.
-   * @param instId The instrumental this vocal track will be for.
-   * @return Success or failure.
-   */
   public static function loadInstFromPath(state:ChartEditorState, path:Path, instId:String = '', wipeFirst:Bool = false):Bool
-  {
-    #if sys
-    var fileBytes:Bytes = sys.io.File.getBytes(path.toString());
-    return loadInstFromBytes(state, fileBytes, instId, wipeFirst);
-    #else
-    trace(" WARNING '.bold().bg_yellow() + ' This platform can't load audio from a file path, you'll need to fetch the bytes some other way.");
-    return false;
-    #end
-  }
+    return NativeAudio.loadInstFromPath(state, path, instId, wipeFirst);
 
-  /**
-   * Loads and stores byte data for an instrumental track from an asset
-   *
-   * @param path The path to the asset. Use `Paths` to build this.
-   * @param instId The instrumental this vocal track will be for.
-   * @return Success or failure.
-   */
   public static function loadInstFromAsset(state:ChartEditorState, path:String, instId:String = '', wipeFirst:Bool = false):Bool
-  {
-    var trackData:Null<Bytes> = Assets.getBytes(path);
-    if (trackData != null)
-    {
-      return loadInstFromBytes(state, trackData, instId, wipeFirst);
-    }
-    return false;
-  }
+    return NativeAudio.loadInstFromBytes(state, funkin.Assets.getBytes(path), instId, wipeFirst);
 
-  /**
-   * Loads and stores byte data for a vocal track
-   *
-   * @param bytes The audio byte data.
-   * @param charId The character this vocal track will be for.
-   * @param instId The instrumental this vocal track will be for.
-   */
   public static function loadInstFromBytes(state:ChartEditorState, bytes:Bytes, instId:String = '', wipeFirst:Bool = false):Bool
-  {
-    if (instId == '') instId = 'default';
-    if (wipeFirst) wipeInstrumentalData(state);
-    state.audioInstTrackData.set(instId, bytes);
-    return true;
-  }
+    return NativeAudio.loadInstFromBytes(state, bytes, instId, wipeFirst);
 
-  public static function switchToInstrumental(state:ChartEditorState, instId:String = '', playerId:String, opponentId:String):Bool
+  public static function switchToInstrumental(state:ChartEditorState, instId:String = '', ?playerId:String, ?opponentId:String):Bool
   {
-    var result:Bool = playInstrumental(state, instId);
-    if (!result) return false;
+    if (!NativeAudio.playInstrumental(state, instId)) return false;
     refreshVocals(state, instId, playerId, opponentId);
     return true;
   }
 
-  public static function refreshVocals(state:ChartEditorState, instId:String, playerId:String, opponentId:String):Void
+  public static function refreshVocals(state:ChartEditorState, instId:String = '', ?playerId:String, ?opponentId:String):Void
   {
-    stopExistingVocals(state);
-    playVocals(state, BF, playerId, instId);
-    playVocals(state, DAD, opponentId, instId);
-
+    NativeAudio.stopExistingVocals(state);
+    NativeAudio.playVocals(state, BF, instId, playerId);
+    NativeAudio.playVocals(state, DAD, instId, opponentId);
     state.postLoadVocals();
-
     state.hardRefreshOffsetsToolbox();
-
-    state.hardRefreshFreeplayToolbox();
-
     state.loadSubtitles();
-
   }
 
-  /**
-   * Tell the Chart Editor to select a specific instrumental track, that is already loaded.
-   */
   public static function playInstrumental(state:ChartEditorState, instId:String = ''):Bool
-  {
-    if (instId == '') instId = 'default';
-    var instTrackData:Null<Bytes> = state.audioInstTrackData.get(instId);
-    var instTrack:Null<FunkinSound> = SoundUtil.buildSoundFromBytes(instTrackData);
-    if (instTrack == null) return false;
-
-    instTrack.important = true;
-
-    final previousTrack = state.audioInstTrack;
-    state.audioInstTrack = instTrack;
-    try
-    {
-      state.postLoadInstrumental();
-    }
-    catch (error:Dynamic)
-    {
-      state.audioInstTrack = previousTrack;
-      instTrack.destroy();
-      throw error;
-    }
-    if (previousTrack != null && previousTrack != instTrack) previousTrack.destroy();
-    // Workaround for a bug where FlxG.sound.music.update() was being called twice.
-    FlxG.sound.list.remove(instTrack);
-    return true;
-  }
-
+    return NativeAudio.playInstrumental(state, instId);
   public static function stopExistingInstrumental(state:ChartEditorState):Void
-  {
-    if (state.audioInstTrack != null)
-    {
-      state.audioInstTrack.stop();
-      state.audioInstTrack.destroy();
-      state.audioInstTrack = null;
-    }
-  }
-
-  /**
-   * Tell the Chart Editor to select a specific vocal track, that is already loaded.
-   */
+    NativeAudio.stopExistingInstrumental(state);
   public static function playVocals(state:ChartEditorState, charType:CharacterType, charId:String, instId:String = ''):Bool
-  {
-    var trackId:String = '${charId}${instId == '' ? '' : '-${instId}'}';
-    var vocalTrackData:Null<Bytes> = state.audioVocalTrackData.get(trackId);
-    var vocalTrack:Null<FunkinSound> = SoundUtil.buildSoundFromBytes(vocalTrackData);
-
-    if (state.audioVocalTrackGroup == null) state.audioVocalTrackGroup = new VoicesGroup();
-
-    // early return
-    if (vocalTrack == null) return false;
-
-    vocalTrack.important = true;
-
-    switch (charType)
-    {
-      case BF:
-        state.audioVocalTrackGroup.addPlayerVoice(vocalTrack);
-
-        var waveformData:Null<WaveformData> = readImportedWaveform(vocalTrack);
-
-        if (waveformData != null)
-        {
-          var waveformSprite:WaveformSprite = initWaveformSprite(waveformData, state, charType);
-          state.audioWaveforms.add(waveformSprite);
-        }
-        else
-        {
-          trace(' WARNING '.warning() + ' Failed to parse waveform data for vocal track.');
-        }
-
-        state.audioVocalTrackGroup.playerVoicesOffset = state.currentVocalOffsetPlayer;
-        return true;
-      case DAD:
-        state.audioVocalTrackGroup.addOpponentVoice(vocalTrack);
-
-        var waveformData:Null<WaveformData> = readImportedWaveform(vocalTrack);
-
-        if (waveformData != null)
-        {
-          var waveformSprite:WaveformSprite = initWaveformSprite(waveformData, state, charType);
-          state.audioWaveforms.add(waveformSprite);
-        }
-        else
-        {
-          trace(' WARNING '.warning() + ' Failed to parse waveform data for vocal track.');
-        }
-
-        state.audioVocalTrackGroup.opponentVoicesOffset = state.currentVocalOffsetOpponent;
-
-        return true;
-      case OTHER:
-        state.audioVocalTrackGroup.add(vocalTrack);
-        // TODO: Add offset for other characters.
-        return true;
-      default:
-        // Do nothing.
-    }
-
-    return false;
-  }
-
-  static function readImportedWaveform(sound:FunkinSound):Null<WaveformData>
-  {
-    try { return sound.waveformData; }
-    catch (error:Dynamic)
-    {
-      trace('[ChartEditor] Audio loaded without a waveform: ${error}');
-      return null;
-    }
-  }
-
-  // initializes a waveform sprite with buncho non-charType specific things
-
-  static function initWaveformSprite(waveformData:WaveformData, state:ChartEditorState, charType:CharacterType):WaveformSprite
-  {
-    var waveformSprite:WaveformSprite = new WaveformSprite(waveformData, VERTICAL, FlxColor.WHITE);
-    waveformSprite.y = Math.max(state.gridTiledSprite?.y ?? 0.0, ChartEditorState.GRID_INITIAL_Y_POS - ChartEditorState.GRID_TOP_PAD);
-    waveformSprite.height = (ChartEditorState.GRID_SIZE) * 16;
-    waveformSprite.width = (ChartEditorState.GRID_SIZE) * 2;
-    waveformSprite.time = 0;
-    waveformSprite.duration = Conductor.instance.getStepTimeInMs(16) * 0.001;
-    waveformSprite.iconId = charType;
-    waveformSprite.reversed = state.isViewDownscroll;
-    if (state.isViewDownscroll) waveformSprite.y = FlxG.height - ChartEditorState.PLAYBAR_HEIGHT - waveformSprite.height;
-    return waveformSprite;
-  }
-
+    return NativeAudio.playVocals(state, charType, instId, charId);
   public static function stopExistingVocals(state:ChartEditorState):Void
-  {
-    for (voice in state.audioVocalTrackGroup.members)
-      if (voice != null) voice.destroy();
-    state.audioVocalTrackGroup.clear();
-    if (state.audioWaveforms != null)
-    {
-      for (waveform in state.audioWaveforms.members)
-        if (waveform != null) waveform.destroy();
-      state.audioWaveforms.clear();
-    }
-  }
-
-  /**
-   * Play a sound effect.
-   * Automatically cleans up after itself and recycles previous FlxSound instances if available, for performance.
-   * @param path The path to the sound effect. Use `Paths` to build this.
-   */
-  public static function playSound(_state:ChartEditorState, path:String, volume:Float = 1.0):Void
-  {
-    var asset:Null<FlxSoundAsset> = FlxG.sound.cache(path);
-    if (asset == null)
-    {
-      trace('WARN: Failed to play sound $path, asset not found.');
-      return;
-    }
-    var snd:Null<FunkinSound> = FunkinSound.load(asset);
-    if (snd == null) return;
-    snd.autoDestroy = true;
-    snd.play(true);
-    snd.volume = volume;
-  }
-
-  /**
-   * Play one of two stretchy sounds.
-   * Since some configurations can play this frequently, we limit to one of each of the two alternating sounds at a time.
-   * @param state
-   * @param volume
-   */
+    NativeAudio.stopExistingVocals(state);
+  public static function playSound(state:ChartEditorState, path:String, volume:Float = 1.0):Void
+    NativeAudio.playSound(state, path, volume);
   public static function playStretchySound(state:ChartEditorState, volume:Float = 1.0):Void
-  {
-    if (state.stretchySounds)
-    {
-      if (state.stretchySound1 == null) state.stretchySound1 = FunkinSound.load(Paths.sound('chartingSounds/stretch1_UI'));
-      if (state.stretchySound1 == null) return;
-
-      // Prevent spam playing that could cause issues.
-      if (state.stretchySound1?.isPlaying ?? false || state.stretchySound2?.isPlaying ?? false) return;
-
-      state.stretchySounds = !state.stretchySounds;
-      state.stretchySound1.play(true);
-      state.stretchySound1.volume = volume;
-    }
-    else
-    {
-      if (state.stretchySound2 == null) state.stretchySound2 = FunkinSound.load(Paths.sound('chartingSounds/stretch2_UI'));
-      if (state.stretchySound2 == null) return;
-
-      // Prevent spam playing that could cause issues.
-      if (state.stretchySound1?.isPlaying ?? false || state.stretchySound2?.isPlaying ?? false) return;
-
-      state.stretchySounds = !state.stretchySounds;
-      state.stretchySound2.play(true);
-      state.stretchySound2.volume = volume;
-    }
-  }
-
+    NativeAudio.playStretchySound(state, volume);
   public static function wipeInstrumentalData(state:ChartEditorState):Void
-  {
-    state.audioInstTrackData.clear();
-    stopExistingInstrumental(state);
-  }
-
+    NativeAudio.wipeInstrumentalData(state);
   public static function wipeVocalData(state:ChartEditorState):Void
-  {
-    state.audioVocalTrackData.clear();
-    stopExistingVocals(state);
-  }
+    NativeAudio.wipeVocalData(state);
 
-  /**
-   * Create a list of ZIP file entries from the current loaded instrumental tracks in the chart eidtor.
-   * @param state The chart editor state.
-   * @return `Array<haxe.zip.Entry>`
-   */
   public static function makeZIPEntriesFromInstrumentals(state:ChartEditorState):Array<haxe.zip.Entry>
   {
-    var zipEntries = [];
-
-    var instTrackIds = state.audioInstTrackData.keys().array();
-    for (key in instTrackIds)
+    var entries:Array<haxe.zip.Entry> = [];
+    for (key => bytes in state.audioInstTrackData)
     {
-      if (key == 'default')
-      {
-        var data:Null<Bytes> = state.audioInstTrackData.get('default');
-        if (data == null)
-        {
-          trace(' WARNING '.warning() + ' Failed to access inst track ($key)');
-          continue;
-        }
-        zipEntries.push(FileUtil.makeZIPEntryFromBytes('Inst.ogg', data));
-      }
-      else
-      {
-        var data:Null<Bytes> = state.audioInstTrackData.get(key);
-        if (data == null)
-        {
-          trace(' WARNING '.warning() + ' Failed to access inst track ($key)');
-          continue;
-        }
-        zipEntries.push(FileUtil.makeZIPEntryFromBytes('Inst-${key}.ogg', data));
-      }
+      if (bytes == null) continue;
+      var suffix = key == '' || key == Constants.DEFAULT_VARIATION ? '' : '-$key';
+      entries.push(FileUtil.makeZIPEntryFromBytes('Inst$suffix.ogg', bytes));
     }
-
-    return zipEntries;
+    return entries;
   }
 
-  /**
-   * Create a list of ZIP file entries from the current loaded vocal tracks in the chart eidtor.
-   * @param state The chart editor state.
-   * @return `Array<haxe.zip.Entry>`
-   */
   public static function makeZIPEntriesFromVocals(state:ChartEditorState):Array<haxe.zip.Entry>
   {
-    var zipEntries = [];
-
-    for (key in state.audioVocalTrackData.keys())
+    var entries:Array<haxe.zip.Entry> = [];
+    for (key => bytes in state.audioVocalTrackData)
     {
-      var data:Null<Bytes> = state.audioVocalTrackData.get(key);
-      if (data == null)
-      {
-        trace(' WARNING '.warning() + ' Failed to access vocal track ($key)');
-        continue;
-      }
-      zipEntries.push(FileUtil.makeZIPEntryFromBytes('Voices-${key}.ogg', data));
+      if (bytes == null) continue;
+      entries.push(FileUtil.makeZIPEntryFromBytes(key == '' ? 'Voices.ogg' : 'Voices-$key.ogg', bytes));
     }
-
-    return zipEntries;
+    return entries;
   }
 }
 #end

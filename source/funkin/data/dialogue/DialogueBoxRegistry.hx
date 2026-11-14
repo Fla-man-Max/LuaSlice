@@ -2,7 +2,6 @@ package funkin.data.dialogue;
 
 import funkin.play.cutscene.dialogue.DialogueBox;
 import funkin.data.dialogue.DialogueBoxData;
-import funkin.play.cutscene.dialogue.ScriptedDialogueBox;
 import funkin.util.tools.ISingleton;
 import funkin.data.DefaultRegistryImpl;
 
@@ -20,7 +19,12 @@ class DialogueBoxRegistry extends BaseRegistry<DialogueBox, DialogueBoxData, Dia
 
   public function new()
   {
-    super('DIALOGUEBOX', 'dialogue/boxes', DIALOGUEBOX_DATA_VERSION_RULE);
+    super({
+      registryId: 'DIALOGUEBOX',
+      dataFilePath: 'gameplay/dialogue/boxes/',
+      nestedEntries: true,
+      versionRule: DIALOGUEBOX_DATA_VERSION_RULE
+    });
   }
 }
 

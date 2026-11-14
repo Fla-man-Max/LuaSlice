@@ -7,7 +7,10 @@ import hxluajit.Types.Lua_State;
 import haxe.io.Bytes;
 import funkin.modding.psychlua.PsychLuaConvert as Convert;
 
-class PsychLuaScript
+typedef PsychLuaScript = PsychLuaScriptImpl;
+
+@:native('funkin.modding.psychlua.PsychLuaScript')
+private final class PsychLuaScriptImpl
 {
   public static inline var CONTINUE = '##PSYCHLUA_FUNCTIONCONTINUE';
   public static inline var STOP = '##PSYCHLUA_FUNCTIONSTOP';
@@ -21,6 +24,7 @@ class PsychLuaScript
   public final path:String;
   public final root:String;
   public final host:PsychLuaHost;
+  @:unreflective
   public var lua(default, null):cpp.RawPointer<Lua_State>;
   public var closed:Bool = false;
   public var depth(default, null):Int = 0;
@@ -96,6 +100,7 @@ class PsychLuaScript
     Lua.settop(lua, top);
   }
 
+  @:unreflective
   static function dispatchCallback(state:cpp.RawPointer<Lua_State>):Int
   {
     var top = Lua.gettop(state);
@@ -185,15 +190,26 @@ class PsychLuaScript
       return CONTINUE;
     }
     depth++;
+    var started = luaslice.script.ScriptProfiler.enabled ? haxe.Timer.stamp() : 0.0;
+    var failed = false;
     var result:Dynamic = CONTINUE;
     try
     {
       for (arg in args) if (!Convert.toLua(lua, arg)) Lua.pushnil(lua);
       var status = protectedCall(args.length, 1);
       if (status == Lua.OK) result = Convert.fromLua(lua, -1);
-      else report(name, Std.string(Lua.tostring(lua, -1)));
+      else
+      {
+        failed = true;
+        report(name, Std.string(Lua.tostring(lua, -1)));
+      }
     }
-    catch (error:Dynamic) report(name, Std.string(error));
+    catch (error:Dynamic)
+    {
+      failed = true;
+      report(name, Std.string(error));
+    }
+    if (started != 0) luaslice.script.ScriptProfiler.record(path, name, started, failed);
     finishInvocation(top);
     return result == null ? CONTINUE : result;
   }
@@ -235,9 +251,17 @@ class PsychLuaScript
 
   public function report(hook:String, message:String):Void
   {
+    var session = host.game.diagnosticSession;
+    session?.diagnostics.record('error', path, hook + ': ' + message, haxe.Timer.stamp());
+    session?.scripts.note('Psych Lua', root, path, 'Error in ' + hook);
     var key = hook + ':' + message;
     if (reported.exists(key)) return;
     reported.set(key, true);
+    if (session?.suppressScriptPopups == true)
+    {
+      trace('[Psych Lua] $path $hook: $message');
+      return;
+    }
     try host.report('[Psych Lua/LuaJIT][$root][$path][$hook] $message')
     catch (error:Dynamic) trace('[Psych Lua] $path $hook: $message (error display failed: $error)');
   }

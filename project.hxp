@@ -32,7 +32,7 @@ class Project extends HXProject
    * REMEMBER TO CHANGE THIS WHEN THE GAME UPDATES!
    * You only have to change it here, the rest of the game will query this value.
    */
-  static final VERSION:String = "0.8.6";
+  static final VERSION:String = "0.8.7";
 
   /**
    * The build's number and version code.
@@ -105,16 +105,12 @@ class Project extends HXProject
   //
 
   /**
-   * The app's minimal Android SDK version.
+   * The app's lime Android java extensions.
    */
-  static final ANDROID_MINIMUM_SDK_VERSION:Int = 28;
-
-  /**
-   * The app's target Android SDK version.
-   */
-  static final ANDROID_TARGET_SDK_VERSION:Int = 35;
-
-  static final ANDROID_EXTENSIONS:Array<String> = ["funkin.extensions.CallbackUtil", "funkin.extensions.FNFCExtension", "funkin.extensions.AudioSession"];
+  static final ANDROID_EXTENSIONS:Array<String> = [
+    "funkin.extensions.CallbackUtil",
+    "funkin.extensions.FNFLoaderExtension"
+  ];
 
   /**
    * The team ID to use for the iOS app. Configured in XCode.
@@ -147,17 +143,26 @@ class Project extends HXProject
   /**
    * Asset path globs to always exclude from asset libraries.
    */
-  static final EXCLUDE_ASSETS:Array<String> = [".*", "cvs", "thumbs.db", "desktop.ini", "*.hash", "*.md"];
+  static final EXCLUDE_ASSETS:Array<String> = [
+    ".*",
+    "cvs",
+    "thumbs.db",
+    "desktop.ini",
+    "*.hash",
+    "*.md",
+    "*.fla",
+    "*/.git*"
+  ];
 
   /**
    * Asset path globs to exclude on web platforms.
    */
-  static final EXCLUDE_ASSETS_WEB:Array<String> = ["*.ogg"];
+  static final EXCLUDE_ASSETS_WEB:Array<String> = [];
 
   /**
    * Asset path globs to exclude on native platforms.
    */
-  static final EXCLUDE_ASSETS_NATIVE:Array<String> = ["*.mp3"];
+  static final EXCLUDE_ASSETS_NATIVE:Array<String> = [];
 
   /**
    * Asset path globs to exclude on platforms with `CENSOR_EXPLETIVES` enabled.
@@ -167,7 +172,11 @@ class Project extends HXProject
   /**
    * Asset path globs to exclude on platforms with `CENSOR_EXPLETIVES` disabled.
    */
-  static final EXCLUDE_ASSETS_UNCENSORED:Array<String> = ["stressCutscene-censored.mp4", "stressPicoCutscene-censored.mp4", "darnellCutscene-censored.mp4"];
+  static final EXCLUDE_ASSETS_UNCENSORED:Array<String> = [
+    "stressCutscene-censored.mp4",
+    "stressPicoCutscene-censored.mp4",
+    "darnellCutscene-censored.mp4"
+  ];
 
   //
   // ASSET EMBEDDING
@@ -205,13 +214,6 @@ class Project extends HXProject
    * If this flag is enabled, armv7 won't be compiled when building android.
    */
   static final EXCLUDE_ARMV7:FeatureFlag = "EXCLUDE_ARMV7";
-
-  /**
-   * `-DFORCE_BLEND_SHADER`
-   * If this flag is enabled, the game will force the use of shaders to render
-   * certain blend modes, even if the device supports the needed OpenGL extensions.
-   */
-  static final FORCE_BLEND_SHADER:FeatureFlag = "FORCE_BLEND_SHADER";
 
   /**
    * `-DGITHUB_BUILD`
@@ -257,6 +259,12 @@ class Project extends HXProject
    */
   static final UNLOCK_EVERYTHING:FeatureFlag = "UNLOCK_EVERYTHING";
 
+  /**
+   * `-DVERBOSE_ASSET_CACHE`
+   * If this flag is enabled, the game will print out many more log messages regarding caching and retrieving assets.
+   */
+  static final VERBOSE_ASSET_CACHE:FeatureFlag = "VERBOSE_ASSET_CACHE";
+
   //
   // FEATURE FLAGS
   // Inverse build flags are automatically populated.
@@ -286,10 +294,10 @@ class Project extends HXProject
   static final FEATURE_DEBUG_FUNCTIONS:FeatureFlag = "FEATURE_DEBUG_FUNCTIONS";
 
   /**
-   * `-DFEATURE_RESULTS_DEBUG`
-   * If this flag is enabled, a debug menu for Results screen will be accessible from the debug menu.
+   * `-FEATURE_DEBUG_MENU`
+   * If this flag is enabled, a debug menu will be accessible.
    */
-  static final FEATURE_RESULTS_DEBUG:FeatureFlag = "FEATURE_RESULTS_DEBUG";
+  static final FEATURE_DEBUG_MENU:FeatureFlag = "FEATURE_DEBUG_MENU";
 
   /**
    * `-DFEATURE_DEBUG_TRACY`
@@ -298,6 +306,12 @@ class Project extends HXProject
    * @see https://github.com/HaxeFoundation/hxcpp/pull/1153
    */
   static final FEATURE_DEBUG_TRACY:FeatureFlag = "FEATURE_DEBUG_TRACY";
+
+  /**
+   * `-DNO_FEATURE_STACK_TRACE`
+   * If this flag is disabled, the build leaves out HXCPP_STACK_LINE and HXCPP_STACK_TRACE.
+   */
+  static final FEATURE_STACK_TRACE:FeatureFlag = "FEATURE_STACK_TRACE";
 
   /**
    * `-DFEATURE_DISCORD_RPC`
@@ -336,6 +350,12 @@ class Project extends HXProject
   static final FEATURE_GHOST_TAPPING:FeatureFlag = "FEATURE_GHOST_TAPPING";
 
   /**
+   * `-DFEATURE_GPU_TEXTURES`
+   * Enables experimental GPU-only textures which improve memory usage.
+   */
+  static final FEATURE_GPU_TEXTURES:FeatureFlag = "FEATURE_GPU_TEXTURES";
+
+  /**
    * `-DFEATURE_HAPTICS`
    * If this flag is enabled, the game provide haptic feedback vibrations.
    * Works for mobile targets (Android and iOS).
@@ -347,6 +367,12 @@ class Project extends HXProject
    * If this flag is enabled, the input offsets menu will be available to configure your audio and visual offsets.
    */
   static final FEATURE_LAG_ADJUSTMENT:FeatureFlag = "FEATURE_LAG_ADJUSTMENT";
+
+  /**
+   * `-DFEATURE_HIGH_DPI`
+   * If this flag is enabled, the game will use high dpi which improves the quality by alot.
+   */
+  static final FEATURE_HIGH_DPI:FeatureFlag = "FEATURE_HIGH_DPI";
 
   /**
    * `-DFEATURE_LOG_TRACE`
@@ -381,6 +407,14 @@ class Project extends HXProject
   static final FEATURE_DEBUG_FILE_LOGGING:FeatureFlag = "FEATURE_DEBUG_FILE_LOGGING";
 
   /**
+   * `-DFEATURE_NATIVE_CRASH_HANDLER`
+   * If this flag is enabled, a native crash handler is installed that catches segfaults and other
+   * native faults, writes a report with a stack trace to the log folder, and shows a dialog.
+   * Only available on C++ targets.
+   */
+  static final FEATURE_NATIVE_CRASH_HANDLER:FeatureFlag = "FEATURE_NATIVE_CRASH_HANDLER";
+
+  /**
    * `-DFEATURE_MOBILE_ADVERTISEMENTS`
    * If this flag is enabled, Google AdMob will be enabled.
    * Banner and interstitial ads will sometimes appear.
@@ -401,6 +435,13 @@ class Project extends HXProject
   static final FEATURE_MOBILE_IAR:FeatureFlag = "FEATURE_MOBILE_IAR";
 
   /**
+   * `-DFEATURE_MULTITHREADING`
+   * If this flag is enabled, the game will create additional child processes to optimize performance.
+   * This functions even on web builds, so only disable it if you are experiencing stability issues.
+   */
+  static final FEATURE_MULTITHREADING:FeatureFlag = "FEATURE_MULTITHREADING";
+
+  /**
    * `-DFEATURE_MOBILE_WEBVIEW`
    * If this feature flag is enabled, the game will be able to load WebViews, mainly needed for the Newgrounds impl.
    */
@@ -418,6 +459,13 @@ class Project extends HXProject
    * If disabled, the option will be hidden and the game will always be censored.
    */
   static final FEATURE_NAUGHTYNESS:FeatureFlag = "FEATURE_NAUGHTYNESS";
+
+  /**
+   * `-DFEATURE_ONE_CLICK_INSTALL`
+   * If this flag is enabled, the game registers itself as the handler for the `funkin:` URL
+   * scheme.
+   */
+  static final FEATURE_ONE_CLICK_INSTALL:FeatureFlag = "FEATURE_ONE_CLICK_INSTALL";
 
   /**
    * `-DFEATURE_NEWGROUNDS`
@@ -475,6 +523,19 @@ class Project extends HXProject
   static final FEATURE_POLYMOD_MODS:FeatureFlag = "FEATURE_POLYMOD_MODS";
 
   /**
+   * `-DFEATURE_CPPIA`
+   * If this flag is enabled, the game is built as a cppia host, letting mods ship compiled `.cppia` scripts.
+   * This adds `-D scriptable`.
+   */
+  static final FEATURE_CPPIA:FeatureFlag = "FEATURE_CPPIA";
+
+  /**
+   * `-DFEATURE_RESULTS_DEBUG`
+   * If this flag is enabled, a debug menu for Results screen will be accessible from the debug menu.
+   */
+  static final FEATURE_RESULTS_DEBUG:FeatureFlag = "FEATURE_RESULTS_DEBUG";
+
+  /**
    * `-DFEATURE_SCREENSHOTS`
    * If this flag is enabled, the game will support the screenshots feature.
    */
@@ -486,12 +547,6 @@ class Project extends HXProject
    * This can be used to provide menus, dialogs, and other UI components via HaxeUI.
    */
   static final FEATURE_HAXEUI:FeatureFlag = "FEATURE_HAXEUI";
-
-  /**
-   * `-FEATURE_DEBUG_MENU`
-   * If this flag is enabled, a debug menu will be accessible.
-   */
-  static final FEATURE_DEBUG_MENU:FeatureFlag = "FEATURE_DEBUG_MENU";
 
   /**
    * `-FEATURE_ANIMATION_EDITOR`
@@ -512,9 +567,22 @@ class Project extends HXProject
   static final FEATURE_STAGE_EDITOR:FeatureFlag = "FEATURE_STAGE_EDITOR";
 
   /**
+   * `-DFEATURE_STRICT_ASSET_CACHING`
+   * If this flag is enabled, trying to load an asset that wasn't cached in the loading screen will crash the game.
+   * If this flag is disabled, the game will attempt to load the asset anyway (which can cause stuttering and texture corruption).
+   */
+  static final FEATURE_STRICT_ASSET_CACHING:FeatureFlag = "FEATURE_STRICT_ASSET_CACHING";
+
+  /**
+   * `-DFEATURE_CAMERA_EDITOR`
+   * If this flag is enabled, the Camera Editor will be accessible from the debug menu.
+   */
+  static final FEATURE_CAMERA_EDITOR:FeatureFlag = "FEATURE_CAMERA_EDITOR";
+
+  /**
    * `-DFEATURE_TOUCH_CONTROLS`
    * If this flag is enabled, the touch controls for the game is also enabled.
-   * Works with desktop builds I think maybe?
+   * Works with desktop builds.
    */
   static final FEATURE_TOUCH_CONTROLS:FeatureFlag = "FEATURE_TOUCH_CONTROLS";
 
@@ -525,6 +593,13 @@ class Project extends HXProject
    * This is done to ensure that the audio context can initialize properly on HTML5. Not necessary on desktop.
    */
   static final FEATURE_TOUCH_HERE_TO_PLAY:FeatureFlag = "FEATURE_TOUCH_HERE_TO_PLAY";
+
+  /**
+   * `-DFEATURE_MACOS_GESTURES`
+   * If this flag is enabled, the game will handle gestures on MacOS.
+   * Currently used just for editors.
+   */
+  static final FEATURE_MACOS_GESTURES:FeatureFlag = "FEATURE_MACOS_GESTURES";
 
   /**
    * `-DFEATURE_VIDEO_PLAYBACK`
@@ -569,17 +644,18 @@ class Project extends HXProject
 
     displayTarget();
 
+    configureFeatureFlags();
+
     configureApp();
 
     configureOutputDir();
 
-    if (isRun() || isInstall())
+    if (isRun() || isInstall() || isUninstall())
     {
       // These commands dont really need much in order to run so to improve the speed, we return here.
       return;
     }
 
-    configureFeatureFlags();
     configureCompileDefines();
     configureIncludeMacros();
     configureCustomMacros();
@@ -616,6 +692,78 @@ class Project extends HXProject
     if (!(isDisplay() || isCleanCommand()))
     {
       checkLibraries();
+    }
+
+    if (FEATURE_CPPIA.isEnabled(this))
+    {
+      configureCppiaSdk();
+    }
+  }
+
+  /**
+   * Some classes are unable to be extended in CPPIA
+   */
+  function excludeFromScripting()
+  {
+    // These bind to native libraries that use RawPointer somehow.
+    var nativePackages:Array<String> = [
+      'hxvlc',
+      'hxdiscord_rpc',
+      'hxdiscord_social_sdk',
+      'hxluajit',
+      'extension',
+      'funkin.api.discord',
+      'funkin.external',
+      'funkin.util.mobile',
+      'funkin.modding.install'
+    ];
+
+    for (pack in nativePackages) addHaxeMacro('haxe.macro.Compiler.addGlobalMetadata("$pack", "@:hscriptBaseCreated", true, true, false)');
+  }
+
+  /**
+   * Run SDK build scripts
+   */
+  function configureCppiaSdk()
+  {
+    if (isDisplay() || isCleanCommand()) return;
+
+    var target:Null<String> = isWindows() ? "windows" : isMac() ? "mac" : isLinux() ? "linux" : null;
+    if (target == null) return;
+
+    var config:String = isDebug() ? "debug" : "release";
+
+    var outputDir = 'sdk/$target/$config';
+
+    var script = 'scripts/cppia/sdk/build_cppia_sdk';
+
+    if (isWindowsHost())
+    {
+      postBuildCallbacks.unshift(new CLICommand("powershell", [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        '$script.ps1',
+        "-Target",
+        target,
+        "-Config",
+        config,
+        ".",
+        outputDir
+      ]));
+    }
+    else
+    {
+      postBuildCallbacks.unshift(new CLICommand("bash", [
+        '$script.sh',
+        "--target",
+        target,
+        "--config",
+        config,
+        ".",
+        outputDir
+      ]));
     }
   }
 
@@ -678,8 +826,9 @@ class Project extends HXProject
 
     this.window.hardware = true;
     this.window.vsync = false;
+    this.window.depthBuffer = false;
     // force / allow high DPI
-    this.window.allowHighDPI = !isMac();
+    this.window.allowHighDPI = FEATURE_HIGH_DPI.isEnabled(this);
 
     if (isWeb())
     {
@@ -710,9 +859,6 @@ class Project extends HXProject
       {
         this.excludeArchitectures.push(Architecture.ARMV7);
       }
-
-      config.set("android.minimum-sdk-version", ANDROID_MINIMUM_SDK_VERSION);
-      config.set("android.target-sdk-version", ANDROID_TARGET_SDK_VERSION);
 
       if (isRelease())
       {
@@ -852,9 +998,13 @@ class Project extends HXProject
     // Should be false unless explicitly requested.
     GITHUB_BUILD.apply(this, false);
     EXCLUDE_ARMV7.apply(this, false);
+    VERBOSE_ASSET_CACHE.apply(this, false);
 
     // Should be true unless explicitly requested.
     HARDCODED_CREDITS.apply(this, true);
+
+    // Should be true unless explicitly requested.
+    // Disable this once we rework the unlock progression system.
     UNLOCK_EVERYTHING.apply(this, true);
 
     // Should be true only on web builds.
@@ -865,24 +1015,18 @@ class Project extends HXProject
     // Should default to true on workspace builds and false on release builds.
     REDIRECT_ASSETS_FOLDER.apply(this, isDebug() && isDesktop());
 
-    // Should be true only on debug mobile builds.
-    TESTING_ADS.apply(this, isDebug() && FEATURE_MOBILE_ADVERTISEMENTS.isEnabled(this));
-
     // Should be true on mobile builds.
     CENSOR_EXPLETIVES.apply(this, isMobile());
-
-    // Should be true on Android.
-    // Some Android devices support native blends, but it causes issues
-    // with other shaders, so we'll disable it for now.
-    FORCE_BLEND_SHADER.apply(this, isAndroid());
 
     //
     // FEATURE FLAGS
     //
 
+    // Should be true on all builds.
     FEATURE_FUNKVIS.apply(this, true);
     FEATURE_LOG_TRACE.apply(this, true);
     FEATURE_DEBUG_FILE_LOGGING.apply(this, FEATURE_DEBUG_FUNCTIONS.isEnabled(this));
+    FEATURE_NATIVE_CRASH_HANDLER.apply(this, isDesktop() && isCPP());
     FEATURE_NAUGHTYNESS.apply(this, true);
     FEATURE_OPEN_URL.apply(this, true);
     FEATURE_PARTIAL_SOUNDS.apply(this, true);
@@ -895,6 +1039,9 @@ class Project extends HXProject
     {
       FEATURE_LUA_SCRIPTS.disable(this);
     }
+
+    // cppia hosting requires hxcpp.
+    FEATURE_CPPIA.apply(this, isCPP() && FEATURE_POLYMOD_MODS.isEnabled(this));
 
     // Video playback should be enabled on desktop, web, and mobile.
     FEATURE_VIDEO_PLAYBACK.apply(this, true);
@@ -923,12 +1070,19 @@ class Project extends HXProject
     FEATURE_ANIMATION_EDITOR.apply(this, !isWeb());
     FEATURE_CHART_EDITOR.apply(this, !isWeb());
     FEATURE_STAGE_EDITOR.apply(this, !(isWeb() || isMobile()));
-    FEATURE_HAXEUI.apply(this, FEATURE_ANIMATION_EDITOR.isEnabled(this)
-      || FEATURE_CHART_EDITOR.isEnabled(this)
-      || FEATURE_STAGE_EDITOR.isEnabled(this));
+    FEATURE_CAMERA_EDITOR.apply(this, !(isWeb() || isMobile()));
+    FEATURE_HAXEUI.apply(
+      this, FEATURE_ANIMATION_EDITOR.isEnabled(
+        this
+      ) || FEATURE_CHART_EDITOR.isEnabled(this) || FEATURE_STAGE_EDITOR.isEnabled(this) || FEATURE_CAMERA_EDITOR.isEnabled(this)
+    );
 
     // Should be true except on web builds (some asset stuff breaks it)
     FEATURE_LAG_ADJUSTMENT.apply(this, !isWeb());
+
+    // Multithreaded task parallelization is supported on all platforms but web.
+    // NOTE: Async stuff still works on web, just not multithreading specifically.
+    FEATURE_MULTITHREADING.apply(this, !isWeb());
 
     // Should be true only on Desktop builds.
     // Mobile has its own screenshot methods.
@@ -938,7 +1092,12 @@ class Project extends HXProject
     // Should be true except on mobile builds.
     FEATURE_FILE_DROP.apply(this, !isMobile());
 
-    // Audio context issues only exist on web builds.
+    // Should be true only on Desktop builds.
+    // Registering a URL scheme requires OS level access we don't have on web or mobile.
+    FEATURE_ONE_CLICK_INSTALL.apply(this, isDesktop() || isMobile());
+
+    // The audio context issues which require the user to click before playing
+    // only exist on web builds.
     FEATURE_TOUCH_HERE_TO_PLAY.apply(this, isWeb());
 
     // Should be true only on mobile builds.
@@ -951,6 +1110,15 @@ class Project extends HXProject
     FEATURE_MOBILE_IAR.apply(this, isMobile() && isRelease());
     FEATURE_MOBILE_WEBVIEW.apply(this, isMobile() && FEATURE_NEWGROUNDS.isEnabled(this));
     FEATURE_MOBILE_AGESIGNALS.apply(this, isMobile() && isRelease());
+
+    // Should be true for everything expect on mac since it reduces performance by alot.
+    FEATURE_HIGH_DPI.apply(this, !isMac());
+
+    // Should be true only on mac builds.
+    FEATURE_MACOS_GESTURES.apply(this, isMac());
+
+    // Should be true only on debug mobile builds which have ads enabled.
+    TESTING_ADS.apply(this, isDebug() && FEATURE_MOBILE_ADVERTISEMENTS.isEnabled(this));
 
     // The coveted ghost tapping feature.
     // Essential on mobile but delayed on desktop.
@@ -965,6 +1133,12 @@ class Project extends HXProject
     // Turns the debug display off if you are on a non debug mobile build
     // Desktop (Native and Web) always has it | Used for mobile debugging purposes
     FEATURE_DEBUG_DISPLAY.apply(this, !isMobile() || FEATURE_DEBUG_FUNCTIONS.isEnabled(this));
+
+    if (isRun() || isInstall() || isUninstall())
+    {
+      // These commands dont really need much in order to run so to improve the speed, we return here.
+      return;
+    }
 
     renderFlagsTable();
   }
@@ -1035,17 +1209,37 @@ class Project extends HXProject
     // Enable OpenFL's error handler. Required for the crash logger.
     setHaxedef("openfl-enable-handle-error");
 
+    // Enable OpenFL's experimental event-pooling flag. Fixes the broken event allocation.
+    setHaxedef("openfl_pool_events");
+
     // Disable a macro in Lime that generates a random number for Assets.cache.version every build.
     // This doesn't seem to be of any use and it causes lime.utils.AssetCache to be re-compiled on every build.
     setHaxedef("lime_disable_assets_version");
 
-    // Enable stack trace tracking. Good for debugging but has a (minor) performance impact.
     setHaxedef("HXCPP_CHECK_POINTER");
-    setHaxedef("HXCPP_STACK_LINE");
-    setHaxedef("HXCPP_STACK_TRACE");
+    if (!FEATURE_DEBUG_TRACY.isEnabled(this)) setHaxedef("HXCPP_GC_GENERATIONAL");
+
+    if (!FEATURE_STACK_TRACE.isDisabled(this))
+    {
+      setHaxedef("HXCPP_STACK_LINE");
+      setHaxedef("HXCPP_STACK_TRACE");
+    }
+
     setHaxedef("hscriptPos");
 
     if (isAndroid()) setHaxedef("DISABLED_MACRO_SUPERLATIVE");
+    if (FEATURE_CPPIA.isEnabled(this))
+    {
+      setHaxedef("scriptable");
+      setHaxedef("POLYMOD_CPPIA");
+
+      if (isIOS())
+      {
+        setHaxedef("CPPIA_NO_JIT");
+      }
+
+      excludeFromScripting();
+    }
 
     if (FEATURE_DEBUG_FUNCTIONS.isDisabled(this))
     {
@@ -1063,7 +1257,6 @@ class Project extends HXProject
 
     // HaxeUI configuration.
     setHaxedef("haxeui_no_mouse_reset");
-    setHaxedef("haxeui_focus_out_on_click"); // Unfocus a dialog when clicking out of it
     setHaxedef("haxeui_dont_impose_base_class"); // Suppress a macro error
 
     if (isRelease())
@@ -1086,6 +1279,17 @@ class Project extends HXProject
 
       setHaxedef("absolute-paths"); // Fix source locations so Tracy can see them
     }
+
+    if (FEATURE_MULTITHREADING.isEnabled(this))
+    {
+      setHaxedef("lime_threads");
+		}
+
+    if (isWeb())
+    {
+      // Disables the native JSON implemention for haxe.Json because scripts cant use it if its native
+      setHaxedef("haxeJSON");
+    }
   }
 
   /**
@@ -1099,11 +1303,13 @@ class Project extends HXProject
 
     // Forcibly include all Funkin' classes in builds.
     // This prevents classes that are unused by the base game from being unavailable to HScript.
-    addHaxeMacro("include('funkin', true, ['funkin.mobile.*', 'funkin.ui.debug.anim.*', 'funkin.ui.debug.charting.*', 'funkin.ui.debug.stage.*', 'funkin.ui.debug.stageeditor.*', 'funkin.ui.haxeui.*'])");
+    addHaxeMacro(
+      "include('funkin', true, ['funkin.touch.*', 'funkin.ui.debug.anim.*', 'funkin.ui.debug.charting.*', 'funkin.ui.debug.stage.*', 'funkin.ui.debug.stageeditor.*', 'funkin.ui.haxeui.*'])"
+    );
 
     if (isMobile())
     {
-      addHaxeMacro("include('funkin.mobile')");
+      addHaxeMacro("include('funkin.util.mobile')");
     }
 
     if (FEATURE_HAXEUI.isEnabled(this))
@@ -1122,6 +1328,11 @@ class Project extends HXProject
       {
         addHaxeMacro("include('funkin.ui.debug.stage')");
         addHaxeMacro("include('funkin.ui.debug.stageeditor')");
+      }
+
+      if (FEATURE_CAMERA_EDITOR.isEnabled(this))
+      {
+        addHaxeMacro("include('funkin.ui.debug.cameraeditor')");
       }
 
       addHaxeMacro("include('funkin.ui.haxeui')");
@@ -1148,7 +1359,9 @@ class Project extends HXProject
 
     // Ensure all Flixel classes are available at runtime.
     // Explicitly ignore packages which require additional dependencies.
-    addHaxeMacro("include('flixel', true, [ 'flixel.addons.editors.spine.*', 'flixel.addons.nape.*', 'flixel.system.macros.*', 'flixel.addons.tile.FlxRayCastTilemap' ])");
+    addHaxeMacro(
+      "include('flixel', true, [ 'flixel.addons.editors.spine.*', 'flixel.addons.nape.*', 'flixel.system.macros.*', 'flixel.addons.tile.FlxRayCastTilemap' ])"
+    );
   }
 
   /**
@@ -1157,7 +1370,6 @@ class Project extends HXProject
   function configureCustomMacros()
   {
     // These macros allow additions of new functionality to existing Flixel. -->
-    addHaxeMacro("addMetadata('@:build(funkin.util.macro.FlxMacro.buildFlxBasic())', 'flixel.FlxBasic')");
     addHaxeMacro("addMetadata('@:build(funkin.util.macro.FlxMacro.buildFlxSprite())', 'flixel.FlxSprite')");
     addHaxeMacro("addMetadata('@:build(funkin.util.macro.AssetMacro.buildPolymodAudio())', 'polymod.backends.LimeModLibrary')");
     if (FEATURE_COMPRESSED_TEXTURES.isEnabled(this))
@@ -1181,6 +1393,14 @@ class Project extends HXProject
     buildDir += "/";
 
     app.path = buildDir;
+
+    if (isWindows() && isCPP() && FEATURE_NATIVE_CRASH_HANDLER.isEnabled(this))
+    {
+      // The native crash handler symbolizes stack traces with the PDB.
+      var pdbPath:String = Path.join([buildDir, 'windows', 'obj', 'Funkin.pdb']);
+
+      setenv("HXCPP_PDB_FILE", sys.FileSystem.absolutePath(pdbPath));
+    }
   }
 
   function configureAndroid()
@@ -1195,13 +1415,13 @@ class Project extends HXProject
     modsFolderProvider.set('android:exported', 'true');
     modsFolderProvider.set('android:permission', 'android.permission.MANAGE_DOCUMENTS');
 
-    final intentFilter:Xml = Xml.createElement('intent-filter');
+    final fnfcIntentFilter:Xml = Xml.createElement('intent-filter');
 
     final action:Xml = Xml.createElement('action');
     action.set('android:name', 'android.content.action.DOCUMENTS_PROVIDER');
-    intentFilter.addChild(action);
+    fnfcIntentFilter.addChild(action);
 
-    modsFolderProvider.addChild(intentFilter);
+    modsFolderProvider.addChild(fnfcIntentFilter);
 
     @:nullSafety(Off)
     {
@@ -1215,48 +1435,94 @@ class Project extends HXProject
       }
     }
 
-    // Custom android.activity XML Children for the AndroidManifest
-    final intentFilter:Xml = Xml.createElement('intent-filter');
+    final intentFilters:Array<Xml> = [];
 
-    final action:Xml = Xml.createElement('action');
-    action.set('android:name', 'android.intent.action.VIEW');
-    intentFilter.addChild(action);
-
-    final intentFilterCategories:Array<String> = ["android.intent.category.DEFAULT", "android.intent.category.BROWSABLE"];
-
-    for (categoryName in intentFilterCategories)
     {
-      final category:Xml = Xml.createElement('category');
-      category.set('android:name', categoryName);
-      intentFilter.addChild(category);
+      // FNFC Intent Filter
+      final fnfcIntentFilter:Xml = Xml.createElement('intent-filter');
+
+      final action:Xml = Xml.createElement('action');
+      action.set('android:name', 'android.intent.action.VIEW');
+      fnfcIntentFilter.addChild(action);
+
+      final fnfcIntentFilterCategories:Array<String> = [
+        "android.intent.category.DEFAULT",
+        "android.intent.category.BROWSABLE"
+      ];
+
+      for (categoryName in fnfcIntentFilterCategories)
+      {
+        final category:Xml = Xml.createElement('category');
+        category.set('android:name', categoryName);
+        fnfcIntentFilter.addChild(category);
+      }
+
+      final fnfcIntentFilterDatas:Map<String, Array<String>> = [
+        "android:mimeType" => ["application/zip"], // When this is added, it makes the game show up only when it's a FNFC file.
+        // But it also for some reason make it not show up at all in ZArchiver no matter what the file is...
+        // "android:host"        => ["*"],
+        "android:scheme" => ["file", "content"], // I think having all these makes it so the extension check would work even when the files has dots like "epic-song-v2.0.fnfc"
+        "android:pathPattern" => [
+          ".*\\.fnfc",
+          ".*\\..*\\.fnfc",
+          ".*\\..*\\..*\\.fnfc",
+          ".*\\..*\\..*\\..*\\.fnfc",
+          ".*\\..*\\..*\\..*\\..*\\.fnfc"
+        ]
+      ];
+
+      for (key => values in fnfcIntentFilterDatas)
+      {
+        for (value in values)
+        {
+          final data:Xml = Xml.createElement("data");
+          data.set(key, value);
+          fnfcIntentFilter.addChild(data);
+        }
+      }
+
+      intentFilters.push(fnfcIntentFilter);
     }
 
-    final intentFilterDatas:Map<String,
-      Array<String>> = ["android:mimeType" => ["application/zip"], // When this is added, it makes the game show up only when it's a FNFC file.
-      // But it also for some reason make it not show up at all in ZArchiver no matter what the file is...
-      // "android:host"        => ["*"],
-      "android:scheme" => ["file", "content"], // I think having all these makes it so the extension check would work even when the files has dots like "epic-song-v2.0.fnfc"
-      "android:pathPattern" => [".*\\.fnfc", ".*\\..*\\.fnfc", ".*\\..*\\..*\\.fnfc", ".*\\..*\\..*\\..*\\.fnfc", ".*\\..*\\..*\\..*\\..*\\.fnfc"]];
-
-    for (key => values in intentFilterDatas)
     {
-      for (value in values)
+      // FNFMod URL Scheme Intent Filter
+      final fnfModUrlSchemeIntentFilter:Xml = Xml.createElement("intent-filter");
+
+      final action:Xml = Xml.createElement("action");
+      action.set("android:name", "android.intent.action.VIEW");
+      fnfModUrlSchemeIntentFilter.addChild(action);
+
+      final fnfModUrlSchemeIntentFilterCategories:Array<String> = [
+        "android.intent.category.DEFAULT",
+        "android.intent.category.BROWSABLE"
+      ];
+
+      for (categoryName in fnfModUrlSchemeIntentFilterCategories)
       {
-        final data:Xml = Xml.createElement("data");
-        data.set(key, value);
-        intentFilter.addChild(data);
+        final category:Xml = Xml.createElement("category");
+        category.set("android:name", categoryName);
+        fnfModUrlSchemeIntentFilter.addChild(category);
       }
+
+      final data:Xml = Xml.createElement("data");
+      data.set("android:scheme", "funkin");
+      fnfModUrlSchemeIntentFilter.addChild(data);
+
+      intentFilters.push(fnfModUrlSchemeIntentFilter);
     }
 
-    @:nullSafety(Off)
+    for (filter in intentFilters)
     {
-      if (config.get('android.activity').xmlChildren != null)
+      @:nullSafety(Off)
       {
-        config.get('android.activity').xmlChildren.push(Printer.print(intentFilter, true));
-      }
-      else
-      {
-        config.get('android.activity').xmlChildren = [Printer.print(intentFilter, true)];
+        if (config.get('android.activity').xmlChildren != null)
+        {
+          config.get('android.activity').xmlChildren.push(Printer.print(filter, true));
+        }
+        else
+        {
+          config.get('android.activity').xmlChildren = [Printer.print(filter, true)];
+        }
       }
     }
 
@@ -1275,39 +1541,25 @@ class Project extends HXProject
   {
     // launchStoryboard = new LaunchStoryboard();
     // launchStoryboard.path = "./LaunchScreen.storyboard";
-
-    // Grab the stuff from a fake plist and then embbed it into the original to maintain a clear format!
-    final documentTypes:String = File.getContent("documentTypes.plist");
-
-    @:nullSafety(Off)
-    {
-      if (config.getArrayString('ios.info-plist-children') != null)
-      {
-        config.set('ios.info-plist-children', config.getArrayString('ios.info-plist-children').concat([documentTypes]));
-      }
-      else
-      {
-        config.set('ios.info-plist-children', [documentTypes]);
-      }
-    }
   }
 
   function configurePolymod()
   {
     // The file extension to use for script files.
-    setHaxedef("POLYMOD_SCRIPT_EXT", ".hscript");
-    // Which asset library to use for scripts.
-    setHaxedef("POLYMOD_SCRIPT_LIBRARY", "scripts");
-    // The base path from which scripts should be accessed.
-    setHaxedef("POLYMOD_ROOT_PATH", "scripts/");
+    setHaxedef("POLYMOD_SCRIPT_CLASS_EXT", ".hx,.hxc,.hscript");
     // Determines the subdirectory of the mod folder used for file appending.
     setHaxedef("POLYMOD_APPEND_FOLDER", "_append");
     // Determines the subdirectory of the mod folder used for file merges.
     setHaxedef("POLYMOD_MERGE_FOLDER", "_merge");
+    // The file extension to use for mod archives.
+    setHaxedef("POLYMOD_ARCHIVE_MOD_EXT", ".zip,.fnfmod");
     // Determines the file in the mod folder used for metadata.
     setHaxedef("POLYMOD_MOD_METADATA_FILE", "_polymod_meta.json");
     // Determines the file in the mod folder used for the icon.
-    setHaxedef("POLYMOD_MOD_ICON_FILE", "_polymod_icon.png");
+    setHaxedef("POLYMOD_MOD_ICON_FILE", "_polymod_icon.png,_polymod_icon.jpg,_polymod_icon.gif,_polymod_icon.webp");
+
+  // Prevents Polymod from loading all assets on load so we can let preloader do it
+    setHaxedef("POLYMOD_DISABLE_WEB_PRELOAD");
 
     if (isDebug())
     {
@@ -1366,6 +1618,11 @@ class Project extends HXProject
       addHaxelib('hxdiscord_rpc'); // Discord API
     }
 
+    if (FEATURE_MULTITHREADING.isEnabled(this))
+    {
+      addHaxelib('haxe-concurrent'); // Multithreading
+    }
+
     if (FEATURE_NEWGROUNDS.isEnabled(this))
     {
       addHaxelib('newgrounds'); // Newgrounds API
@@ -1374,7 +1631,6 @@ class Project extends HXProject
     if (FEATURE_FUNKVIS.isEnabled(this))
     {
       addHaxelib('funkin.vis'); // Audio visualization
-      addHaxelib('grig.audio'); // Audio data utilities
     }
 
     if (FEATURE_PARTIAL_SOUNDS.isEnabled(this))
@@ -1440,8 +1696,6 @@ class Project extends HXProject
     }
 
     var exclude = EXCLUDE_ASSETS.concat(isWeb() ? EXCLUDE_ASSETS_WEB : EXCLUDE_ASSETS_NATIVE);
-    var shouldPreload = PRELOAD_ALL.isEnabled(this);
-    var shouldEmbed = EMBED_ASSETS.isEnabled(this);
 
     if (CENSOR_EXPLETIVES.isEnabled(this))
     {
@@ -1452,77 +1706,31 @@ class Project extends HXProject
       exclude = exclude.concat(EXCLUDE_ASSETS_UNCENSORED);
     }
 
-    if (shouldEmbed)
-    {
-      info('Embedding assets into executable...');
-    }
-    else
-    {
-      info('Including assets alongside executable...');
-    }
-
     // Default asset library
-    var shouldPreloadDefault = true;
-    addAssetLibrary("default", shouldEmbed, shouldPreloadDefault);
-    addAssetPath("assets/preload", "assets", "default", ["*"], exclude, shouldEmbed, "assets");
-    addAsset("VersionUpdater.txt", "assets/data/VersionUpdater.txt", "default", shouldEmbed, "assets");
+    var shouldPreloadDefault = !isWeb();
+    var shouldEmbedDefault = false;
+
+    setHaxedef("disable_preload_default_library", !shouldPreloadDefault ? "1" : "0");
+
+    // removeAssetPath("assets/", "default");
+    addAssetLibrary("default", shouldEmbedDefault, shouldPreloadDefault);
+    addAssetPath("assets", "assets", "default", ["*"], exclude, shouldEmbedDefault, "assets");
+    addAsset("VersionUpdater.txt", "assets/data/VersionUpdater.txt", "default", shouldEmbedDefault, "assets");
 
     if (!HARDCODED_CREDITS.isEnabled(this))
     {
-      addAsset("assets/exclude/data/credits.json", "assets/data/credits.json", "default", shouldEmbed);
+      addAsset("assets/exclude/ui/credits/credits.json", "assets/ui/credits/credits.json", "default", shouldEmbedDefault, "assets");
     }
 
-    if (!FEATURE_ANIMATION_EDITOR.isEnabled(this)) removeAssetPath('assets/preload/data/ui/animation-editor', "default");
+    if (!FEATURE_ANIMATION_EDITOR.isEnabled(this)) removeAssetPath('assets/ui/editors/animation-editor', "default");
 
-    if (!FEATURE_CHART_EDITOR.isEnabled(this)) removeAssetPath('assets/preload/data/ui/chart-editor', "default");
+    if (!FEATURE_CHART_EDITOR.isEnabled(this)) removeAssetPath('assets/ui/editors/chart-editor', "default");
 
-    if (!FEATURE_STAGE_EDITOR.isEnabled(this)) removeAssetPath('assets/preload/data/ui/stage-editor', "default");
+    // if (!FEATURE_CAMERA_EDITOR.isEnabled(this)) removeAssetPath('assets/ui/editors/camera-editor', "default");
 
     // Font assets
     var shouldEmbedFonts = true;
-    addAssetPath("assets/fonts", null, "default", ["*"], exclude, shouldEmbedFonts, "assets");
-
-    // Shared asset libraries
-    addAssetLibrary("songs", shouldEmbed, shouldPreload);
-    addAssetPath("assets/songs", "assets/songs", "songs", ["*"], exclude, shouldEmbed, "assets");
-
-    for (song in EMBED_SONGS_AUDIO)
-    {
-      removeAssetPath('assets/songs/$song');
-      addAssetPath('assets/songs/$song', 'assets/songs/$song', "songs", ["*"], exclude, true, "assets");
-    }
-
-    addAssetLibrary("shared", shouldEmbed, shouldPreload);
-    addAssetPath("assets/shared", "assets/shared", "shared", ["*"], exclude, shouldEmbed, "assets");
-
-    if (FEATURE_VIDEO_PLAYBACK.isEnabled(this))
-    {
-      var shouldEmbedVideos = false;
-      addAssetLibrary("videos", shouldEmbedVideos, shouldPreload);
-      addAssetPath("assets/videos", "assets/videos", "videos", ["*"], exclude, shouldEmbedVideos, "assets");
-    }
-
-    // Level asset libraries
-    addAssetLibrary("tutorial", shouldEmbed, shouldPreload);
-    addAssetPath("assets/tutorial", "assets/tutorial", "tutorial", ["*"], exclude, shouldEmbed, "assets");
-    addAssetLibrary("week1", shouldEmbed, shouldPreload);
-    addAssetPath("assets/week1", "assets/week1", "week1", ["*"], exclude, shouldEmbed, "assets");
-    addAssetLibrary("week2", shouldEmbed, shouldPreload);
-    addAssetPath("assets/week2", "assets/week2", "week2", ["*"], exclude, shouldEmbed, "assets");
-    addAssetLibrary("week3", shouldEmbed, shouldPreload);
-    addAssetPath("assets/week3", "assets/week3", "week3", ["*"], exclude, shouldEmbed, "assets");
-    addAssetLibrary("week4", shouldEmbed, shouldPreload);
-    addAssetPath("assets/week4", "assets/week4", "week4", ["*"], exclude, shouldEmbed, "assets");
-    addAssetLibrary("week5", shouldEmbed, shouldPreload);
-    addAssetPath("assets/week5", "assets/week5", "week5", ["*"], exclude, shouldEmbed, "assets");
-    addAssetLibrary("week6", shouldEmbed, shouldPreload);
-    addAssetPath("assets/week6", "assets/week6", "week6", ["*"], exclude, shouldEmbed, "assets");
-    addAssetLibrary("week7", shouldEmbed, shouldPreload);
-    addAssetPath("assets/week7", "assets/week7", "week7", ["*"], exclude, shouldEmbed, "assets");
-    addAssetLibrary("weekend1", shouldEmbed, shouldPreload);
-    addAssetPath("assets/weekend1", "assets/weekend1", "weekend1", ["*"], exclude, shouldEmbed, "assets");
-    addAssetLibrary("sserafim", shouldEmbed, shouldPreload);
-    addAssetPath("assets/sserafim", "assets/sserafim", "sserafim", ["*"], exclude, shouldEmbed, "assets");
+    addAssetPath("assets/ui/fonts", null, "default", ["*"], exclude, shouldEmbedFonts, "assets");
 
     // Art asset library (where README and CHANGELOG pull from)
     var shouldEmbedArt = false;
@@ -1535,7 +1743,11 @@ class Project extends HXProject
     addAsset("changelogs/LuaSlice Lua API.md", "LuaSlice Lua API.md", "art", shouldEmbedArt);
     addAsset("changelogs/CHANGELOG - PSYCH API.MD", "CHANGELOG - PSYCH API.MD", "art", shouldEmbedArt);
 
-    if (shouldEmbed)
+    // Exclude assets in the "exclude" folder
+    // This must be done explicitly now that the "default" library contains the whole assets folder.
+    removeAssetPath("assets/exclude");
+
+    if (shouldEmbedDefault)
     {
       info('Done embedding assets.');
     }
@@ -1562,7 +1774,13 @@ class Project extends HXProject
       case PlatformType.DESKTOP:
         if (isMac())
         {
-          assetsPath = Path.join([basePath, '${this.app.file}.app', "Contents", "Resources", "assets"]);
+          assetsPath = Path.join([
+            basePath,
+            '${this.app.file}.app',
+            "Contents",
+            "Resources",
+            "assets"
+          ]);
         }
         else
         {
@@ -1571,11 +1789,24 @@ class Project extends HXProject
       case PlatformType.MOBILE:
         if (isAndroid() && !isBundle())
         {
-          assetsPath = Path.join([basePath, "app", "src", "main", "assets", "assets"]);
+          assetsPath = Path.join([
+            basePath,
+            "app",
+            "src",
+            "main",
+            "assets",
+            "assets"
+          ]);
         }
         else if (isIOS())
         {
-          assetsPath = Path.join([exportPath, platform, '${this.app.file}', "assets", "assets"]);
+          assetsPath = Path.join([
+            exportPath,
+            platform,
+            '${this.app.file}',
+            "assets",
+            "assets"
+          ]);
         }
         else
         {
@@ -1799,6 +2030,11 @@ class Project extends HXProject
     return this.command == "install";
   }
 
+  public function isUninstall():Bool
+  {
+    return this.command == "uninstall";
+  }
+
   public function isBuild():Bool
   {
     return this.command == "test" || this.command == "build";
@@ -1947,8 +2183,13 @@ class Project extends HXProject
    * @param embed Whether to embed the assets in the executable.
    * @param padName The name of the Play Assets Delivery that this asset path will be added to. (Android only)
    */
-  public function addAssetPath(path:String, ?rename:String, library:String, ?include:Array<String>, ?exclude:Array<String>, embed:Bool = false,
-      ?padName:String):Void
+  public function addAssetPath(path:String,
+    ?rename:String,
+    library:String,
+    ?include:Array<String>,
+    ?exclude:Array<String>,
+    embed:Bool = false,
+    ?padName:String):Void
   {
     // Argument parsing.
     if (path == "") return;
@@ -2115,9 +2356,24 @@ class Project extends HXProject
           case 'haxelib':
             differentLibraries.set(libraryName, [libraryDev, libraryCurrentCommitHash, library.version, 'haxelib']);
           case 'git':
-            if (libraryCurrentCommitHash != library.ref)
+            var hasMatchingRemote:Bool = false;
+            for (remoteName in readLibraryRemoteNames(libraryName))
             {
-              differentLibraries.set(libraryName, [libraryDev, libraryCurrentCommitHash, library.ref, 'git']);
+              if (getGitURLBase(readLibraryRemoteURL(libraryName, remoteName)) == getGitURLBase(library.url))
+              {
+                hasMatchingRemote = true;
+                break;
+              }
+            }
+            if (libraryCurrentCommitHash != library.ref || !hasMatchingRemote)
+            {
+              differentLibraries.set(libraryName, [
+                libraryDev,
+                libraryCurrentCommitHash,
+                library.ref,
+                'git',
+                library.url
+              ]);
             }
         }
       }
@@ -2131,9 +2387,24 @@ class Project extends HXProject
               differentLibraries.set(libraryName, ['', libraryCurrentVersion, library.version, 'haxelib']);
             }
           case 'git':
-            if (libraryCurrentCommitHash != library.ref)
+            var hasMatchingRemote:Bool = false;
+            for (remoteName in readLibraryRemoteNames(libraryName))
             {
-              differentLibraries.set(libraryName, ['', libraryCurrentCommitHash, library.ref, 'git']);
+              if (getGitURLBase(readLibraryRemoteURL(libraryName, remoteName)) == getGitURLBase(library.url))
+              {
+                hasMatchingRemote = true;
+                break;
+              }
+            }
+            if (libraryCurrentCommitHash != library.ref || !hasMatchingRemote)
+            {
+              differentLibraries.set(libraryName, [
+                '',
+                libraryCurrentCommitHash,
+                library.ref,
+                'git',
+                library.url
+              ]);
             }
         }
       }
@@ -2147,6 +2418,16 @@ class Project extends HXProject
 
       Sys.println('');
 
+      var reportLines:Array<String> = [];
+      var maxLineLen:Int = 0;
+
+      function pushLine(line:String):Void
+      {
+        reportLines.push(line);
+        final lineLen:Int = line.stripCodes(true).length;
+        if (lineLen > maxLineLen) maxLineLen = lineLen;
+      }
+
       for (libraryName in differentLibraries.keys())
       {
         var infos:Null<Array<String>> = differentLibraries.get(libraryName);
@@ -2157,23 +2438,67 @@ class Project extends HXProject
         var currentVersion:String = infos[1];
         var expectedVersion:String = infos[2];
         var libType:String = infos[3];
+        var libURL:String = infos.length > 4 ? infos[4] : '';
 
-        if (haxe.io.Path.isAbsolute(devPath))
+        var displayName:String = libraryName.replace(",", ".");
+        var libPath:String = libType == 'git' ? getLibraryGitPath(libraryName) : getLibraryCurrentFolder(libraryName);
+        var linkedName:String = displayName.link(toFileURL(libPath));
+
+        if (Path.isAbsolute(devPath))
         {
-          Sys.println("- " + libraryName.replace(",", ".") + " (Development Build)".bright_cyan());
-          Sys.println(("   Path:     " + haxe.io.Path.removeTrailingSlashes(devPath)).bright_blue());
+          pushLine("┌─ " + linkedName.bold().bright_white() + " (Development Build)".bright_cyan());
+          pushLine("│" + ("  Path:  ".bold() + Path.removeTrailingSlashes(devPath)).bright_blue());
         }
         else
         {
-          Sys.println("- " + libraryName.replace(",", "."));
+          pushLine("┌─ " + linkedName.bold().bright_white());
         }
 
-        Sys.println(("   Current:  " + currentVersion).red());
-        Sys.println(("   Expected: " + expectedVersion).green());
+        if (currentVersion != expectedVersion)
+        {
+          pushLine(messageWithHeader(" • Current:  ", currentVersion, true, AnsiUtil.bright_red));
+          pushLine(messageWithHeader(" • Expected: ", expectedVersion, true, AnsiUtil.bright_green));
+        }
+
+        if (libType == 'git')
+        {
+          final libBaseURL = getGitURLBase(libURL);
+          final defaultRemote = readLibraryDefaultRemoteName(libraryName);
+          final currentURL = readLibraryRemoteURL(libraryName, defaultRemote);
+
+          if (getGitURLBase(currentURL) != libBaseURL)
+          {
+            if (currentVersion != expectedVersion) pushLine("│");
+            final displayURL = currentURL.length > 0 ? currentURL : "(no remote is set)";
+            pushLine(messageWithHeader(" • Current Remote URL:  ", displayURL, true, AnsiUtil.bright_red));
+            pushLine(messageWithHeader(" • Expected Remote URL: ", libURL, true, AnsiUtil.bright_green));
+          }
+        }
+
+        pushLine("│");
       }
 
-      Sys.println('');
+      for (line in reportLines) Sys.println(line);
+
+      Sys.println("".rpad("-", maxLineLen > 0 ? maxLineLen : 75));
     }
+  }
+
+  function messageWithHeader(header:String, message:String, sideline:Bool = true, ?ansiColor:String->String, ?ansiHeaderStyle:String->String,
+      ?ansiMessageStyle:String->String):String
+  {
+    if (ansiColor == null) ansiColor = AnsiUtil.white;
+    if (ansiHeaderStyle == null) ansiHeaderStyle = AnsiUtil.bold;
+    if (ansiMessageStyle == null) ansiMessageStyle = AnsiUtil.underline;
+
+    var str = '';
+
+    if (sideline) str += '├─ ';
+
+    str += ansiColor(ansiHeaderStyle(header));
+    str += ansiColor(ansiMessageStyle(message));
+
+    return str;
   }
 
   static function readLibraryCurrentVersion(libraryName:String):String
@@ -2196,35 +2521,144 @@ class Project extends HXProject
 
   static function readLibraryGitCommitHash(libraryName:String):String
   {
-    var commit:String = '';
+    return execGitOnLibrary(libraryName, ["rev-parse", "HEAD"]);
+  }
 
-    var gitProccess = new sys.io.Process("git", ["-C", getLibraryGitPath(libraryName), "rev-parse", "HEAD"]);
-    gitProccess.exitCode(true);
-    commit = gitProccess.stdout.readAll().toString().trim();
-
-    if (commit.length <= 0)
+  static function execGitOnLibrary(libraryName:String, args:Array<String>):String
+  {
+    function _execGit(path:String):String
     {
-      gitProccess = new sys.io.Process("git", ["-C", readLibraryDev(libraryName), "rev-parse", "HEAD"]);
+      if (path == null || path.length <= 0 || !FileSystem.exists(Path.join([path, '.git']))) return '';
+
+      var gitProccess = new sys.io.Process("git", ["-C", path].concat(args));
       gitProccess.exitCode(true);
-      commit = gitProccess.stdout.readAll().toString().trim();
+      return gitProccess.stdout.readAll().toString().trim();
     }
 
-    return commit;
+    var out:String = _execGit(getLibraryGitPath(libraryName));
+
+    if (out.length <= 0)
+    {
+      var devLib:String = readLibraryDev(libraryName);
+      if (devLib.length > 0) out = _execGit(devLib);
+    }
+
+    return out;
+  }
+
+  static function readLibraryRemoteNames(libraryName:String):Array<String>
+  {
+    var output:String = execGitOnLibrary(libraryName, ["remote"]);
+
+    if (output.length <= 0) return [];
+
+    return output.split('\n').map(s -> s.trim()).filter(s -> s.length > 0);
+  }
+
+  static function readLibraryDefaultRemoteName(libraryName:String):String
+  {
+    var remote:String = execGitOnLibrary(libraryName, ["rev-parse", "--abbrev-ref", "--symbolic-full-name", "@{u}"]);
+
+    final i:Int = remote.indexOf("/");
+    if (i > 0) return remote.substr(0, i);
+
+    final remotes = readLibraryRemoteNames(libraryName);
+    if (remotes.contains("origin")) return "origin";
+    if (remotes.length > 0) return remotes[0];
+
+    return "";
+  }
+
+  static function readLibraryRemoteURL(libraryName:String, ?remote:String):String
+  {
+    if (remote == null || remote.length <= 0) remote = readLibraryDefaultRemoteName(libraryName);
+
+    if (remote.length <= 0) return "";
+
+    return execGitOnLibrary(libraryName, ["remote", "get-url", remote]);
+  }
+
+  static function getGitURLBase(url:String):String
+  {
+    // Sometimes we might be using SSH instead of HTTPS locally.
+    // If both have the same "base" then we don't flag them as different repos.
+    // For example, https://github.com/FunkinCrew/Funkin (HTTPS) and git@github.com:FunkinCrew/Funkin (SSH)
+    // would have a base that's FunkinCrew/Funkin which is the same!
+    if (url == null || url.length <= 0) return "";
+
+    if (url.startsWith("git@"))
+    {
+      url = url.split(":")[1];
+    }
+    else if (url.startsWith("http"))
+    {
+      final len = url.startsWith("https") ? 8 : 7;
+      url = url.substr(len, url.length - len);
+      final i = url.indexOf("/") + 1;
+      url = url.substr(i, url.length - i);
+    }
+
+    if (url.endsWith(".git")) url = url.substr(0, url.length - 4);
+
+    return Path.addTrailingSlash(url.toLowerCase());
   }
 
   static function getLibraryCurrentFile(libraryName:String):String
   {
-    return haxe.io.Path.join([haxe.io.Path.addTrailingSlash(Sys.getCwd()), '.haxelib', libraryName, '.current']);
+    return Path.join([
+      Path.addTrailingSlash(Sys.getCwd()),
+      '.haxelib',
+      libraryName,
+      '.current'
+    ]);
   }
 
   static function getLibraryDevFile(libraryName:String):String
   {
-    return haxe.io.Path.join([haxe.io.Path.addTrailingSlash(Sys.getCwd()), '.haxelib', libraryName, '.dev']);
+    return Path.join([
+      Path.addTrailingSlash(Sys.getCwd()),
+      '.haxelib',
+      libraryName,
+      '.dev'
+    ]);
+  }
+
+  static function getLibraryCurrentFolder(libraryName:String):String
+  {
+    var libFolder:String = Path.join([Path.addTrailingSlash(Sys.getCwd()), '.haxelib', libraryName]);
+    var currentFile:String = Path.join([libFolder, '.current']);
+
+    if (!FileSystem.exists(currentFile)) return libFolder;
+
+    return Path.join([libFolder, File.getContent(currentFile).trim().replace(".", ",")]);
   }
 
   static function getLibraryGitPath(libraryName:String):String
   {
-    return haxe.io.Path.join([haxe.io.Path.addTrailingSlash(Sys.getCwd()), '.haxelib', libraryName, 'git']);
+    var currentFolder:String = getLibraryCurrentFolder(libraryName);
+    if (FileSystem.exists(Path.join([currentFolder, '.git']))) return currentFolder;
+
+    var libFolder:String = Path.join([Path.addTrailingSlash(Sys.getCwd()), '.haxelib', libraryName]);
+    var gitFolder:String = Path.join([libFolder, 'git']);
+    if (FileSystem.exists(Path.join([gitFolder, '.git']))) return gitFolder;
+
+    if (FileSystem.exists(libFolder))
+    {
+      for (entry in FileSystem.readDirectory(libFolder))
+      {
+        var entryPath:String = Path.join([libFolder, entry]);
+        if (FileSystem.isDirectory(entryPath) && FileSystem.exists(Path.join([entryPath, '.git']))) return entryPath;
+      }
+    }
+
+    return currentFolder;
+  }
+
+  static function toFileURL(path:String):String
+  {
+    var normalized:String = StringTools.replace(path, "\\", "/");
+    if (!normalized.startsWith("/")) normalized = "/" + normalized;
+    return "file://" + normalized;
   }
 
   static function isLibraryLocalGitDev(libraryName:String):Bool
@@ -2243,7 +2677,6 @@ class Project extends HXProject
   static function getLibraryPath(libraryName:String):String
   {
     var process = new sys.io.Process('haxelib', ['libpath', libraryName]);
-    @:privateAccess
     return process.stdout.readLine();
   }
 
@@ -2275,8 +2708,8 @@ class Project extends HXProject
   public function buildHxCppTools():Void
   {
     var path:String = getLibraryPath("hxcpp");
-    var dotNPath:String = haxe.io.Path.join([path, 'hxcpp.n']);
-    var toolsPath:String = haxe.io.Path.join([path, 'tools/hxcpp']);
+    var dotNPath:String = Path.join([path, 'hxcpp.n']);
+    var toolsPath:String = Path.join([path, 'tools/hxcpp']);
 
     // The output can be an error message if the library doesn't exist.
     if (path.toLowerCase().startsWith("error") || !sys.FileSystem.exists(path)) error('HXCPP could not be found while on C++ target.');
@@ -2327,7 +2760,7 @@ class Project extends HXProject
    */
   public function info(message:String):Void
   {
-    if (!(isDisplay() || isCleanCommand() || isRun() || isInstall()))
+    if (!(isDisplay() || isCleanCommand() || isRun() || isInstall() || isUninstall()))
     {
       Sys.println(' INFO '.bold().bg_blue() + " " + message);
     }
@@ -2338,7 +2771,7 @@ class Project extends HXProject
    */
   public function warn(message:String):Void
   {
-    if (!(isDisplay() || isCleanCommand() || isRun() || isInstall()))
+    if (!(isDisplay() || isCleanCommand() || isRun() || isInstall() || isUninstall()))
     {
       Sys.println(' WARNING '.bold().bg_yellow() + " " + message);
     }
@@ -2402,8 +2835,9 @@ class Project extends HXProject
     final mobile:Bool = key.startsWith('MOBILE_') || ios || android;
     final web:Bool = key.startsWith('WEB_');
     final desktop:Bool = key.startsWith('DESKTOP_');
+    final native:Bool = key.startsWith('NATIVE_');
 
-    if (isWeb() && (mobile || desktop)) return true;
+    if (isWeb() && (mobile || desktop || native)) return true;
     if (isDesktop() && (mobile || web)) return true;
     if (isAndroid() && (ios || web || desktop)) return true;
     if (isIOS() && (android || web || desktop)) return true;
@@ -2423,11 +2857,11 @@ class Project extends HXProject
     final prefix:String = key.substr(0, index);
     final rest:String = key.substr(index + 1);
 
-    if (isAndroid() && (prefix == 'ANDROID' || prefix == 'MOBILE'))
+    if (isAndroid() && (prefix == 'ANDROID' || prefix == 'MOBILE' || prefix == 'NATIVE'))
     {
       return rest;
     }
-    else if (isIOS() && (prefix == 'IOS' || prefix == 'MOBILE'))
+    else if (isIOS() && (prefix == 'IOS' || prefix == 'MOBILE' || prefix == 'NATIVE'))
     {
       return rest;
     }
@@ -2435,7 +2869,7 @@ class Project extends HXProject
     {
       return rest;
     }
-    else if (isDesktop() && prefix == 'DESKTOP')
+    else if (isDesktop() && (prefix == 'DESKTOP' || prefix == 'NATIVE'))
     {
       return rest;
     }
@@ -2448,8 +2882,7 @@ class Project extends HXProject
     @:nullSafety(Off)
     astcExcludes = haxe.Json.parse(File.getContent('./astc-compression-data.json')).excludes;
 
-    for (i in 0...astcExcludes.length)
-      astcExcludes[i] = astcExcludes[i].trim();
+    for (i in 0...astcExcludes.length) astcExcludes[i] = astcExcludes[i].trim();
   }
 
   public function isASTCExcluded(file:String):Bool

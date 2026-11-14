@@ -1,5 +1,12 @@
 # LuaSlice Engine Changelog
 
+## Preview 4
+
+- Open the Test Debug Editor from the Debug Menu to preview stages, playtest songs, and inspect objects, scripts, and events. Session overrides are temporary, and playtests don't count toward scores or progression.
+- Song playtests have their own controls for botplay, HUD visibility, camera focus, and seeking. Free camera is available with botplay on.
+- Android: `Options → Open Debug Menu` now leads to the editors. The Mods button is still on the main menu.
+- The mobile Animation Editor has touch controls for zoom, character JSON import and export, and animation previews. Drag to pan, or turn on Finger Edit to adjust animation offsets in whole pixels. Shortcuts appear when a hardware keyboard is connected.
+
 ## v0.1.0 - 2026-10-29
 
 - Psych Engine Lua API is finally fixed!

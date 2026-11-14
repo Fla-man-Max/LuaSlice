@@ -239,7 +239,10 @@ class LuaSliceUpdateState extends FlxState
     if (request != null) request.cancel();
 
     FlxTransitionableState.skipNextTransIn = true;
-    FlxG.switchState(() -> new TitleState());
+    funkin.ui.transition.Transition.switchState(() -> new TitleState(), {
+      assetQuery: TitleState.queryAssets,
+      transition: None
+    });
   }
 
   static function displayVersion(version:String):String

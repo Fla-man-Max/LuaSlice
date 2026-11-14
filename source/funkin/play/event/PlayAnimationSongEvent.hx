@@ -25,6 +25,9 @@ class PlayAnimationSongEvent extends SongEvent
 
   override public function handleEvent(data:SongEventData):Void
   {
+    // Does nothing if there is no PlayState camera or stage.
+    if (PlayState.instance == null || PlayState.instance.currentStage == null) return;
+
     var anim:String = data.getString('anim') ?? DEFAULT_ANIM;
     var force:Bool = data.getBool('force') ?? DEFAULT_FORCE;
     var target:Null<FlxSprite> = getTarget(data);
@@ -49,8 +52,15 @@ class PlayAnimationSongEvent extends SongEvent
     }
   }
 
+  /**
+   * Get the sprite which this PlayAnimation event will target.
+   *
+   * @param data The song data for the event.
+   * @return The sprite to target, or `null` if the target is invalid.
+   */
   public function getTarget(data:SongEventData):Null<FlxSprite>
   {
+    // Does nothing if there is no PlayState camera or stage.
     if (PlayState.instance == null || PlayState.instance.currentStage == null) return null;
 
     var targetName:String = data.getString('target') ?? DEFAULT_TARGET;

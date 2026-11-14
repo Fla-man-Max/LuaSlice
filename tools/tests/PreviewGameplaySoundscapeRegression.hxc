@@ -1,0 +1,55 @@
+import flixel.math.FlxPoint;
+import flixel.tweens.FlxTween;
+import flixel.util.FlxTimer;
+import funkin.audio.FunkinSoundscape;
+import funkin.modding.module.Module;
+
+// Uses real global FlxTimers. No sounds/assets need to be played in this case.
+class PreviewGameplaySoundscapeRegression extends Module
+{
+  var checked = false;
+  var elapsed = 0.0;
+  var unrelatedCalls = 0;
+  var soundscapeCalls = 0;
+  var unrelated;
+  var soundscape;
+
+  public function new() { super('preview-gameplay-soundscape-regression', 1000); }
+
+  override function onUpdate(event)
+  {
+    if (checked) return;
+    try
+    {
+      if (soundscape == null)
+      {
+        unrelated = new FlxTimer().start(0.01, function(timer) { unrelatedCalls++; });
+        soundscape = new FunkinSoundscape({baseAmbiencePath: '', randomSoundPath: '__no_fixture_sounds__',
+          randomSoundWait: 0.01, randomTimeRange: new FlxPoint(1, 1), fadeInTime: 0});
+        var schedule = Reflect.field(soundscape, 'scheduleSound');
+        if (schedule == null) throw 'Soundscape has no owner-scoped timer scheduler';
+        Reflect.callMethod(soundscape, schedule, [0.01, function() { soundscapeCalls++; }]);
+        soundscape.destroy();
+        soundscape.destroy();
+        // A fade/audio completion may already be queued when destroy() runs.
+        Reflect.callMethod(soundscape, schedule, [0.01, function() { soundscapeCalls++; }]);
+        Reflect.callMethod(soundscape, Reflect.field(soundscape, 'onSoundFadeIn'), [null]);
+        return;
+      }
+      elapsed += event.elapsed;
+      if (elapsed < 0.1) return;
+      checked = true;
+      if (unrelatedCalls != 1) throw 'Soundscape destruction canceled another owner\'s timer';
+      if (soundscapeCalls != 0) throw 'Destroyed soundscape ran an owned timer or a late completion';
+      unrelated.destroy();
+      trace('PREVIEW_GAMEPLAY_SOUNDSCAPE_REGRESSION_OK');
+    }
+    catch (error:Dynamic)
+    {
+      checked = true;
+      unrelated?.destroy();
+      soundscape?.destroy();
+      trace('PREVIEW_GAMEPLAY_SOUNDSCAPE_REGRESSION_FAILED: ' + error);
+    }
+  }
+}

@@ -1,0 +1,43 @@
+local creates = 0
+local posts = 0
+local failed = false
+local sawCountdown = false
+local retry = false
+
+local function check(ok, message)
+  if not ok then
+    failed = true
+    debugPrint('PREVIEW_GAMEPLAY_LIFECYCLE_FAILED: ' .. message)
+  end
+end
+
+local function completeIfReady()
+  if sawCountdown and creates == 1 and posts == 1 and not failed then
+    debugPrint(retry and 'PREVIEW_GAMEPLAY_LIFECYCLE_OK' or 'PREVIEW_GAMEPLAY_LIFECYCLE_INITIAL_OK')
+  end
+end
+
+function onCreate()
+  retry = getVar('preview4LifecycleRetry') == true
+  creates = creates + 1
+  check(creates == 1, 'onCreate invoked twice')
+  check(getProperty('generatedMusic') == retry, 'onCreate did not see the expected chart state for this run')
+  check(type(getPropertyFromGroup('playerStrums', 0, 'x')) == 'number', 'onCreate cannot access player receptors')
+end
+
+function onSongRetry()
+  setVar('preview4LifecycleRetry', true)
+end
+
+function onCreatePost()
+  posts = posts + 1
+  check(creates == 1 and posts == 1, 'onCreatePost lifecycle is duplicated or out of order')
+  check(getProperty('generatedMusic') == true, 'onCreatePost ran before native chart generation')
+  completeIfReady()
+end
+
+function onStartCountdown()
+  sawCountdown = true
+  check(creates == 1, 'initial countdown missed script creation')
+  completeIfReady()
+end

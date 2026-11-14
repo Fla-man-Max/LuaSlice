@@ -30,7 +30,7 @@ try {
         $taskOutput = if (Test-Path -LiteralPath $taskStdout) { Get-Content -LiteralPath $taskStdout -Raw } else { '' }
         if ($taskOutput -match 'UPSTREAM_REGRESSION_FAILED') { throw "Upstream editor regressions failed. Logs: $taskRuntime" }
         if ($taskOutput -match 'Fatal Uncaught|Error while parsing|Could not parse|Error while executing') { throw "Unexpected engine/script error. Logs: $taskRuntime" }
-        if ($taskOutput -match 'UPSTREAM_REGRESSION_OK: 5') { Write-Output "PASS: five upstream editor regressions. Logs: $taskRuntime"; exit 0 }
+        if ($taskOutput -match 'UPSTREAM_REGRESSION_OK: 8') { Write-Output "PASS: eight native editor and menu regressions. Logs: $taskRuntime"; exit 0 }
         if ($taskProcess.HasExited) { throw "Regression process exited early. Logs: $taskRuntime" }
     }
     throw "Regression timed out. Logs: $taskRuntime"

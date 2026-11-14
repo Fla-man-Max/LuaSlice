@@ -116,7 +116,9 @@ Assets go in `images/`, `sounds/`, `music/`, `fonts/`, and `shaders/` inside you
 
 Only run mods you trust. Lua's standard libraries are still available, so this is not a security sandbox for an entire mod. Haxe imports and reflection through the Psych bridge now respect LuaSlice's existing class and field restrictions; filesystem, process-launching and interpreter internals are not exposed through that bridge.
 
-To try the included example, copy `example_mods/psych-lua-test` into `mods`, enable it, and play Tutorial. Its `scripts/api-test.luapg` also runs in other songs.
+On Windows and Linux, `mods/` is next to the game executable. On Android, it's in the app's data folder under `Android/data/me.luaslice/files/mods/`. Use the Mods menu to enable the mod.
+
+To try a script on Tutorial only, save the example below as `data/songs/tutorial/message.luap` inside an enabled mod.
 
 ## Script examples
 

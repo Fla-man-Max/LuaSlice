@@ -1,5 +1,9 @@
 import funkin.modding.module.Module;
+import funkin.ui.debug.DebugMenuSubState;
 import funkin.ui.debug.charting.ChartEditorState;
+import funkin.ui.debug.charting.handlers.audio.ChartEditorAudioHandler;
+import funkin.ui.debug.charting.handlers.audio.ChartEditorPlaybackHandler;
+import funkin.ui.debug.charting.handlers.ui.ChartEditorUIHandler;
 import funkin.ui.debug.charting.toolboxes.ChartEditorOffsetsToolbox;
 import funkin.ui.haxeui.components.CharacterPlayer;
 import funkin.ui.mainmenu.MainMenuState;
@@ -12,6 +16,9 @@ import funkin.Preferences;
 import flixel.FlxG;
 import flixel.math.FlxRect;
 import haxe.ui.events.ScrollEvent;
+import haxe.ui.events.MouseEvent;
+import haxe.ui.components.CheckBox;
+import haxe.ui.components.Button;
 import haxe.ui.geom.Point;
 import haxe.ui.validation.ValidationManager;
 
@@ -48,7 +55,7 @@ class UpstreamEditorRegression extends Module
       elapsed = 0;
       Preferences.autoPause = false;
       FlxG.autoPause = false;
-      FlxG.switchState(() -> new ChartEditorState({targetSongId: 'tutorial'}));
+      FlxG.switchState(() -> new ChartEditorState({loadFromTemplate: 'tutorial'}));
     }
     else if (phase == 1 && elapsed > 2 && Std.isOfType(FlxG.state, ChartEditorState))
     {
@@ -95,8 +102,9 @@ class UpstreamEditorRegression extends Module
       });
       check('instrumental-offset-drag', function()
       {
-        editor.clearVocals();
-        var toolbox = new ChartEditorOffsetsToolbox(editor);
+        ChartEditorAudioHandler.clearVocals(editor);
+        if (editor.audioInstTrack == null) throw 'Tutorial instrumental was not loaded in the chart editor';
+        var toolbox = ChartEditorOffsetsToolbox.build(editor);
         toolbox.waveformPlayer.waveform.waveformData = null;
         toolbox.waveformOpponent.waveform.waveformData = null;
         toolbox.movePlayheadToMouse();
@@ -109,7 +117,7 @@ class UpstreamEditorRegression extends Module
       });
       check('playbar-alignment', function()
       {
-        editor.handlePlaybar();
+        ChartEditorUIHandler.handlePlaybar(editor);
         var bar = editor.playbarHeadLayout;
         if (bar.x != 0 || bar.width != FlxG.width) throw 'Playbar is shifted or cut off by the viewport';
         var range = bar.playbarHead.findComponent('range');
@@ -129,6 +137,39 @@ class UpstreamEditorRegression extends Module
         if (Math.abs(slider.posFromCoord(new Point(FlxG.width - 4, 0)) - editor.songLengthInPixels) > 0.01)
           throw 'Dragging to the end did not seek to the song end';
       });
+      check('downscroll-checkbox', function()
+      {
+        var view = null;
+        for (button in editor.menubar.findComponents(null, Button, 1))
+          if (button.text == 'View') view = button;
+        if (view == null) throw 'View button missing';
+        view.dispatch(new MouseEvent(MouseEvent.CLICK));
+        var checkbox = editor.menubarItemDownscroll.findComponent(null, CheckBox, false);
+        if (checkbox.depth < 0) throw 'View menu was not displayed';
+        checkbox.selected = true;
+        ValidationManager.instance.process();
+        if (!editor.isViewDownscroll) throw 'Checking View > Downscroll left the editor in upscroll';
+        checkbox.selected = false;
+        ValidationManager.instance.process();
+        if (editor.isViewDownscroll) throw 'Unchecking View > Downscroll did not restore upscroll';
+        view.dispatch(new MouseEvent(MouseEvent.CLICK));
+      });
+      check('downscroll-playhead-and-player-view', function()
+      {
+        editor.scrollPositionInPixels = 0;
+        editor.playheadPositionInPixels = 128;
+        editor.isViewDownscroll = true;
+        var bottom = FlxG.height - ChartEditorState.PLAYBAR_HEIGHT;
+        if (Math.abs(editor.gridPlayhead.y - (bottom - 128 - ChartEditorState.PLAYHEAD_HEIGHT)) > 0.01)
+          throw 'Playhead did not mirror above the downscroll baseline';
+        editor.showPlayerView = true;
+        ChartEditorPlaybackHandler.handlePlayerView(editor);
+        if (editor.gridPlayerView.y >= editor.gridPlayhead.y || editor.gridPlayerViewEdge.y >= editor.gridPlayhead.y)
+          throw 'Player View still extends down from the playhead in downscroll';
+        editor.isViewDownscroll = false;
+        if (Math.abs(editor.gridPlayhead.y - (ChartEditorState.GRID_INITIAL_Y_POS + 128)) > 0.01)
+          throw 'Toggling back changed the upscroll playhead time';
+      });
       FlxG.stage.window.title = 'LuaSlice Chart Editor - test';
       FlxG.switchState(() -> new MainMenuState());
       elapsed = 0;
@@ -139,6 +180,17 @@ class UpstreamEditorRegression extends Module
       check('window-title-after-exit', function()
       {
         if (FlxG.stage.window.title != Constants.TITLE) throw 'Closing the editor kept its document title';
+      });
+      check('one-debug-mod-menu', function()
+      {
+        var menu = new DebugMenuSubState();
+        FlxG.state.openSubState(menu);
+        FlxG.state.resetSubState();
+        var count = 0;
+        for (item in menu.items.members)
+          if (item != null && item.name == 'MOD MENU') count++;
+        FlxG.state.closeSubState();
+        if (count != 1) throw 'Expected one Mod Menu entry, found ' + count;
       });
       trace(failed ? 'UPSTREAM_REGRESSION_FAILED' : 'UPSTREAM_REGRESSION_OK: ' + checks);
     }

@@ -239,4 +239,3 @@ class PropertyAnimator implements IFlxDestroyable
     anims = null;
   }
 }
-

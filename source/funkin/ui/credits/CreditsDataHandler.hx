@@ -10,9 +10,9 @@ class CreditsDataHandler
 {
   public static final BACKER_PUBLIC_URL:String = 'https://funkin.me/backers';
   #if HARDCODED_CREDITS
-  static final CREDITS_DATA_PATH:String = "assets/exclude/data/credits.json";
+  static final CREDITS_DATA_PATH:String = "assets/exclude/ui/credits/credits.json";
   #else
-  static final CREDITS_DATA_PATH:String = "assets/data/credits.json";
+  static final CREDITS_DATA_PATH:String = "assets/ui/credits/credits.json";
   #end
 
   #if macro
@@ -50,12 +50,23 @@ class CreditsDataHandler
   public static inline function getFallback():CreditsData
   {
     return {
-      entries: [
-        {
-          header: 'Founders',
-          body: [{line: 'ninjamuffin99'}, {line: 'PhantomArcade'}, {line: 'Kawai Sprite'}, {line: 'evilsk8r'},]
-        }
-      ]
+      entries: [{
+        header: 'Founders',
+        body: [
+          {
+            line: 'ninjamuffin99'
+          },
+          {
+            line: 'PhantomArcade'
+          },
+          {
+            line: 'Kawai Sprite'
+          },
+          {
+            line: 'evilsk8r'
+          },
+        ]
+      }]
     };
   }
 
@@ -112,8 +123,9 @@ class CreditsDataHandler
     #if !macro
     if (file.contents == null) return null;
 
-    var parser = new json2object.JsonParser<CreditsData>();
-    parser.ignoreUnknownVariables = false;
+    var parser = new json2object.JsonParser<CreditsData>({
+      ignoreUnknownVariables: false
+    });
     trace('[CREDITS] Parsing credits data from ${CREDITS_DATA_PATH}');
     parser.fromJson(file.contents, file.fileName);
 

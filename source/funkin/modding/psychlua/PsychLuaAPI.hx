@@ -42,6 +42,7 @@ class PsychLuaAPI
   final script:PsychLuaScript;
   final host:PsychLuaHost;
   final saves:Map<String, FlxSave> = [];
+  final diagnosticSaves:Map<String, String> = [];
   final shaderSources:Map<String, Array<String>> = [];
   final assetPaths:Map<String, String> = [];
   final animateOffsets:Map<FunkinSprite, Map<String, Array<Float>>> = [];
@@ -407,16 +408,49 @@ class PsychLuaAPI
     add('deleteFile', (name:String, ignoreMods:Bool = false) -> { var path = localPath(name); if (!FileSystem.exists(path) || FileSystem.isDirectory(path)) return false; FileSystem.deleteFile(path); return true; });
     add('directoryFileList', (name:String) -> FileSystem.readDirectory(localPath(name)));
     add('initSaveData', (name:String, folder:String = 'psychenginemods') -> {
+      if (host.game.isDiagnosticPlaytest)
+      {
+        if (!diagnosticSaves.exists(name)) diagnosticSaves.set(name, haxe.Json.stringify([folder, name]));
+        return;
+      }
       if (saves.exists(name)) return;
       var save = new FlxSave();
       var namespace = haxe.crypto.Sha256.encode(script.root).substr(0, 16);
       if (!save.bind(name.replace('/', '_').replace('\\', '_'), 'psychlua/' + namespace + '/' + folder.replace('/', '_').replace('\\', '_'))) throw 'Could not open save $name';
       saves.set(name, save);
     });
-    add('getDataFromSave', (name:String, field:String, fallback:Dynamic = null) -> { var value = Reflect.getProperty(save(name).data, field); return value == null ? fallback : value; });
-    add('setDataFromSave', (name:String, field:String, value:Dynamic) -> { Reflect.setProperty(save(name).data, field, value); return save(name).flush(); });
-    add('flushSaveData', (name:String) -> save(name).flush());
-    add('eraseSaveData', (name:String) -> save(name).erase());
+    add('getDataFromSave', (name:String, field:String, fallback:Dynamic = null) -> {
+      var session = host.game.diagnosticSession;
+      if (session != null) return session.getSave('psych', script.root, diagnosticSlot(name), field, fallback) ?? fallback;
+      var value = Reflect.getProperty(save(name).data, field);
+      return value == null ? fallback : value;
+    });
+    add('setDataFromSave', (name:String, field:String, value:Dynamic) -> {
+      var session = host.game.diagnosticSession;
+      if (session != null)
+      {
+        session.setSave('psych', script.root, diagnosticSlot(name), field, value);
+        return true;
+      }
+      Reflect.setProperty(save(name).data, field, value);
+      return save(name).flush();
+    });
+    add('flushSaveData', (name:String) -> {
+      if (!host.game.isDiagnosticPlaytest) return save(name).flush();
+      diagnosticSlot(name);
+      return true;
+    });
+    add('eraseSaveData', (name:String) -> {
+      var session = host.game.diagnosticSession;
+      if (session == null) return save(name).erase();
+      session.eraseSave('psych', script.root, diagnosticSlot(name));
+      return true;
+    });
+  }
+
+  function diagnosticSlot(name:String):String
+  {
+    return diagnosticSaves.get(name) ?? throw 'Call initSaveData first: $name';
   }
 
   function installShaders():Void
@@ -644,7 +678,8 @@ class PsychLuaAPI
       if (!canSkip || loop || !playOnLoad) throw 'This video backend supports skippable, non-looping, immediately played cutscenes only';
       var path = Paths.videos(file);
       if (!openfl.Assets.exists(path)) throw 'Video not found: $file';
-      funkin.play.cutscene.VideoCutscene.play(path, forMidSong ? funkin.play.cutscene.VideoCutscene.CutsceneType.MIDSONG : funkin.play.cutscene.VideoCutscene.CutsceneType.STARTING);
+      var assetPath = funkin.assets.Paths.file(Paths.stripLibrary(path), haxe.io.Path.extension(path), false, Paths.getLibrary(path));
+      funkin.play.cutscene.VideoCutscene.play(assetPath, forMidSong ? funkin.play.cutscene.VideoCutscene.CutsceneType.MIDSONG : funkin.play.cutscene.VideoCutscene.CutsceneType.STARTING);
       return true;
       #else
       if (!forMidSong) host.game.startCountdown();

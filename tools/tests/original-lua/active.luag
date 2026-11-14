@@ -1,0 +1,8 @@
+debugPrint('ORIGINAL_LUA_ACTIVE_SCRIPT_RAN')
+if require('luaslice_active_fixture') == 'active' then
+    debugPrint('ORIGINAL_LUA_ACTIVE_MODULE_RAN')
+end
+local loaded = pcall(require, 'luaslice_disabled_fixture')
+if loaded then
+    debugPrint('ORIGINAL_LUA_DISABLED_MODULE_RAN')
+end

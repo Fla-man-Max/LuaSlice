@@ -55,6 +55,18 @@ class ScriptRuntimeManager
       final normalized = Path.normalize(path);
       if (seen.exists(normalized) || !FileSystem.exists(normalized) || FileSystem.isDirectory(normalized)) continue;
       seen.set(normalized, true);
+      var extension = Path.extension(normalized).toLowerCase();
+      var backend = extension.startsWith('nx') ? 'NxScript' : 'SScript';
+      var session = luaslice.debug.ModDebugSession.current;
+      if (session != null)
+      {
+        session.scripts.discover(backend, '', normalized, false);
+        if (!session.scripts.isEnabled(backend, '', normalized))
+        {
+          session.scripts.note(backend, '', normalized, 'Disabled');
+          continue;
+        }
+      }
 
       try
       {
@@ -62,9 +74,12 @@ class ScriptRuntimeManager
         if (runtime == null) continue;
         manager ??= new ScriptRuntimeManager();
         manager.scripts.push(runtime);
+        session?.scripts.note(backend, '', normalized, 'Loaded');
       }
       catch (error:Dynamic)
       {
+        session?.scripts.note(backend, '', normalized, 'Load failed');
+        session?.diagnostics.record('error', normalized, Std.string(error), haxe.Timer.stamp());
         trace('[LuaSlice Scripts] Failed to load ${normalized}: ${Std.string(error)}');
       }
     }

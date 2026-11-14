@@ -6,13 +6,14 @@ import funkin.data.song.migrator.SongData_v2_1_0.SongMetadata_v2_1_0;
 import funkin.data.song.SongData.SongChartData;
 import funkin.data.song.SongData.SongMetadata;
 import funkin.data.song.SongData.SongMusicData;
-import funkin.play.song.ScriptedSong;
 import funkin.play.song.Song;
-import funkin.util.assets.DataAssets;
-import funkin.util.assets.ResourceCache;
 import funkin.util.VersionUtil;
 import funkin.util.tools.ISingleton;
 import funkin.data.DefaultRegistryImpl;
+#if FEATURE_MULTITHREADING
+import hx.concurrent.collection.SynchronizedMap;
+#end
+import funkin.assets.Assets;
 
 using funkin.data.song.migrator.SongDataMigrator;
 
@@ -24,7 +25,7 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
    * Handle breaking changes by incrementing this value
    * and adding migration to the `migrateStageData()` function.
    */
-  public static final SONG_METADATA_VERSION:thx.semver.Version = '2.2.4';
+  public static final SONG_METADATA_VERSION:thx.semver.Version = '2.2.8';
 
   public static final SONG_METADATA_VERSION_RULE:thx.semver.VersionRule = '2.2.x';
   public static final SONG_CHART_DATA_VERSION:thx.semver.Version = '2.0.0';
@@ -33,7 +34,11 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
   public static final SONG_MUSIC_DATA_VERSION_RULE:thx.semver.VersionRule = '2.0.x';
   public static var DEFAULT_GENERATEDBY(get, never):String;
 
+  #if FEATURE_MULTITHREADING
+  public var scriptedSongVariations:SynchronizedMap<String, Song> = SynchronizedMap.newStringMap(); // Use a thread safe map when needed.
+  #else
   public var scriptedSongVariations:Map<String, Song> = new Map<String, Song>();
+  #end
 
   static function get_DEFAULT_GENERATEDBY():String
   {
@@ -42,74 +47,53 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
 
   public function new()
   {
-    super('SONG', 'songs', SONG_METADATA_VERSION_RULE);
+    super({
+      registryId: 'SONG',
+      dataFilePath: 'gameplay/songs/',
+      // nestedEntries: true, // This registry uses custom parsing.
+      versionRule: SONG_METADATA_VERSION_RULE
+    });
   }
 
-  override public function loadEntries():Void
+  override function onScriptedEntryLoaded(clsName:String, entry:Song):Void
   {
-    clearEntries();
-
-    //
-    // SCRIPTED ENTRIES
-    //
-    var scriptedEntryClassNames:Array<String> = getScriptedClassNames();
-    log(' INFO '.info() + 'Parsing ${scriptedEntryClassNames.length} scripted entries...');
-
-    for (entryCls in scriptedEntryClassNames)
+    if (entry.variation != null)
     {
-      var entry:Song = createScriptedEntry(entryCls);
+      scriptedSongVariations.set('${entry.id}:${entry.variation}', entry);
+      log('Successfully created scripted entry (${clsName} = ${entry.id}, ${entry.variation})');
+    }
+    else
+    {
+      entries.set(entry.id, entry);
+      scriptedEntryIds.set(entry.id, clsName);
+      log('Successfully created scripted entry (${clsName} = ${entry.id})');
+    }
+  }
 
-      if (entry != null)
-      {
-        if (entry.variation != null)
-        {
-          scriptedSongVariations.set('${entry.id}:${entry.variation}', entry);
-          log('Successfully created scripted entry (${entryCls} = ${entry.id}, ${entry.variation})');
-        }
-        else
-        {
-          entries.set(entry.id, entry);
-          scriptedEntryIds.set(entry.id, entryCls);
-          log('Successfully created scripted entry (${entryCls} = ${entry.id})');
-        }
-      }
-      else
-      {
-        log('Failed to create scripted entry (${entryCls})');
-      }
+  override function countEntries():Int
+  {
+    // Account for song variations.
+    return entries.size() + scriptedSongVariations.size();
+  }
+
+  override function clearEntries():Void
+  {
+    log('Destroying ${countEntries()} entries in registry...');
+
+    for (entry in entries)
+    {
+      entry.destroy();
     }
 
-    //
-    // UNSCRIPTED ENTRIES
-    //
-    var entryIdList:Array<String> = DataAssets.listDataFilesInPath('songs/', '-metadata.json').map(function(songDataPath:String):String
+    // Override to clear song variations.
+    for (entry in scriptedSongVariations)
     {
-      return songDataPath.split('/')[0];
-    });
-    var unscriptedEntryIds:Array<String> = entryIdList.filter(function(entryId:String):Bool
-    {
-      return !entries.exists(entryId);
-    });
-    log('Parsing ${unscriptedEntryIds.length} unscripted entries...');
-    for (entryId in unscriptedEntryIds)
-    {
-      try
-      {
-        var entry:Null<Song> = createEntry(entryId);
-        if (entry != null)
-        {
-          log('Loaded entry data: ${entry}');
-          entries.set(entry.id, entry);
-        }
-      }
-      catch (e:Dynamic)
-      {
-        // Print the error.
-        log(' ERROR '.error() + 'Failed to load entry data: ${entryId}');
-        log(' ERROR '.error() + e);
-        continue;
-      }
+      entry.destroy();
     }
+
+    entries.clear();
+    scriptedEntryIds.clear();
+    scriptedSongVariations.clear();
   }
 
   /**
@@ -143,10 +127,14 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
     var variation:String = params?.variation ?? Constants.DEFAULT_VARIATION;
     if (variation != Constants.DEFAULT_VARIATION)
     {
-      final variationSongId:ScriptedSong = cast scriptedSongVariations.get('${id}:${variation}');
+      var variationSong:Null<Song> = cast scriptedSongVariations.get('${id}:${variation}');
       @:privateAccess
-      var path:String = variationSongId._asc.fullyQualifiedName;
-      return path;
+      if (variationSong != null && variationSong._asc != null)
+      {
+        @:privateAccess
+        var path:String = variationSong._asc.fullyQualifiedName;
+        return path;
+      }
     }
     return super.getScriptedEntryClassName(id, params);
   }
@@ -158,15 +146,12 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
   {
     var variation:String = params?.variation ?? Constants.DEFAULT_VARIATION;
 
-    if (variation != Constants.DEFAULT_VARIATION)
+    if (scriptedSongVariations.exists('${id}:${variation}'))
     {
-      if (scriptedSongVariations.exists('${id}:${variation}'))
+      var variationSongScript:Null<Song> = scriptedSongVariations.get('${id}:${variation}');
+      if (variationSongScript != null)
       {
-        var variationSongScript:Null<Song> = scriptedSongVariations.get('${id}:${variation}');
-        if (variationSongScript != null)
-        {
-          return variationSongScript;
-        }
+        return variationSongScript;
       }
     }
 
@@ -177,12 +162,16 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
   {
     variation = variation == null ? Constants.DEFAULT_VARIATION : variation;
 
-    var parser = new json2object.JsonParser<SongMetadata>();
-    parser.ignoreUnknownVariables = true;
+    var parser = new json2object.JsonParser<SongMetadata>({
+      ignoreUnknownVariables: true
+    });
 
     switch (loadEntryMetadataFile(id, variation))
     {
-      case {fileName: fileName, contents: contents}:
+      case {
+        fileName: fileName,
+        contents: contents
+      }:
         parser.fromJson(contents, fileName);
       default:
         return null;
@@ -200,8 +189,9 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
   {
     variation = variation == null ? Constants.DEFAULT_VARIATION : variation;
 
-    var parser = new json2object.JsonParser<SongMetadata>();
-    parser.ignoreUnknownVariables = true;
+    var parser = new json2object.JsonParser<SongMetadata>({
+      ignoreUnknownVariables: true
+    });
     parser.fromJson(contents, fileName);
 
     if (parser.errors.length > 0)
@@ -235,8 +225,7 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
     }
   }
 
-  public function parseEntryMetadataRawWithMigration(contents:String, ?fileName:String = 'raw', version:thx.semver.Version,
-      ?variation:String):Null<SongMetadata>
+  public function parseEntryMetadataRawWithMigration(contents:String, ?fileName:String = 'raw', version:thx.semver.Version, ?variation:String):Null<SongMetadata>
   {
     // If a version rule is not specified, do not check against it.
     if (SONG_METADATA_VERSION_RULE == null || VersionUtil.validateVersion(version, SONG_METADATA_VERSION_RULE))
@@ -261,12 +250,16 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
   {
     variation = variation == null ? Constants.DEFAULT_VARIATION : variation;
 
-    var parser = new json2object.JsonParser<SongMetadata_v2_1_0>();
-    parser.ignoreUnknownVariables = true;
+    var parser = new json2object.JsonParser<SongMetadata_v2_1_0>({
+      ignoreUnknownVariables: true
+    });
 
     switch (loadEntryMetadataFile(id, variation))
     {
-      case {fileName: fileName, contents: contents}:
+      case {
+        fileName: fileName,
+        contents: contents
+      }:
         parser.fromJson(contents, fileName);
       default:
         return null;
@@ -283,12 +276,16 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
   {
     variation = variation == null ? Constants.DEFAULT_VARIATION : variation;
 
-    var parser = new json2object.JsonParser<SongMetadata_v2_0_0>();
-    parser.ignoreUnknownVariables = true;
+    var parser = new json2object.JsonParser<SongMetadata_v2_0_0>({
+      ignoreUnknownVariables: true
+    });
 
     switch (loadEntryMetadataFile(id, variation))
     {
-      case {fileName: fileName, contents: contents}:
+      case {
+        fileName: fileName,
+        contents: contents
+      }:
         parser.fromJson(contents, fileName);
       default:
         return null;
@@ -303,8 +300,9 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
 
   function parseEntryMetadataRaw_v2_1_0(contents:String, ?fileName:String = 'raw'):Null<SongMetadata>
   {
-    var parser = new json2object.JsonParser<SongMetadata_v2_1_0>();
-    parser.ignoreUnknownVariables = true;
+    var parser = new json2object.JsonParser<SongMetadata_v2_1_0>({
+      ignoreUnknownVariables: true
+    });
     parser.fromJson(contents, fileName);
 
     if (parser.errors.length > 0)
@@ -317,8 +315,9 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
 
   function parseEntryMetadataRaw_v2_0_0(contents:String, ?fileName:String = 'raw'):Null<SongMetadata>
   {
-    var parser = new json2object.JsonParser<SongMetadata_v2_0_0>();
-    parser.ignoreUnknownVariables = true;
+    var parser = new json2object.JsonParser<SongMetadata_v2_0_0>({
+      ignoreUnknownVariables: true
+    });
     parser.fromJson(contents, fileName);
 
     if (parser.errors.length > 0)
@@ -333,12 +332,16 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
   {
     variation = variation == null ? Constants.DEFAULT_VARIATION : variation;
 
-    var parser = new json2object.JsonParser<SongMusicData>();
-    parser.ignoreUnknownVariables = false;
+    var parser = new json2object.JsonParser<SongMusicData>({
+      ignoreUnknownVariables: true
+    });
 
     switch (loadMusicDataFile(id, variation))
     {
-      case {fileName: fileName, contents: contents}:
+      case {
+        fileName: fileName,
+        contents: contents
+      }:
         parser.fromJson(contents, fileName);
       default:
         return null;
@@ -354,8 +357,9 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
 
   public function parseMusicDataRaw(contents:String, ?fileName:String = 'raw'):Null<SongMusicData>
   {
-    var parser = new json2object.JsonParser<SongMusicData>();
-    parser.ignoreUnknownVariables = false;
+    var parser = new json2object.JsonParser<SongMusicData>({
+      ignoreUnknownVariables: true
+    });
     parser.fromJson(contents, fileName);
 
     if (parser.errors.length > 0)
@@ -398,12 +402,16 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
   {
     variation = variation == null ? Constants.DEFAULT_VARIATION : variation;
 
-    var parser = new json2object.JsonParser<SongChartData>();
-    parser.ignoreUnknownVariables = true;
+    var parser = new json2object.JsonParser<SongChartData>({
+      ignoreUnknownVariables: true
+    });
 
     switch (loadEntryChartFile(id, variation))
     {
-      case {fileName: fileName, contents: contents}:
+      case {
+        fileName: fileName,
+        contents: contents
+      }:
         parser.fromJson(contents, fileName);
       default:
         return null;
@@ -421,8 +429,9 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
   {
     variation = variation == null ? Constants.DEFAULT_VARIATION : variation;
 
-    var parser = new json2object.JsonParser<SongChartData>();
-    parser.ignoreUnknownVariables = true;
+    var parser = new json2object.JsonParser<SongChartData>({
+      ignoreUnknownVariables: true
+    });
     parser.fromJson(contents, fileName);
 
     if (parser.errors.length > 0)
@@ -448,8 +457,7 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
     }
   }
 
-  public function parseEntryChartDataRawWithMigration(contents:String, ?fileName:String = 'raw', version:thx.semver.Version,
-      ?variation:String):Null<SongChartData>
+  public function parseEntryChartDataRawWithMigration(contents:String, ?fileName:String = 'raw', version:thx.semver.Version, ?variation:String):Null<SongChartData>
   {
     // If a version rule is not specified, do not check against it.
     if (SONG_CHART_DATA_VERSION_RULE == null || VersionUtil.validateVersion(version, SONG_CHART_DATA_VERSION_RULE))
@@ -462,41 +470,62 @@ class SongRegistry extends BaseRegistry<Song, SongMetadata, SongEntryParams> imp
     }
   }
 
+  override function fetchEntryIdsFromFiles():Array<String>
+  {
+    return funkin.modding.compat.RegistryData.listEntryIds(dataFilePath, '-metadata', true);
+  }
+
   function loadEntryMetadataFile(id:String, ?variation:String):Null<JsonFile>
   {
-    variation = variation == null ? Constants.DEFAULT_VARIATION : variation;
-    var entryFilePath:String = Paths.json('$dataFilePath/$id/$id-metadata${variation == Constants.DEFAULT_VARIATION ? '' : '-$variation'}');
-    if (!openfl.Assets.exists(entryFilePath))
+    try
     {
-      trace('  WARNING '.bold().bg_yellow() + ' Could not locate file $entryFilePath');
+      variation ??= Constants.DEFAULT_VARIATION;
+      var suffix = '-metadata${variation == Constants.DEFAULT_VARIATION ? '' : '-$variation'}';
+      return funkin.modding.compat.RegistryData.loadEntryData(id, suffix, dataFilePath, true);
+    }
+    catch (e)
+    {
+      log(' WARNING '.bold().bg_yellow() + ' Could not locate song metadata $id-$variation');
+      log(' WARNING '.bold().bg_yellow() + '   $e');
+      // throw e;
       return null;
     }
-    var rawJson:Null<String> = ResourceCache.getText(entryFilePath);
-    if (rawJson == null) return null;
-    rawJson = rawJson.trim();
-    return {fileName: entryFilePath, contents: rawJson};
   }
 
   function loadMusicDataFile(id:String, ?variation:String):Null<JsonFile>
   {
-    variation = variation == null ? Constants.DEFAULT_VARIATION : variation;
-    var entryFilePath:String = Paths.file('music/$id/$id-metadata${variation == Constants.DEFAULT_VARIATION ? '' : '-$variation'}.json');
-    if (!openfl.Assets.exists(entryFilePath)) return null;
-    var rawJson:String = ResourceCache.getText(entryFilePath);
+    variation ??= Constants.DEFAULT_VARIATION;
+    var entryFilePath:String = Paths.musicMetadata('$id', variation == Constants.DEFAULT_VARIATION ? '' : '-$variation');
+    if (!Assets.exists(entryFilePath))
+    {
+      trace('  WARNING '.bold().bg_yellow() + ' Could not locate file $entryFilePath');
+      return null;
+    }
+    @:privateAccess
+    var rawJson:String = Assets.getText(funkin.assets.Paths.raw(entryFilePath));
     if (rawJson == null) return null;
     rawJson = rawJson.trim();
-    return {fileName: entryFilePath, contents: rawJson};
+    return {
+      fileName: entryFilePath,
+      contents: rawJson
+    };
   }
 
   function loadEntryChartFile(id:String, ?variation:String):Null<JsonFile>
   {
-    variation = variation == null ? Constants.DEFAULT_VARIATION : variation;
-    var entryFilePath:String = Paths.json('$dataFilePath/$id/$id-chart${variation == Constants.DEFAULT_VARIATION ? '' : '-$variation'}');
-    if (!openfl.Assets.exists(entryFilePath)) return null;
-    var rawJson:String = ResourceCache.getText(entryFilePath);
-    if (rawJson == null) return null;
-    rawJson = rawJson.trim();
-    return {fileName: entryFilePath, contents: rawJson};
+    try
+    {
+      variation ??= Constants.DEFAULT_VARIATION;
+      var suffix = '-chart${variation == Constants.DEFAULT_VARIATION ? '' : '-$variation'}';
+      return funkin.modding.compat.RegistryData.loadEntryData(id, suffix, dataFilePath, true);
+    }
+    catch (e)
+    {
+      log(' WARNING '.bold().bg_yellow() + ' Could not locate song chart data $id-$variation');
+      log(' WARNING '.bold().bg_yellow() + '   $e');
+      // throw e;
+      return null;
+    }
   }
 
   public function fetchEntryMetadataVersion(id:String, ?variation:String):Null<thx.semver.Version>

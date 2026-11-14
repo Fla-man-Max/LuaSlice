@@ -259,6 +259,10 @@ class ScreenshotPlugin extends FlxBasic
    */
   public function capture():Void
   {
+    #if FEATURE_HAXEUI
+    if (haxe.ui.focus.FocusManager.instance.focus != null) return;
+    #end
+
     onPreScreenshot.dispatch();
 
     var shot:Bitmap = new Bitmap(BitmapData.fromImage(FlxG.stage.window.readPixels()));
@@ -311,9 +315,11 @@ class ScreenshotPlugin extends FlxBasic
   {
     if (stateChanging) return; // Flash off!
     flashSprite.alpha = 1;
-    FlxTween.tween(flashSprite, {alpha: 0}, 0.15);
+    FlxTween.tween(flashSprite, {
+      alpha: 0
+    }, 0.15);
 
-    FunkinSound.playOnce(Paths.sound('screenshot'), 1.0);
+    FunkinSound.playOnce(Paths.sound('ui/main-menu/screenshot'), 1.0);
   }
 
   static final PREVIEW_INITIAL_DELAY:Float = 0.25; // How long before the preview starts fading in.
@@ -380,7 +386,10 @@ class ScreenshotPlugin extends FlxBasic
     {
       // Fade in.
       changingAlpha = true;
-      FlxTween.tween(previewSprite, {alpha: targetAlpha, y: 0}, PREVIEW_FADE_IN_DURATION, {
+      FlxTween.tween(previewSprite, {
+        alpha: targetAlpha,
+        y: 0
+      }, PREVIEW_FADE_IN_DURATION, {
         ease: FlxEase.quartOut,
         onComplete: function(_)
         {
@@ -390,7 +399,10 @@ class ScreenshotPlugin extends FlxBasic
           {
             changingAlpha = true;
             // Fade out.
-            FlxTween.tween(previewSprite, {alpha: 0.0, y: 10}, PREVIEW_FADE_OUT_DURATION, {
+            FlxTween.tween(previewSprite, {
+              alpha: 0.0,
+              y: 10
+            }, PREVIEW_FADE_OUT_DURATION, {
               ease: FlxEase.quartInOut,
               onComplete: function(_)
               {

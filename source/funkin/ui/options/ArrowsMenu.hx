@@ -1,8 +1,8 @@
 package funkin.ui.options;
 
-#if mobile
+#if FEATURE_TOUCH_CONTROLS
 import funkin.Preferences;
-import funkin.mobile.ui.FunkinHitbox.FunkinHitboxControlSchemes;
+import funkin.touch.ui.FunkinHitbox.FunkinHitboxControlSchemes;
 
 class ArrowsMenu extends PreferencesMenu
 {

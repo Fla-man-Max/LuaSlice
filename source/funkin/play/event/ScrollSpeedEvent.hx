@@ -139,7 +139,7 @@ class ScrollSpeedEvent extends SongEvent
         type: SongEventFieldType.ENUM,
         keys: [
           'Linear' => 'linear',
-          'Instant (Ignores duration)' => 'INSTANT',
+          'Instant' => 'INSTANT',
           'Sine' => 'sine',
           'Quad' => 'quad',
           'Cube' => 'cube',
@@ -160,7 +160,11 @@ class ScrollSpeedEvent extends SongEvent
         tooltip: 'Rate of change of parameter over time.',
         defaultValue: SongEvent.DEFAULT_EASE_DIR,
         type: SongEventFieldType.ENUM,
-        keys: ['In' => 'In', 'Out' => 'Out', 'In/Out' => 'InOut']
+        keys: [
+          'In' => 'In',
+          'Out' => 'Out',
+          'In/Out' => 'InOut'
+        ]
       },
       {
         name: 'advanced',
@@ -175,7 +179,11 @@ class ScrollSpeedEvent extends SongEvent
             tooltip: 'The target strumline to change.',
             defaultValue: DEFAULT_STRUMLINE,
             type: SongEventFieldType.ENUM,
-            keys: ['Both' => 'both', 'Player' => 'player', 'Opponent' => 'opponent']
+            keys: [
+              'Both' => 'both',
+              'Player' => 'player',
+              'Opponent' => 'opponent'
+            ]
           },
           {
             name: 'absolute',

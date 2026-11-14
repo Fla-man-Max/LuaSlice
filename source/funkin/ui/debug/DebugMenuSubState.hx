@@ -5,12 +5,14 @@ import flixel.FlxObject;
 import flixel.FlxSprite;
 import funkin.ui.MusicBeatSubState;
 import funkin.ui.FullScreenScaleMode;
+import funkin.ui.mainmenu.MainMenuState;
 import funkin.audio.FunkinSound;
 import funkin.ui.TextMenuList;
 import funkin.ui.debug.charting.ChartEditorState;
 import funkin.util.logging.CrashHandler;
 import flixel.addons.transition.FlxTransitionableState;
 import funkin.util.FileUtil;
+import funkin.ui.transition.Transition;
 
 class DebugMenuSubState extends MusicBeatSubState
 {
@@ -28,8 +30,15 @@ class DebugMenuSubState extends MusicBeatSubState
     this.exitCallback = exitCallback;
   }
 
+  public static function queryAssets(type:funkin.assets.Assets.AssetType):Array<funkin.assets.Paths.AssetPath>
+  {
+    return funkin.ui.mainmenu.MainMenuState.queryAssets(type);
+  }
+
   override function create():Void
   {
+    transIn = null;
+    transOut = null;
     FlxTransitionableState.skipNextTransIn = true;
     super.create();
 
@@ -43,7 +52,7 @@ class DebugMenuSubState extends MusicBeatSubState
     FlxG.camera.follow(camFocusPoint, null, 0.06);
 
     // Create the green background.
-    var menuBG = new FlxSprite().loadGraphic(Paths.image('menuDesat'));
+    var menuBG = new FlxSprite().loadGraphic(Paths.image('ui/main-menu/menu-desat'));
     menuBG.color = 0xFF4CAF50;
     menuBG.setGraphicSize(Std.int(menuBG.width * 1.1 * FullScreenScaleMode.wideScale.x));
     menuBG.updateHitbox();
@@ -64,15 +73,17 @@ class DebugMenuSubState extends MusicBeatSubState
     #if FEATURE_CHART_EDITOR
     createItem("CHART EDITOR", openChartEditor);
     #end
-    #if FEATURE_ANIMATION_EDITOR
-    #if mobile
-    createItem("ANIMATION EDITOR [WIP]", openAnimationEditor);
-    #else
-    createItem("ANIMATION EDITOR", openAnimationEditor);
+    #if (FEATURE_HAXEUI && (windows || android))
+    createItem("TEST DEBUG EDITOR", openModDebugEditor);
     #end
+    #if FEATURE_CAMERA_EDITOR
+    createItem("CAMERA EDITOR", openCameraEditor);
     #end
     #if FEATURE_POLYMOD_MODS
     createItem("MOD MENU", openModMenu);
+    #end
+    #if FEATURE_ANIMATION_EDITOR
+    createItem("ANIMATION EDITOR", openAnimationEditor);
     #end
     #if FEATURE_STAGE_EDITOR
     createItem("STAGE EDITOR", openStageEditor);
@@ -85,6 +96,12 @@ class DebugMenuSubState extends MusicBeatSubState
     #end
     onMenuChange(items.members[0]);
     FlxG.camera.focusOn(new FlxPoint(camFocusPoint.x, camFocusPoint.y + 500));
+
+    #if (android && FEATURE_TOUCH_CONTROLS)
+    final back = new funkin.touch.ui.FunkinBackButton(FlxG.width - 230, FlxG.height - 200, exitDebugMenu, 0.8);
+    back.scrollFactor.set(0, 0);
+    add(back);
+    #end
 
     #if FEATURE_HAXEUI
     // Remove the "user" stylesheet to prevent components using incorrect style data when entering an editor.
@@ -103,7 +120,7 @@ class DebugMenuSubState extends MusicBeatSubState
 
     if (controls.BACK_P)
     {
-      FunkinSound.playOnce(Paths.sound('cancelMenu'));
+      FunkinSound.playOnce(Paths.sound('ui/main-menu/cancel-menu'));
       exitDebugMenu();
     }
   }
@@ -119,52 +136,81 @@ class DebugMenuSubState extends MusicBeatSubState
   #if FEATURE_CHART_EDITOR
   function openChartEditor():Void
   {
-    FlxTransitionableState.skipNextTransIn = true;
+    var chartEditorParams = {};
 
-    FlxG.switchState(() -> new ChartEditorState());
+    Transition.switchState(() -> new ChartEditorState(chartEditorParams), {
+      transition: Throbber,
+      assetQuery: ChartEditorState.queryAssets.bind(_, chartEditorParams)
+    });
+  }
+  #end
+
+  function openCharSelect():Void
+  {
+    Transition.switchState(() -> new funkin.ui.charSelect.CharacterSelectState(), {
+      transition: Throbber,
+      assetQuery: funkin.ui.transition.Transition.NO_ASSETS
+    });
+  }
+
+  #if (FEATURE_HAXEUI && (windows || android))
+  function openModDebugEditor():Void
+  {
+    Transition.switchState(() -> new funkin.ui.debug.moddebug.ModDebugEditorState(), {
+      transition: None,
+      assetQuery: Transition.NO_ASSETS,
+      shouldPurgeCache: false
+    });
+  }
+  #end
+
+  #if FEATURE_ANIMATION_EDITOR
+  function openAnimationEditor():Void
+  {
+    Transition.switchState(() -> new funkin.ui.debug.anim.DebugBoundingState(), {
+      transition: Throbber,
+      assetQuery: funkin.ui.transition.Transition.NO_ASSETS
+    });
+  }
+  #end
+
+  #if FEATURE_STAGE_EDITOR
+  function openStageEditor():Void
+  {
+    Transition.switchState(() -> new funkin.ui.debug.stageeditor.StageEditorState(), {
+      transition: Throbber,
+      assetQuery: funkin.ui.transition.Transition.NO_ASSETS
+    });
   }
   #end
 
   #if FEATURE_POLYMOD_MODS
   function openModMenu():Void
   {
-    FlxTransitionableState.skipNextTransIn = true;
-    FlxG.switchState(() -> new funkin.ui.modmenu.ModMenuState());
+    Transition.switchState(() -> new funkin.ui.modmenu.ModMenuState(), {
+      assetQuery: funkin.ui.modmenu.ModMenuState.queryAssets,
+      transition: Throbber
+    });
   }
   #end
 
-  function openCharSelect():Void
+  #if FEATURE_CAMERA_EDITOR
+  function openCameraEditor():Void
   {
-    FlxG.switchState(() -> new funkin.ui.charSelect.CharSelectSubState());
-  }
-
-  #if FEATURE_ANIMATION_EDITOR
-  function openAnimationEditor():Void
-  {
-    FlxG.switchState(() -> new funkin.ui.debug.anim.DebugBoundingState());
-    trace('Animation Editor');
-  }
-  #end
-
-  function testStickers():Void
-  {
-    openSubState(new funkin.ui.transition.stickers.StickerSubState({
-    }));
-    trace('opened stickers');
-  }
-
-  #if FEATURE_STAGE_EDITOR
-  function openStageEditor():Void
-  {
-    trace('Stage Editor');
-    FlxG.switchState(() -> new funkin.ui.debug.stageeditor.StageEditorState());
+    Transition.switchState(() -> new funkin.ui.debug.cameraeditor.CameraEditorState(), {
+      transition: None,
+      assetQuery: funkin.ui.transition.Transition.NO_ASSETS
+    });
   }
   #end
 
   #if FEATURE_RESULTS_DEBUG
   function openTestResultsScreen():Void
   {
-    FlxG.switchState(() -> new funkin.ui.debug.results.ResultsDebugSubState());
+    Transition.switchState(() -> new funkin.ui.debug.results.ResultsDebugSubState(), {
+      transition: None,
+      assetQuery: funkin.ui.transition.Transition.NO_ASSETS
+    });
   }
   #end
 

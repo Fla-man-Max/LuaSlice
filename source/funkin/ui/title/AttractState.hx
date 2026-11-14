@@ -1,5 +1,12 @@
 package funkin.ui.title;
 
+import funkin.ui.MusicBeatState;
+import funkin.ui.FullScreenScaleMode;
+import flixel.FlxG;
+import flixel.math.FlxMath;
+import flixel.util.FlxColor;
+import flixel.addons.display.FlxRadialGauge;
+import funkin.ui.transition.Transition;
 #if html5
 import funkin.graphics.video.FlxVideo;
 #end
@@ -9,12 +16,15 @@ import funkin.graphics.video.FunkinVideoSprite;
 #if FEATURE_TOUCH_CONTROLS
 import funkin.util.TouchUtil;
 #end
-import funkin.ui.MusicBeatState;
-import funkin.ui.FullScreenScaleMode;
-import flixel.FlxG;
-import flixel.math.FlxMath;
-import flixel.util.FlxColor;
-import flixel.addons.display.FlxRadialGauge;
+//
+// ~PATHS~
+//
+import funkin.assets.Assets;
+import funkin.assets.Paths.AssetPath;
+import funkin.assets.Paths.AnimateAtlasAssetPathBuilder;
+import funkin.assets.Paths.MusicAssetPathBuilder;
+import funkin.assets.ValidatedPaths as Paths;
+import funkin.assets.Paths as NewPaths;
 
 /**
  * After 40 seconds of inactivity on the title screen,
@@ -30,13 +40,15 @@ class AttractState extends MusicBeatState
    * @param path The path to the video to play.
    * This used
    */
-  static final VIDEO_PATHS:Array<
-    {path:String}> = [
-    {path: Paths.videos('riftCollabTrailer')},
-    {path: Paths.videos('mobileRelease')},
-    {path: Paths.videos('boyfriendEverywhere')}
+  static final VIDEO_PATHS:Array<AssetPath> = [
+    NewPaths.video('ui/title/attract/rift-collab-trailer'),
+    NewPaths.video('ui/title/attract/mobile-release'),
+    NewPaths.video('ui/title/attract/boyfriend-everywhere')
   ];
 
+  /**
+   * We used to play videos with a random weight, but now we use a pre-determined order.
+   */
   static var nextVideoToPlay:Int = 0;
 
   /**
@@ -46,6 +58,25 @@ class AttractState extends MusicBeatState
 
   var pie:FlxRadialGauge;
   var holdDelta:Float = 0;
+
+  /**
+   * Return a list of all AssetPaths that this substate depends on to load.
+   * This gets called AFTER the chart gets loaded manually.
+   * @param type The type of AssetPath to return a list of paths for.
+   * @param params The parameters to use when constructing the Controls Scheme Menu.
+   * @return The assets that the loading screen should cache.
+   */
+  public static function queryAssets(type:AssetType):Array<AssetPath>
+  {
+    switch (type)
+    {
+      case VIDEO:
+        return VIDEO_PATHS;
+
+      default:
+        return [];
+    }
+  }
 
   override public function create():Void
   {
@@ -57,13 +88,13 @@ class AttractState extends MusicBeatState
     }
 
     #if html5
-    var videoPath:String = getVideoPath();
+    var videoPath:AssetPath = getVideoPath();
     trace('Playing web video ${videoPath}');
     playVideoHTML5(videoPath);
     #end
 
     #if hxvlc
-    var videoPath:String = getVideoPath();
+    var videoPath:AssetPath = getVideoPath();
     trace('Playing native video ${videoPath}');
     playVideoNative(videoPath);
     #end
@@ -81,15 +112,11 @@ class AttractState extends MusicBeatState
    * Get the path of a random video to display to the user.
    * @return The video path to play.
    */
-  function getVideoPath():String
+  function getVideoPath():AssetPath
   {
-    var result:String = VIDEO_PATHS[nextVideoToPlay].path;
+    var result:AssetPath = VIDEO_PATHS[nextVideoToPlay];
 
     nextVideoToPlay = (nextVideoToPlay + 1) % VIDEO_PATHS.length;
-
-    #if html5
-    result = Paths.stripLibrary(result);
-    #end
 
     return result;
   }
@@ -97,10 +124,10 @@ class AttractState extends MusicBeatState
   #if html5
   var vid:FlxVideo;
 
-  function playVideoHTML5(filePath:String):Void
+  function playVideoHTML5(assetPath:AssetPath):Void
   {
     // Video displays OVER the FlxState.
-    vid = new FlxVideo(filePath);
+    vid = new FlxVideo(assetPath.toString());
     if (vid != null)
     {
       vid.zIndex = 0;
@@ -119,7 +146,7 @@ class AttractState extends MusicBeatState
   #if hxvlc
   var vid:FunkinVideoSprite;
 
-  function playVideoNative(filePath:String):Void
+  function playVideoNative(assetPath:AssetPath):Void
   {
     // Video displays OVER the FlxState.
     vid = new FunkinVideoSprite(0, 0);
@@ -144,7 +171,7 @@ class AttractState extends MusicBeatState
 
       add(vid);
 
-      if (vid.load(filePath)) vid.play();
+      if (vid.load(assetPath.toString())) vid.play();
     }
     else
     {
@@ -158,8 +185,12 @@ class AttractState extends MusicBeatState
     super.update(elapsed);
 
     // If the user presses any button or hold their screen for 1.5 seconds, skip the video.
-    if ((FlxG.keys.pressed.ANY && !controls.VOLUME_MUTE && !controls.VOLUME_UP && !controls.VOLUME_DOWN) #if FEATURE_TOUCH_CONTROLS
-      || TouchUtil.touch != null && TouchUtil.touch.pressed #end)
+    if ((
+      FlxG.keys.pressed.ANY
+      && !controls.VOLUME_MUTE
+      && !controls.VOLUME_UP
+      && !controls.VOLUME_DOWN
+    ) #if FEATURE_TOUCH_CONTROLS || TouchUtil.touch != null && TouchUtil.touch.pressed #end)
     {
       holdDelta += elapsed;
     }
@@ -202,6 +233,9 @@ class AttractState extends MusicBeatState
     vid = null;
     #end
 
-    FlxG.switchState(() -> new TitleState());
+    Transition.switchState(() -> new TitleState(), {
+      assetQuery: TitleState.queryAssets,
+      transition: BlackScreen(Fade(North), Fade(South))
+    });
   }
 }

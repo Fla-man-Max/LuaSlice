@@ -1,9 +1,10 @@
 package funkin;
 
-#if mobile
-import funkin.mobile.ui.FunkinHitbox;
-import funkin.mobile.input.ControlsHandler;
-import funkin.mobile.util.InAppPurchasesUtil;
+#if FEATURE_TOUCH_CONTROLS
+import funkin.touch.ui.FunkinHitbox;
+#end
+#if FEATURE_MOBILE_IAP
+import funkin.util.mobile.InAppPurchasesUtil;
 #end
 import funkin.save.Save;
 import funkin.util.WindowUtil;
@@ -115,7 +116,9 @@ class Preferences
 
   static function get_downscroll():Bool
   {
-    return Save?.instance?.options?.downscroll #if mobile ?? true #else ?? false #end;
+    final defaultValue:Bool = #if FEATURE_TOUCH_CONTROLS true #else false #end;
+    final saved = Save?.instance?.options?.downscroll ?? defaultValue;
+    return luaslice.debug.ModDebugSession.current?.option(Downscroll, saved) ?? saved;
   }
 
   static function set_downscroll(value:Bool):Bool
@@ -130,7 +133,8 @@ class Preferences
 
   static function get_middleScroll():Bool
   {
-    return Save?.instance?.options?.middleScroll ?? false;
+    final saved = Save?.instance?.options?.middleScroll ?? false;
+    return luaslice.debug.ModDebugSession.current?.option(MiddleScroll, saved) ?? saved;
   }
 
   static function set_middleScroll(value:Bool):Bool
@@ -171,7 +175,8 @@ class Preferences
 
   static function get_flashingLights():Bool
   {
-    return Save?.instance?.options?.flashingLights ?? true;
+    final saved = Save?.instance?.options?.flashingLights ?? true;
+    return luaslice.debug.ModDebugSession.current?.option(FlashingLights, saved) ?? saved;
   }
 
   static function set_flashingLights(value:Bool):Bool
@@ -204,7 +209,8 @@ class Preferences
 
   static function get_zoomCamera():Bool
   {
-    return Save?.instance?.options?.zoomCamera ?? true;
+    final saved = Save?.instance?.options?.zoomCamera ?? true;
+    return luaslice.debug.ModDebugSession.current?.option(CameraZoom, saved) ?? saved;
   }
 
   static function set_zoomCamera(value:Bool):Bool
@@ -710,6 +716,10 @@ class Preferences
     return value;
   }
 
+  /**
+   * Controls Scheme for the hitbox.
+   * @default `4 Lanes`
+   */
   public static var controlsScheme(get, set):String;
 
   static function get_controlsScheme():String
@@ -719,7 +729,8 @@ class Preferences
 
   static function set_controlsScheme(value:String):String
   {
-    Save.instance.options.controlsScheme = value;
+    var save:Save = Save.instance;
+    save.options.controlsScheme = value;
     Save.system.flush();
     return value;
   }
@@ -752,7 +763,6 @@ class Preferences
     Save.system.flush();
     return result;
   }
-
   #if mobile
   /**
    * If enabled, device will be able to sleep on its own.
@@ -774,6 +784,7 @@ class Preferences
     Save.system.flush();
     return value;
   }
+  #end
 
   #if FEATURE_MOBILE_IAP
   /**
@@ -799,6 +810,5 @@ class Preferences
     Save.system.flush();
     return value;
   }
-  #end
   #end
 }

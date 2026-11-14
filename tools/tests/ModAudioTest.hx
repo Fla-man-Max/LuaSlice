@@ -90,7 +90,11 @@ class ModAudioTest
     expect(callbackOnMain, label + ': completion callback runs on main thread');
     expect(future.value.channels == expected.channels && future.value.sampleRate == expected.sampleRate,
       label + ': decoded audio properties preserved');
-    expect(future.value.data.toBytes().compare(expected.data.toBytes()) == 0, label + ': decoded samples match original');
+    var actualView = future.value.data;
+    var expectedView = expected.data;
+    var actualSamples:Bytes = actualView.buffer.slice(actualView.byteOffset, actualView.byteOffset + actualView.byteLength);
+    var expectedSamples:Bytes = expectedView.buffer.slice(expectedView.byteOffset, expectedView.byteOffset + expectedView.byteLength);
+    expect(actualSamples.compare(expectedSamples) == 0, label + ': decoded samples match original');
     #if lime_threads
     expect(fs.lastReadThread != mainThread, label + ': file read runs off main thread');
     #end
@@ -128,8 +132,8 @@ class ModAudioTest
     var pcm = wav();
     var expectedWav = AudioBuffer.fromBytes(pcm);
     var expectedOgg = AudioBuffer.fromBytes(ogg);
-    expect(expectedWav != null && expectedWav.data != null && expectedWav.data.length == 882, 'Native WAV decoder available');
-    expect(expectedOgg != null && expectedOgg.data != null && expectedOgg.data.length > 0, 'Native OGG decoder available');
+    expect(expectedWav != null && expectedWav.data != null && expectedWav.data.byteLength == 882, 'Native WAV decoder available');
+    expect(expectedOgg != null && expectedOgg.data != null && expectedOgg.data.byteLength > 0, 'Native OGG decoder available');
 
     app = new Application();
     mainThread = Thread.current();
@@ -189,6 +193,6 @@ private class AudioTestFileSystem extends SysZipFileSystem
 
   public function closeFixtures():Void
   {
-    @:privateAccess for (parser in zipParsers) parser.fileHandle.close();
+    @:privateAccess for (parser in zipParsers) parser.persistFileHandle = false;
   }
 }

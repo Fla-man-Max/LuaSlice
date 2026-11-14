@@ -22,8 +22,7 @@ import funkin.save.Save;
 import funkin.save.Save.SaveScoreData;
 import funkin.ui.mainmenu.MainMenuState;
 import funkin.ui.MusicBeatState;
-import funkin.ui.transition.LoadingState;
-import funkin.ui.transition.stickers.StickerSubState;
+import funkin.ui.transition.Transition;
 import funkin.util.MathUtil;
 import funkin.util.SwipeUtil;
 import funkin.util.TouchUtil;
@@ -31,17 +30,23 @@ import funkin.ui.FullScreenScaleMode;
 #if FEATURE_DISCORD_RPC
 import funkin.api.discord.DiscordClient;
 #end
+// import funkin.assets.Assets as Paths;
+import funkin.assets.Paths;
+import funkin.assets.Assets;
 
+/**
+ * Handles the user interface for the Story Mode menu.
+ */
+@:nullSafety
 class StoryMenuState extends MusicBeatState
 {
-  static final DEFAULT_BACKGROUND_COLOR:FlxColor = FlxColor.fromString('#F9CF51');
   static final BACKGROUND_HEIGHT:Int = 400;
 
-  var currentDifficultyId:String = 'normal';
-  var currentLevelId:String = 'tutorial';
-  var currentLevel:Level;
-  var isLevelUnlocked:Bool;
-  var currentLevelTitle:LevelTitle;
+  var currentDifficultyId:String = Constants.DEFAULT_DIFFICULTY;
+  var currentLevelId:String = Constants.DEFAULT_LEVEL;
+  var currentLevel:Null<Level>;
+  var isLevelUnlocked:Bool = true;
+  var currentLevelTitle:Null<LevelTitle>;
   var highScore:Int = 42069420;
   var highScoreLerp:Int = 12345678;
   var exitingMenu:Bool = false;
@@ -53,75 +58,113 @@ class StoryMenuState extends MusicBeatState
   /**
    * The title of the level at the top.
    */
-  var levelTitleText:FlxText;
+  var levelTitleText:FlxText = new FlxText();
 
   /**
    * The score text at the top.
    */
-  var scoreText:FlxText;
+  var scoreText:FlxText = new FlxText();
 
   /**
    * The list of songs on the left.
    */
-  var tracklistText:FlxText;
+  var tracklistText:FlxText = new FlxText();
 
   /**
    * The titles of the levels in the middle.
    */
-  var levelTitles:FlxTypedGroup<LevelTitle>;
+  var levelTitles:FlxTypedGroup<LevelTitle> = new FlxTypedGroup<LevelTitle>();
 
   /**
    * The props in the center.
    */
-  var levelProps:FlxTypedGroup<LevelProp>;
+  var levelProps:FlxTypedGroup<LevelProp> = new FlxTypedGroup<LevelProp>();
 
   /**
    * The background behind the props.
    */
-  var levelBackground:FlxSprite;
+  var levelBackground:FunkinSprite = new FunkinSprite();
 
   /**
    * The left arrow of the difficulty selector.
    */
-  var leftDifficultyArrow:FlxSprite;
+  var leftDifficultyArrow:FunkinSprite = new FunkinSprite();
 
   /**
    * The right arrow of the difficulty selector.
    */
-  var rightDifficultyArrow:FlxSprite;
+  var rightDifficultyArrow:FunkinSprite = new FunkinSprite();
 
   /**
    * The text of the difficulty selector.
    */
-  var difficultySprite:FlxSprite;
+  var difficultySprite:Null<FunkinSprite> = new FunkinSprite();
 
   /**
    * List of available level IDs.
    */
-  var levelList:Array<String> = [];
+  var levelList:Array<String> = getLevelList();
 
-  var difficultySprites:Map<String, FlxSprite>;
-  var stickerSubState:StickerSubState;
+  var difficultySprites:Map<String, FunkinSprite> = [];
 
   static var rememberedLevelId:Null<String> = null;
   static var rememberedDifficulty:Null<String> = Constants.DEFAULT_DIFFICULTY;
 
-  public function new(?stickers:StickerSubState = null)
+  /**
+   * Return a list of all AssetPaths that this state depends on to load.
+   * @param type The type of AssetPath to return a list of paths for.
+   */
+  public static function queryAssets(type:AssetType):Array<AssetPath>
   {
-    super();
+    var results:Array<AssetPath> = [];
 
-    if (stickers?.members != null)
+    // Tally the assets needed by each Story Level.
+    var levelAssets:Array<AssetPath> = LevelRegistry.instance.queryAllAssets(type).filterNull();
+    results.appendUnique(levelAssets);
+
+    switch (type)
     {
-      stickerSubState = stickers;
+      case IMAGE:
+        var defaultDifficultySprites:Array<AssetPath> = Constants.DEFAULT_DIFFICULTY_LIST.map((diff) ->
+        {
+          return Paths.image('ui/story-mode/difficulties/$diff').orNull();
+        }).filterNull();
+
+        results.appendUnique([
+          Paths.image('ui/backspace'),
+          Paths.image('ui/story-mode/arrows'),
+          Paths.image('ui/story-mode/lock')
+        ]);
+        results.appendUnique(defaultDifficultySprites);
+
+      case XML:
+        var defaultDifficultySprites:Array<AssetPath> = Constants.DEFAULT_DIFFICULTY_LIST.map((diff) ->
+        {
+          return Paths.xml('ui/story-mode/difficulties/$diff', false).orNull();
+        }).filterNull();
+
+        results.appendUnique([
+          Paths.xml('ui/backspace'),
+          Paths.xml('ui/story-mode/arrows')
+        ]);
+        results.appendUnique(defaultDifficultySprites);
+
+      default:
+        // Nothing
     }
+
+    return results;
   }
 
-  override function create():Void
+  public function new()
   {
-    super.create();
+    super();
+  }
 
-    levelList = LevelRegistry.instance.listSortedLevelIds();
-    levelList = levelList.filter(function(id)
+  public static function getLevelList():Array<String>
+  {
+    var levelList = LevelRegistry.instance.listSortedLevelIds();
+    levelList = levelList.filter((id) ->
     {
       var levelData = LevelRegistry.instance.fetchEntry(id);
       if (levelData == null) return false;
@@ -130,21 +173,27 @@ class StoryMenuState extends MusicBeatState
     });
     if (levelList.length == 0) levelList = ['tutorial']; // Make sure there's at least one level to display.
 
-    difficultySprites = new Map<String, FlxSprite>();
+    return levelList;
+  }
+
+  override function create():Void
+  {
+    super.create();
+
+    currentLevel = LevelRegistry.instance.fetchEntry(Constants.DEFAULT_LEVEL) ?? LevelRegistry.instance.fetchEntry(levelList[0]);
+    if (currentLevel == null)
+    {
+      throw 'Could not find any level';
+    }
+
+    currentLevelTitle = new LevelTitle(0, 0, currentLevel);
+
+    difficultySprites = new Map<String, FunkinSprite>();
 
     transIn = FlxTransitionableState.defaultTransIn;
     transOut = FlxTransitionableState.defaultTransOut;
 
     playMenuMusic();
-
-    if (stickerSubState != null)
-    {
-      this.persistentUpdate = true;
-      this.persistentDraw = true;
-
-      openSubState(stickerSubState);
-      stickerSubState.degenStickers();
-    }
 
     persistentUpdate = persistentDraw = true;
 
@@ -152,7 +201,6 @@ class StoryMenuState extends MusicBeatState
 
     updateData();
 
-    levelTitles = new FlxTypedGroup<LevelTitle>();
     levelTitles.zIndex = 15;
     add(levelTitles);
 
@@ -162,26 +210,31 @@ class StoryMenuState extends MusicBeatState
     black.zIndex = levelBackground.zIndex - 1;
     add(black);
 
-    levelProps = new FlxTypedGroup<LevelProp>();
     levelProps.zIndex = 1000;
     add(levelProps);
 
     updateProps();
 
     // x on tracklistText is set/updated later, we dont need to init it
-    tracklistText = new FlxText(0, levelBackground.x + levelBackground.height + 100, 0, 'Tracks', 32);
-    tracklistText.setFormat('VCR OSD Mono', 32);
+    tracklistText.x = 0;
+    tracklistText.y = levelBackground.x + levelBackground.height + 100;
+    tracklistText.text = 'Tracks';
+    tracklistText.setFormat(Paths.font('ui/fonts/VCR OSD Mono'), 32);
     tracklistText.alignment = CENTER;
     tracklistText.color = 0xFFE55777;
     add(tracklistText);
 
-    scoreText = new FlxText(Math.max(FullScreenScaleMode.gameNotchSize.x, 10), 10, 0, 'HIGH SCORE: 42069420');
-    scoreText.setFormat('VCR OSD Mono', 32);
+    scoreText.x = Math.max(FullScreenScaleMode.gameNotchSize.x, 10);
+    scoreText.y = 10;
+    scoreText.text = 'HIGH SCORE: 42069420';
+    scoreText.setFormat(Paths.font('ui/fonts/VCR OSD Mono'), 32);
     scoreText.zIndex = 1000;
     add(scoreText);
 
-    levelTitleText = new FlxText(Math.max((FlxG.width * 0.7), FlxG.width - FullScreenScaleMode.gameNotchSize.x), 10, 0, 'LEVEL 1');
-    levelTitleText.setFormat('VCR OSD Mono', 32, FlxColor.WHITE, RIGHT);
+    levelTitleText.x = Math.max((FlxG.width * 0.7), FlxG.width - FullScreenScaleMode.gameNotchSize.x);
+    levelTitleText.y = 10;
+    levelTitleText.text = 'LEVEL 1';
+    levelTitleText.setFormat(funkin.assets.Paths.font('ui/fonts/VCR OSD Mono'), 32, FlxColor.WHITE, RIGHT);
     levelTitleText.alpha = 0.7;
     levelTitleText.visible = !Preferences.isLowQualityMinimal();
     levelTitleText.zIndex = 1000;
@@ -189,9 +242,10 @@ class StoryMenuState extends MusicBeatState
 
     buildLevelTitles();
 
-    final useNotch:Bool = Math.max(35, FullScreenScaleMode.gameNotchSize.x) != 35;
-    leftDifficultyArrow = new FlxSprite(FlxG.width - (useNotch ? (FullScreenScaleMode.gameNotchSize.x) + 410 : 410), 480);
-    leftDifficultyArrow.frames = Paths.getSparrowAtlas('storymenu/ui/arrows');
+    var useNotch:Bool = Math.max(35, FullScreenScaleMode.gameNotchSize.x) != 35;
+    leftDifficultyArrow.x = FlxG.width - (useNotch ? (FullScreenScaleMode.gameNotchSize.x) + 410 : 410);
+    leftDifficultyArrow.y = 480;
+    leftDifficultyArrow.frames = Paths.getSparrowAtlas('ui/story-mode/arrows');
     leftDifficultyArrow.animation.addByPrefix('idle', 'leftIdle0');
     leftDifficultyArrow.animation.addByPrefix('press', 'leftConfirm0');
     leftDifficultyArrow.animation.play('idle');
@@ -200,14 +254,15 @@ class StoryMenuState extends MusicBeatState
     buildDifficultySprite(Constants.DEFAULT_DIFFICULTY);
     buildDifficultySprite();
 
-    rightDifficultyArrow = new FlxSprite(FlxG.width - (useNotch ? FullScreenScaleMode.gameNotchSize.x * 1.5 : 35), leftDifficultyArrow.y);
+    rightDifficultyArrow.x = FlxG.width - (useNotch ? FullScreenScaleMode.gameNotchSize.x * 1.5 : 35);
+    rightDifficultyArrow.y = leftDifficultyArrow.y;
     rightDifficultyArrow.frames = leftDifficultyArrow.frames;
     rightDifficultyArrow.animation.addByPrefix('idle', 'rightIdle0');
     rightDifficultyArrow.animation.addByPrefix('press', 'rightConfirm0');
     rightDifficultyArrow.animation.play('idle');
     add(rightDifficultyArrow);
 
-    add(difficultySprite);
+    if (difficultySprite != null) add(difficultySprite);
 
     updateText();
     changeDifficulty();
@@ -216,10 +271,13 @@ class StoryMenuState extends MusicBeatState
 
     #if FEATURE_DISCORD_RPC
     // Updating Discord Rich Presence
-    DiscordClient.instance.setPresence({state: 'In the Menus', details: null});
+    DiscordClient.instance.setPresence({
+      state: 'In the Menus',
+      details: null
+    });
     #end
 
-    #if mobile
+    #if FEATURE_TOUCH_CONTROLS
     addBackButton(FlxG.width - 230, FlxG.height - 170, FlxColor.WHITE, goBack, 0.7);
     #end
 
@@ -232,17 +290,26 @@ class StoryMenuState extends MusicBeatState
   {
     if (rememberedLevelId != null)
     {
-      currentLevelId = rememberedLevelId;
+      final levelList:Array<String> = LevelRegistry.instance.listEntryIds();
+      if (!levelList.contains(rememberedLevelId))
+      {
+        rememberedLevelId = null;
+        rememberedDifficulty = null;
+
+        return;
+      }
+      else
+      {
+        currentLevelId = rememberedLevelId;
+      }
     }
-    if (rememberedDifficulty != null)
-    {
-      currentDifficultyId = rememberedDifficulty;
-    }
+
+    if (rememberedDifficulty != null) currentDifficultyId = rememberedDifficulty;
   }
 
   function playMenuMusic():Void
   {
-    FunkinSound.playMusic('freakyMenu', {
+    FunkinSound.playMusic('ui/main-menu/freaky-menu/freaky-menu', {
       overrideExisting: true,
       restartTrack: false,
       // Continue playing this music between states, until a different music track gets played.
@@ -252,41 +319,52 @@ class StoryMenuState extends MusicBeatState
 
   function updateData():Void
   {
-    currentLevel = LevelRegistry.instance.fetchEntry(currentLevelId);
-    if (currentLevel == null) throw 'Could not fetch data for level: ${currentLevelId}';
+    var newLevel:Null<Level> = LevelRegistry.instance.fetchEntry(currentLevelId);
+    if (newLevel == null) throw 'Could not fetch data for level: ${currentLevelId}';
+    currentLevel = newLevel;
+
     isLevelUnlocked = currentLevel == null ? false : currentLevel.isUnlocked();
   }
 
   function buildDifficultySprite(?diff:String):Void
   {
-    if (diff == null) diff = currentDifficultyId;
-    remove(difficultySprite);
+    diff ??= currentDifficultyId;
+    if (diff == null) throw 'Tried to build difficulty sprite for null!';
+
+    if (difficultySprite != null) remove(difficultySprite);
     difficultySprite = difficultySprites.get(diff);
     if (difficultySprite == null)
     {
-      difficultySprite = new FlxSprite(leftDifficultyArrow.x + leftDifficultyArrow.width + 10, leftDifficultyArrow.y);
+      difficultySprite = new FunkinSprite();
+      difficultySprite.x = leftDifficultyArrow.x + leftDifficultyArrow.width + 10;
+      difficultySprite.y = leftDifficultyArrow.y;
 
-      if (Assets.exists(Paths.file('images/storymenu/difficulties/${diff}.xml')))
+      if (Assets.exists(Paths.xml('ui/story-mode/difficulties/${diff}').toString()))
       {
-        difficultySprite.frames = Paths.getSparrowAtlas('storymenu/difficulties/${diff}');
+        difficultySprite.frames = Assets.getSparrowAtlas(Paths.image('ui/story-mode/difficulties/${diff}'));
         difficultySprite.animation.addByPrefix('idle', 'idle0', 24, true);
         if (Preferences.flashingLights) difficultySprite.animation.play('idle');
       }
       else
       {
-        difficultySprite.loadGraphic(Paths.image('storymenu/difficulties/${diff}'));
+        difficultySprite.loadGraphic(Paths.image('ui/story-mode/difficulties/${diff}').toFlxGraphicAsset());
       }
 
       difficultySprites.set(diff, difficultySprite);
 
-      difficultySprite.x += (difficultySprites.get(Constants.DEFAULT_DIFFICULTY).width - difficultySprite.width) / 2;
+      final DEFAULT_WIDTH:Float = difficultySprites.get(Constants.DEFAULT_DIFFICULTY)?.width ?? 0.0;
+      difficultySprite.x += (DEFAULT_WIDTH - difficultySprite.width) / 2;
     }
     difficultySprite.alpha = 0;
 
     difficultySprite.y = leftDifficultyArrow.y - 15;
     var targetY:Float = leftDifficultyArrow.y + 10;
-    targetY -= (difficultySprite.height - difficultySprites.get(Constants.DEFAULT_DIFFICULTY).height) / 2;
-    FlxTween.tween(difficultySprite, {y: targetY, alpha: 1}, 0.07);
+    final DEFAULT_HEIGHT:Float = difficultySprites.get(Constants.DEFAULT_DIFFICULTY)?.height ?? 0.0;
+    targetY -= (difficultySprite.height - DEFAULT_HEIGHT) / 2;
+    FlxTween.tween(difficultySprite, {
+      y: targetY,
+      alpha: 1
+    }, 0.07);
 
     add(difficultySprite);
   }
@@ -298,7 +376,7 @@ class StoryMenuState extends MusicBeatState
     for (levelIndex in 0...levelList.length)
     {
       var levelId:String = levelList[levelIndex];
-      var level:Level = LevelRegistry.instance.fetchEntry(levelId);
+      var level:Null<Level> = LevelRegistry.instance.fetchEntry(levelId);
       if (level == null || !level.isVisible()) continue;
 
       // TODO: Readd lock icon if unlocked is false.
@@ -319,7 +397,7 @@ class StoryMenuState extends MusicBeatState
     var commaSeparated:Bool = true;
     scoreText.text = 'LEVEL SCORE: ${FlxStringUtil.formatMoney(highScoreLerp, false, commaSeparated)}';
 
-    levelTitleText.text = currentLevel.getTitle();
+    levelTitleText.text = currentLevel?.getTitle() ?? 'Unknown';
 
     levelTitleText.x = FlxG.width - (levelTitleText.width + Math.max(10, FullScreenScaleMode.gameNotchSize.x)); // Right align.
 
@@ -335,9 +413,6 @@ class StoryMenuState extends MusicBeatState
 
   function handleKeyPresses():Void
   {
-    @:privateAccess
-    if ((stickerSubState?.switchingState ?? false)) return;
-
     if (!exitingMenu)
     {
       if (!selectedLevel)
@@ -366,7 +441,7 @@ class StoryMenuState extends MusicBeatState
           changeDifficulty(0);
         }
 
-        final wheelAmount:Int = Math.round(FlxMath.bound(FlxG.mouse.deltaWheel.y, -1, 1));
+        var wheelAmount:Int = Math.round(FlxMath.bound(FlxG.mouse.deltaWheel.y, -1, 1));
 
         if (wheelAmount != 0)
         {
@@ -374,26 +449,28 @@ class StoryMenuState extends MusicBeatState
         }
 
         // TODO: Querying UI_RIGHT_P (justPressed) after UI_RIGHT always returns false. Fix it!
-        if (controls.UI_RIGHT_P #if FEATURE_TOUCH_CONTROLS
+        if (controls.UI_RIGHT_P
+          #if FEATURE_TOUCH_CONTROLS
           || (SwipeUtil.swipeRight && TouchUtil.touch != null && TouchUtil.touch.deltaViewY < 10 && TouchUtil.touch.deltaViewY > -10)
-          || (TouchUtil.pressAction(rightDifficultyArrow, null, false)) #end)
+          || (TouchUtil.pressAction(rightDifficultyArrow, null, false))
+          #end)
         {
           #if FEATURE_TOUCH_CONTROLS
           @:privateAccess
-          if (TouchUtil.touch != null
-            && !TouchUtil.pressAction(rightDifficultyArrow, null, false)) TouchUtil.touch._startY = TouchUtil.touch.viewY;
+          if (TouchUtil.touch != null && !TouchUtil.pressAction(rightDifficultyArrow, null, false)) TouchUtil.touch._startY = TouchUtil.touch.viewY;
           #end
           changeDifficulty(1);
         }
 
-        if (controls.UI_LEFT_P #if FEATURE_TOUCH_CONTROLS
+        if (controls.UI_LEFT_P
+          #if FEATURE_TOUCH_CONTROLS
           || (SwipeUtil.swipeLeft && TouchUtil.touch != null && TouchUtil.touch.deltaViewY < 10 && TouchUtil.touch.deltaViewY > -10)
-          || (TouchUtil.pressAction(leftDifficultyArrow, null, false)) #end)
+          || (TouchUtil.pressAction(leftDifficultyArrow, null, false))
+          #end)
         {
           #if FEATURE_TOUCH_CONTROLS
           @:privateAccess
-          if (TouchUtil.touch != null
-            && !TouchUtil.pressAction(leftDifficultyArrow, null, false)) TouchUtil.touch._startY = TouchUtil.touch.viewY;
+          if (TouchUtil.touch != null && !TouchUtil.pressAction(leftDifficultyArrow, null, false)) TouchUtil.touch._startY = TouchUtil.touch.viewY;
           #end
           changeDifficulty(-1);
         }
@@ -423,14 +500,13 @@ class StoryMenuState extends MusicBeatState
       }
 
       #if FEATURE_TOUCH_CONTROLS
+      @:nullSafety(Off)
       if (!selectedLevel && TouchUtil.justReleased && !TouchUtil.overlaps(leftDifficultyArrow) && !SwipeUtil.justSwipedAny)
       {
         for (i in 0...levelTitles.members.length)
         {
           final item = levelTitles.members[i];
-          final selectedItem = levelTitles.members[
-            levelList.indexOf(currentLevelId)
-          ];
+          final selectedItem = levelTitles.members[levelList.indexOf(currentLevelId)];
 
           if (!TouchUtil.pressAction(item, null, false)) continue;
 
@@ -485,7 +561,7 @@ class StoryMenuState extends MusicBeatState
       }
     }
 
-    if (currentIndex != prevIndex) FunkinSound.playOnce(Paths.sound('scrollMenu'), 0.4);
+    if (currentIndex != prevIndex) FunkinSound.playOnce(Paths.sound('ui/main-menu/scroll-menu').toFlxSoundAsset(), 0.4);
 
     repositionTitles();
     updateText();
@@ -500,11 +576,8 @@ class StoryMenuState extends MusicBeatState
    */
   function changeDifficulty(change:Int = 0):Void
   {
-    // "For now, NO erect in story mode" -Dave
+    var difficultyList:Array<String> = currentLevel?.getDifficulties() ?? ['normal'];
 
-    var difficultyList:Array<String> = currentLevel.getDifficulties().filter(e -> Constants.DEFAULT_DIFFICULTY_LIST.contains(e));
-    // Use this line to displays all difficulties
-    // var difficultyList:Array<String> = currentLevel.getDifficulties();
     var currentIndex:Int = difficultyList.indexOf(currentDifficultyId);
 
     currentIndex += change;
@@ -514,7 +587,7 @@ class StoryMenuState extends MusicBeatState
     if (currentIndex >= difficultyList.length) currentIndex = 0;
 
     var hasChanged:Bool = currentDifficultyId != difficultyList[currentIndex];
-    currentDifficultyId = difficultyList[currentIndex];
+    currentDifficultyId = difficultyList[currentIndex] ?? Constants.DEFAULT_DIFFICULTY;
     rememberedDifficulty = currentDifficultyId;
 
     if (difficultyList.length <= 1)
@@ -531,7 +604,7 @@ class StoryMenuState extends MusicBeatState
     if (hasChanged)
     {
       buildDifficultySprite();
-      FunkinSound.playOnce(Paths.sound('scrollMenu'), 0.4);
+      FunkinSound.playOnce(Paths.sound('ui/main-menu/scroll-menu').toFlxSoundAsset(), 0.4);
       // Disable the funny music thing for now.
       // funnyMusicThing();
     }
@@ -540,40 +613,29 @@ class StoryMenuState extends MusicBeatState
     refresh();
   }
 
-  final FADE_OUT_TIME:Float = 1.5;
-
-  function funnyMusicThing():Void
-  {
-    if (currentDifficultyId == 'nightmare')
-    {
-      FlxG.sound.music.fadeOut(FADE_OUT_TIME, 0.0);
-    }
-    else
-    {
-      FlxG.sound.music.fadeOut(FADE_OUT_TIME, 1.0);
-    }
-  }
-
-  override public function dispatchEvent(event:ScriptEvent):Void
+  override public function dispatchEvent(event:ScriptEvent, finish:Bool = true):Void
   {
     // super.dispatchEvent(event) dispatches event to module scripts.
-    super.dispatchEvent(event);
+    super.dispatchEvent(event, false);
 
     if (levelProps?.members != null && levelProps.members.length > 0)
     {
       // Dispatch event to props.
       for (prop in levelProps.members)
       {
+        if (selectedLevel && prop != null && prop.hasAnimation('confirm')) continue;
         ScriptEventDispatcher.callEvent(prop, event);
       }
     }
+
+    if (finish) event.finish();
   }
 
   function selectLevel():Void
   {
-    if (!currentLevel.isUnlocked())
+    if (!(currentLevel?.isUnlocked() ?? false))
     {
-      FunkinSound.playOnce(Paths.sound('cancelMenu'));
+      FunkinSound.playOnce(Paths.sound('ui/main-menu/cancel-menu').toFlxSoundAsset());
       return;
     }
 
@@ -581,59 +643,78 @@ class StoryMenuState extends MusicBeatState
 
     selectedLevel = true;
 
-    FunkinSound.playOnce(Paths.sound('confirmMenu'));
+    FunkinSound.playOnce(Paths.sound('ui/main-menu/confirm-menu').toFlxSoundAsset());
 
-    currentLevelTitle.isFlashing = true;
+    if (currentLevelTitle != null)
+    {
+      currentLevelTitle.isFlashing = true;
+    }
 
     for (prop in levelProps.members)
     {
       prop.playConfirm();
     }
 
-    Paths.setCurrentLevel(currentLevel.id);
-
-    PlayStatePlaylist.playlistSongIds = currentLevel.getSongs();
+    PlayStatePlaylist.playlistSongIds = currentLevel?.getSongs() ?? [];
     PlayStatePlaylist.isStoryMode = true;
     PlayStatePlaylist.campaignScore = 0;
 
-    var targetSongId:String = PlayStatePlaylist.playlistSongIds.shift();
+    var targetSongId:String = PlayStatePlaylist.playlistSongIds.shift() ?? Constants.DEFAULT_SONG;
 
-    var targetSong:Song = SongRegistry.instance.fetchEntry(targetSongId, {variation: Constants.DEFAULT_VARIATION});
+    var targetSong:Null<Song> = SongRegistry.instance.fetchEntry(targetSongId, {
+      variation: Constants.DEFAULT_VARIATION
+    });
 
-    PlayStatePlaylist.campaignId = currentLevel.id;
-    PlayStatePlaylist.campaignTitle = currentLevel.getTitle();
-    PlayStatePlaylist.campaignDifficulty = currentDifficultyId;
+    if (targetSong == null)
+    {
+      FlxG.log.warn('WARN: could not find song with id (${targetSongId})');
+      return;
+    }
+
+    PlayStatePlaylist.campaignId = currentLevel?.id ?? Constants.DEFAULT_LEVEL;
+    PlayStatePlaylist.campaignTitle = currentLevel?.getTitle() ?? 'Unknown';
+    PlayStatePlaylist.campaignDifficulty = currentDifficultyId ?? Constants.DEFAULT_DIFFICULTY;
 
     Highscore.talliesLevel = new funkin.Highscore.Tallies();
 
-    new FlxTimer().start(1, function(tmr:FlxTimer)
+    new FlxTimer().start(1, (tmr:FlxTimer) ->
     {
-      #if mobile
-      FlxTween.tween(backButton, {alpha: 0}, 0.2, {ease: FlxEase.quadOut});
+      #if FEATURE_TOUCH_CONTROLS
+      FlxTween.tween(backButton, {
+        alpha: 0
+      }, 0.2, {
+        ease: FlxEase.quadOut
+      });
       #end
 
       FlxTransitionableState.skipNextTransIn = false;
       FlxTransitionableState.skipNextTransOut = false;
 
-      var targetVariation:String = targetSong.getFirstValidVariation(PlayStatePlaylist.campaignDifficulty);
+      var targetVariation:Null<String> = targetSong.getFirstValidVariation(PlayStatePlaylist.campaignDifficulty);
 
-      FlxG.camera.fade(FlxColor.BLACK, 0.2, false, function()
+      FlxG.camera.fade(FlxColor.BLACK, 0.2, false, () ->
       {
-        LoadingState.loadPlayState({
-          targetSong: targetSong,
+        // Null safety kinda stupid......
+        if (targetSong == null) throw 'Bwuh?';
+        var targetSongNotNull:Song = targetSong;
+
+        funkin.ui.transition.Transition.openPlayState({
+          targetSong: targetSongNotNull,
           targetDifficulty: PlayStatePlaylist.campaignDifficulty,
           targetVariation: targetVariation
-        }, true);
+        }, {
+          transition: LoadingScreen(None, Fade(South))
+        }, false);
       });
     });
   }
 
-  function updateBackground(?previousLevelId:String = ''):Void
+  function updateBackground(previousLevelId:String = ''):Void
   {
     if (levelBackground == null || previousLevelId == '')
     {
       // Build a new background and display it immediately.
-      levelBackground = currentLevel.buildBackground();
+      levelBackground = currentLevel?.buildBackground() ?? new FunkinSprite().makeSolidColor(FlxG.width, 400, FlxColor.WHITE);
       levelBackground.x = 0;
       levelBackground.y = 56;
       levelBackground.zIndex = 100;
@@ -642,19 +723,23 @@ class StoryMenuState extends MusicBeatState
     }
     else
     {
-      var previousLevel = LevelRegistry.instance.fetchEntry(previousLevelId);
+      var previousLevel:Null<Level> = LevelRegistry.instance.fetchEntry(previousLevelId);
 
-      if (currentLevel.isBackgroundSimple() && previousLevel.isBackgroundSimple())
+      var shouldEaseColor:Bool = (currentLevel?.isBackgroundSimple() ?? true) && (previousLevel != null && previousLevel.isBackgroundSimple());
+
+      if (shouldEaseColor)
       {
-        var previousColor:FlxColor = previousLevel.getBackgroundColor();
-        var currentColor:FlxColor = currentLevel.getBackgroundColor();
+        var previousColor:FlxColor = previousLevel?.getBackgroundColor() ?? Constants.DEFAULT_COLOR_STORY_LEVEL;
+        var currentColor:FlxColor = currentLevel?.getBackgroundColor() ?? Constants.DEFAULT_COLOR_STORY_LEVEL;
         if (previousColor != currentColor)
         {
           // Both the previous and current level were simple backgrounds.
           // Fade between colors directly, rather than fading one background out and another in.
           // cancels potential tween in progress, and tweens from there
           FlxTween.cancelTweensOf(levelBackground);
-          FlxTween.color(levelBackground, 0.9, levelBackground.color, currentColor, {ease: FlxEase.quartOut});
+          FlxTween.color(levelBackground, 0.9, levelBackground.color, currentColor, {
+            ease: FlxEase.quartOut
+          });
         }
         else
         {
@@ -668,23 +753,27 @@ class StoryMenuState extends MusicBeatState
 
         // Reference the old background and fade it out.
         var oldBackground:FlxSprite = levelBackground;
-        FlxTween.tween(oldBackground, {alpha: 0.0}, 0.6, {
+        FlxTween.tween(oldBackground, {
+          alpha: 0.0
+        }, 0.6, {
           ease: FlxEase.linear,
-          onComplete: function(_)
+          onComplete: (_) ->
           {
             remove(oldBackground);
           }
         });
 
         // Build a new background and fade it in.
-        levelBackground = currentLevel.buildBackground();
+        levelBackground = currentLevel?.buildBackground() ?? new FunkinSprite().makeSolidColor(FlxG.width, 400, FlxColor.WHITE);
         levelBackground.x = 0;
         levelBackground.y = 56;
         levelBackground.alpha = 0.0; // Hidden to start.
         levelBackground.zIndex = 100;
         add(levelBackground);
 
-        FlxTween.tween(levelBackground, {alpha: 1.0}, 0.6, {
+        FlxTween.tween(levelBackground, {
+          alpha: 1.0
+        }, 0.6, {
           ease: FlxEase.linear
         });
       }
@@ -699,7 +788,7 @@ class StoryMenuState extends MusicBeatState
       return;
     }
 
-    for (ind => prop in currentLevel.buildProps(levelProps.members))
+    for (ind => prop in currentLevel?.buildProps(levelProps.members) ?? [])
     {
       prop.x += (FullScreenScaleMode.gameCutoutSize.x / 4);
       prop.zIndex = 1000;
@@ -712,7 +801,7 @@ class StoryMenuState extends MusicBeatState
   function updateText():Void
   {
     tracklistText.text = 'TRACKS\n\n';
-    tracklistText.text += currentLevel.getSongDisplayNames(currentDifficultyId).join('\n');
+    tracklistText.text += (currentLevel?.getSongDisplayNames(currentDifficultyId) ?? []).join('\n');
 
     tracklistText.screenCenter(X);
     tracklistText.x -= (FlxG.width * 0.33);
@@ -725,18 +814,21 @@ class StoryMenuState extends MusicBeatState
   function goBack():Void
   {
     @:privateAccess
-    if (exitingMenu || selectedLevel || (stickerSubState?.switchingState ?? false)) return;
+    if (exitingMenu || selectedLevel) return;
 
     exitingMenu = true;
     FlxG.keys.enabled = false;
-    FlxG.switchState(() -> new MainMenuState());
-    FunkinSound.playOnce(Paths.sound('cancelMenu'));
+    Transition.switchState(() -> new MainMenuState(), {
+      assetQuery: MainMenuState.queryAssets,
+      transition: BlackScreen(Fade(North), Fade(South)),
+    });
+    FunkinSound.playOnce(Paths.sound('ui/main-menu/cancel-menu').toFlxSoundAsset());
   }
 
   /**
    * Reposition titles based on the currently selected one.
    */
-  function repositionTitles()
+  function repositionTitles():Void
   {
     var currentIndex:Int = levelList.indexOf(currentLevelId);
 

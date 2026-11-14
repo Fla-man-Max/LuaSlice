@@ -21,6 +21,7 @@ class LuaOptionManager
   static final SAVE_KEY:String = 'LuaSliceLuaOptions';
   var owner:LuaScriptManager;
   var pages:Map<String, LuaOptionPage> = [];
+  var diagnosticOptions:Dynamic;
 
   public function new(owner:LuaScriptManager)
   {
@@ -34,7 +35,7 @@ class LuaOptionManager
     if (!Reflect.hasField(options, name))
     {
       Reflect.setField(options, name, defaultValue);
-      Save.instance.setModOptions(SAVE_KEY, options);
+      if (luaslice.debug.ModDebugSession.current == null) Save.instance.setModOptions(SAVE_KEY, options);
     }
     return Reflect.field(options, name);
   }
@@ -51,7 +52,7 @@ class LuaOptionManager
     if (name == '') return false;
     var options = getOptionsObject();
     Reflect.setField(options, name, value);
-    if (flush) Save.instance.setModOptions(SAVE_KEY, options);
+    if (flush && luaslice.debug.ModDebugSession.current == null) Save.instance.setModOptions(SAVE_KEY, options);
     return true;
   }
 
@@ -66,7 +67,7 @@ class LuaOptionManager
     if (name == '') return false;
     var options = getOptionsObject();
     var existed = Reflect.deleteField(options, name);
-    if (flush && existed) Save.instance.setModOptions(SAVE_KEY, options);
+    if (flush && existed && luaslice.debug.ModDebugSession.current == null) Save.instance.setModOptions(SAVE_KEY, options);
     return existed;
   }
 
@@ -223,6 +224,15 @@ class LuaOptionManager
   }
   function getOptionsObject():Dynamic
   {
+    if (luaslice.debug.ModDebugSession.current != null)
+    {
+      if (diagnosticOptions == null)
+      {
+        var original = Save.instance.modOptions.get(SAVE_KEY);
+        diagnosticOptions = original == null ? {} : Json.parse(Json.stringify(original));
+      }
+      return diagnosticOptions;
+    }
     return Save.instance.getModOptions(SAVE_KEY);
   }
 

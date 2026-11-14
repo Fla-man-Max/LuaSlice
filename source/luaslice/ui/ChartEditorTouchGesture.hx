@@ -96,7 +96,8 @@ class ChartEditorTouchGesture
       return Press;
     }
 
-    held += Math.max(0, elapsed);
+    // A bad frame timestamp must not make the rest of this gesture permanently NaN.
+    if (Math.isFinite(elapsed)) held += Math.max(0, elapsed);
     if (held + 0.000001 >= normalizeDuration(duration))
     {
       phase = Blocked;

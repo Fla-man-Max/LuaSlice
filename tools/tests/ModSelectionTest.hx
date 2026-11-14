@@ -6,6 +6,13 @@ class ModSelectionTest
 
   static function main():Void
   {
+    var mods = [{id: 'sky-id', dirName: 'Sky Folder'}, {id: 'neon-id', dirName: 'neon'}, {id: 'neon', dirName: 'collision'}];
+    assertArray('Legacy directories become IDs in saved order', ModSelection.toModIds(['neon', 'Sky Folder'], mods), ['neon', 'sky-id']);
+    assertArray('Current IDs take priority over coincident directory names', ModSelection.toModIds(['neon-id', 'neon'], mods), ['neon-id', 'neon']);
+    assertArray('Duplicate aliases collapse after conversion', ModSelection.toModIds(['Sky Folder', 'sky-id'], mods), ['sky-id']);
+    assertArray('Unresolved installed entries survive invalid metadata', ModSelection.toModIds(['broken'], mods), ['broken']);
+    assertArray('Empty selection is intentionally disabled', ModSelection.toModIds([], mods), []);
+    assertArray('IDs map back to directories for legacy known-mod tracking', ModSelection.toModDirs(['sky-id', 'neon-id', 'broken'], mods), ['Sky Folder', 'neon', 'broken']);
     expect("Fresh mobile installs are enabled", [], [], ["sky", "neon"], ["sky", "neon"], true,
       ["sky", "neon"], ["sky", "neon"]);
 

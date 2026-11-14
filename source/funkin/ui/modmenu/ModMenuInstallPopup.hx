@@ -4,19 +4,22 @@ import flixel.FlxG;
 import flixel.math.FlxRect;
 import flixel.text.FlxText;
 import flixel.util.FlxColor;
+import funkin.graphics.FunkinAnimationDecoder;
 import funkin.graphics.FunkinSprite;
 import funkin.group.FunkinGroup.FunkinSpriteGroup;
 import funkin.ui.FullScreenScaleMode;
+import funkin.ui.ScrollingTextBox;
 
 /**
  * The card shown in the corner while a one-click install runs.
  */
+@:access(lime.graphics.Image)
 class ModMenuInstallPopup extends FunkinSpriteGroup
 {
   static inline final ICON_SIZE:Int = 96;
-
   static inline final CARD_WIDTH:Int = 350;
   static inline final TEXT_WIDTH:Int = 246;
+  static inline final TITLE_HEIGHT:Int = 42;
   static inline final PADDING:Int = 8;
   static inline final PROMPT_HEIGHT:Int = 30;
   static inline final BAR_HEIGHT:Int = 6;
@@ -27,8 +30,9 @@ class ModMenuInstallPopup extends FunkinSpriteGroup
   public var state(default, null):ModMenuInstallState = Hidden;
 
   var background:FunkinSprite;
+  var modIconDecoder:Null<FunkinAnimationDecoder>;
   var modIcon:FunkinSprite;
-  var titleText:FlxText;
+  var titleText:ScrollingTextBox;
   var detailText:FlxText;
   var promptText:FlxText;
   var barBackground:FunkinSprite;
@@ -91,7 +95,7 @@ class ModMenuInstallPopup extends FunkinSpriteGroup
 
     background = new FunkinSprite(0, 0);
     background.makeSolidColor(CARD_WIDTH, cardHeight, FlxColor.BLACK);
-    background.alpha = 0.72;
+    background.localAlpha = 0.72;
     background.scrollFactor.set(0, 0);
     add(background);
 
@@ -100,52 +104,50 @@ class ModMenuInstallPopup extends FunkinSpriteGroup
     modIcon.scrollFactor.set();
     modIcon.antialiasing = true;
     modIcon.setGraphicSize(ICON_SIZE, ICON_SIZE);
+    modIcon.localScale.x = modIcon.scale.x;
+    modIcon.localScale.y = modIcon.scale.y;
     modIcon.updateHitbox();
-    modIcon.x = PADDING;
-    modIcon.y = PADDING;
+    modIcon.localX = PADDING;
+    modIcon.localY = PADDING;
     add(modIcon);
 
-    titleText = new FlxText(0, 0, TEXT_WIDTH);
-    titleText.setFormat(Paths.font('FunkinLingLong.otf'), 30, FlxColor.WHITE);
-    titleText.scale.set(1, 0.8);
-    titleText.fieldHeight = 42;
-    titleText.x = PADDING + ICON_SIZE + PADDING;
-    titleText.y = PADDING;
+    titleText = new ScrollingTextBox(TEXT_WIDTH - 16, TITLE_HEIGHT, funkin.assets.Paths.font('ui/fonts/FunkinLingLong', 'otf'), 30, FlxColor.WHITE);
+    titleText.localX = PADDING + ICON_SIZE + PADDING;
+    titleText.localY = PADDING;
     titleText.scrollFactor.set(0, 0);
+    titleText.scrolling = true;
     add(titleText);
 
-    setChildClipRect(titleText, FlxRect.get(0, 0, TEXT_WIDTH, 32));
-
     detailText = new FlxText(0, 0, TEXT_WIDTH);
-    detailText.setFormat(Paths.font('FunkinLingLong.otf'), 20, FlxColor.WHITE);
+    detailText.setFormat(funkin.assets.Paths.font('ui/fonts/FunkinLingLong', 'otf'), 20, FlxColor.WHITE);
     detailText.fieldHeight = 64;
-    detailText.x = titleText.x;
-    detailText.y = PADDING + 36;
+    detailText.localX = titleText.localX;
+    detailText.localY = PADDING + 36;
     detailText.scrollFactor.set(0, 0);
     add(detailText);
 
     barBackground = new FunkinSprite(0, 0);
     barBackground.makeSolidColor(ICON_SIZE, BAR_HEIGHT, 0xFF3C3C4B);
-    barBackground.x = PADDING;
-    barBackground.y = PADDING + ICON_SIZE - BAR_HEIGHT;
+    barBackground.localX = PADDING;
+    barBackground.localY = PADDING + ICON_SIZE - BAR_HEIGHT;
     barBackground.scrollFactor.set(0, 0);
     add(barBackground);
 
     barFill = new FunkinSprite(0, 0);
 
     barFill.makeGraphic(ICON_SIZE, BAR_HEIGHT, 0xFF00C9FF);
-    barFill.x = barBackground.x;
-    barFill.y = barBackground.y;
+    barFill.localX = barBackground.localX;
+    barFill.localY = barBackground.localY;
     barFill.scrollFactor.set(0, 0);
     add(barFill);
 
     barClip = FlxRect.get(0, 0, 0, BAR_HEIGHT);
-    setChildClipRect(barFill, barClip);
+    barFill.clipRect = barClip;
 
     promptText = new FlxText(0, 0, CARD_WIDTH - (PADDING * 2));
-    promptText.setFormat(Paths.font('FunkinLingLong.otf'), 20, FlxColor.WHITE, FlxTextAlign.CENTER);
-    promptText.x = PADDING;
-    promptText.y = PADDING + ICON_SIZE + 4;
+    promptText.setFormat(funkin.assets.Paths.font('ui/fonts/FunkinLingLong', 'otf'), 20, FlxColor.WHITE, FlxTextAlign.CENTER);
+    promptText.localX = PADDING;
+    promptText.localY = PADDING + ICON_SIZE + 4;
     promptText.scrollFactor.set(0, 0);
     add(promptText);
 
@@ -199,14 +201,49 @@ class ModMenuInstallPopup extends FunkinSpriteGroup
   /**
    * Swaps in the mod's preview image once it has been fetched.
    */
-  public function setIcon(bitmap:openfl.display.BitmapData):Void
+  public function setIcon(bytes:openfl.utils.ByteArray):Void
   {
-    modIcon.loadGraphic(bitmap);
+    modIconDecoder?.destroy();
+
+    var onIconLoaded = () ->
+    {
+      modIcon.setGraphicSize(ICON_SIZE, ICON_SIZE);
+      modIcon.localScale.x = modIcon.scale.x;
+      modIcon.localScale.y = modIcon.scale.y;
+      modIcon.updateHitbox();
+      modIcon.localX = PADDING;
+      modIcon.localY = PADDING;
+    };
+
+    if (lime.graphics.Image.__isGIF(bytes))
+    {
+      modIconDecoder = new FunkinAnimationDecoder(bytes, GIF);
+
+      modIcon.loadGraphic(modIconDecoder.bitmapData);
+      onIconLoaded();
+    }
+    else if (lime.graphics.Image.__isWebP(bytes))
+    {
+      modIconDecoder = new FunkinAnimationDecoder(bytes, WEBP);
+
+      modIcon.loadGraphic(modIconDecoder.bitmapData);
+      onIconLoaded();
+    }
+    else
+    {
+      #if sys
+      modIcon.loadGraphic(openfl.display.BitmapData.fromBytes(bytes, true));
+      onIconLoaded();
+      #else
+      openfl.display.BitmapData.loadFromBytes(bytes).onComplete((bitmap) ->
+      {
+        modIcon.loadGraphic(bitmap);
+        onIconLoaded();
+      });
+      #end
+    }
+
     modIcon.antialiasing = true;
-    modIcon.setGraphicSize(ICON_SIZE, ICON_SIZE);
-    modIcon.updateHitbox();
-    modIcon.x = PADDING;
-    modIcon.y = PADDING;
   }
 
   /**
@@ -264,6 +301,11 @@ class ModMenuInstallPopup extends FunkinSpriteGroup
 
   override public function update(elapsed:Float):Void
   {
+    if (modIconDecoder != null)
+    {
+      modIconDecoder.update(elapsed);
+    }
+
     super.update(elapsed);
 
     if (state == Result)
@@ -280,6 +322,17 @@ class ModMenuInstallPopup extends FunkinSpriteGroup
     if (Math.abs(targetRatio - displayRatio) < 0.001) displayRatio = targetRatio;
 
     barClip.width = ICON_SIZE * displayRatio;
+  }
+
+  override public function destroy():Void
+  {
+    super.destroy();
+
+    if (modIconDecoder != null)
+    {
+      modIconDecoder.destroy();
+      modIconDecoder = null;
+    }
   }
 
   /**

@@ -8,8 +8,12 @@ class BlurShaderUp extends FlxShader
   @:glFragmentSource('
     #pragma header
 
+		// slightly edited Dual Kawase implementation taken from https://blog.frost.kiwi/dual-kawase/
+		// this is the up-sample part of the effect.
 
+		// blur strength (distance of samples)
 		uniform float offset;
+		// scale of current image
 		uniform float scale;
 
 		void main()
@@ -42,4 +46,3 @@ class BlurShaderUp extends FlxShader
     scale.value = [_scale];
   }
 }
-

@@ -52,67 +52,48 @@ class TouchCursorPlugin extends FlxTypedSpriteGroup<TouchCursor>
 
     pointerCamera = new FlxCamera();
     pointerCamera.bgColor.alpha = 0;
+    pointerCamera.removable = false;
     instance = new TouchCursorPlugin();
+    pointerCamera.zIndex = 1000;
     instance.cameras = [pointerCamera];
 
     FlxG.cameras.add(pointerCamera, false);
-    FlxG.plugins.drawOnTop = true;
+    syncPointerCameraSize();
+
     FlxG.plugins.addPlugin(instance);
 
-    function moveCameraToTop(camera:FlxCamera):Void
+    FlxG.signals.gameResized.add(function(_, _)
     {
-      if (pointerCamera == null) return;
+      syncPointerCameraSize();
+    });
 
-      // If there aren't any cameras then the CameraFrontEnd got reset so we have to wait for that finish (which is most of the time after state switch)
-      if (FlxG.cameras.list.length == 0)
-      {
-        FlxG.signals.postStateSwitch.addOnce(moveCameraToTop.bind(null));
-        return;
-      }
-
-      if (FlxG.cameras.list.contains(pointerCamera))
-      {
-        FlxG.cameras.list.remove(pointerCamera);
-      }
-
-      if (FlxG.game.contains(pointerCamera.flashSprite))
-      {
-        FlxG.game.removeChild(pointerCamera.flashSprite);
-      }
-
-      @:privateAccess
-      FlxG.game.addChildAt(pointerCamera.flashSprite, FlxG.game.getChildIndex(FlxG.game._inputContainer));
-      FlxG.cameras.list.push(pointerCamera);
-    }
-
-    FlxG.cameras.cameraAdded.add(moveCameraToTop);
-
-    FlxG.cameras.cameraRemoved.add(function(camera:FlxCamera)
+    FlxG.signals.postStateSwitch.add(function()
     {
-      if (camera == pointerCamera)
-      {
-        if (!camera.exists) // The camera got destroyed, we make a new one!
-        {
-          instance.cameras = [pointerCamera = new FlxCamera()];
-          moveCameraToTop(null);
-          pointerCamera.bgColor.alpha = 0;
-          pointerCamera.ID = FlxG.cameras.list.length - 1;
-        }
-        else // It's not destroyed so just move it to the top!
-        {
-          moveCameraToTop(null);
-        }
-      }
-      else
-      {
-        moveCameraToTop(null);
-      }
+      syncPointerCameraSize();
     });
 
     FlxG.signals.preStateSwitch.add(function()
     {
       instance.removeAll();
     });
+  }
+
+  /**
+   * Keeps the persistent pointer camera aligned to the logical game viewport.
+   */
+  static function syncPointerCameraSize():Void
+  {
+    if (pointerCamera == null) return;
+
+    final width:Int = FlxG.width;
+    final height:Int = FlxG.height;
+
+    if (width > 0 && height > 0 && (pointerCamera.width != width || pointerCamera.height != height))
+    {
+      pointerCamera.setSize(width, height);
+    }
+
+    pointerCamera.setPosition(0, 0);
   }
 
   override public function update(elapsed:Float):Void
@@ -143,7 +124,9 @@ class TouchCursorPlugin extends FlxTypedSpriteGroup<TouchCursor>
       if (pointer.touchId != -2)
       {
         pointer.alpha = 0.8;
-        FlxTween.tween(pointer, {alpha: 0}, FlxG.random.float(0.8, 0.9), {
+        FlxTween.tween(pointer, {
+          alpha: 0
+        }, FlxG.random.float(0.8, 0.9), {
           ease: FlxEase.cubeIn,
           onComplete: function(_)
           {
@@ -214,7 +197,9 @@ class TouchCursorPlugin extends FlxTypedSpriteGroup<TouchCursor>
       }
 
       pointer.alpha = 0.8;
-      FlxTween.tween(pointer, {alpha: 0}, FlxG.random.float(0.8, 1), {
+      FlxTween.tween(pointer, {
+        alpha: 0
+      }, FlxG.random.float(0.8, 1), {
         ease: FlxEase.quadIn,
         onComplete: function(_)
         {
@@ -271,7 +256,7 @@ class TouchCursor extends FlxSprite
   {
     this.touchId = touchId;
     moving = false;
-    loadGraphic('assets/images/cursor/michael.png');
+    loadGraphic('assets/ui/cursor/mobile/michael.png');
   }
 
   /**
@@ -314,7 +299,7 @@ class TouchCursor extends FlxSprite
     if (moving != isMoving)
     {
       moving = isMoving;
-      loadGraphic(moving ? 'assets/images/cursor/kevin.png' : 'assets/images/cursor/michael.png');
+      loadGraphic(moving ? 'assets/ui/cursor/mobile/kevin.png' : 'assets/ui/cursor/mobile/michael.png');
     }
 
     lastPosition.copyFrom(viewPoint);

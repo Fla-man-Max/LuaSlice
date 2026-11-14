@@ -142,6 +142,26 @@ class BitmapDataUtil
   }
 
   /**
+   * Convers a `BitmapData` to a GPU texture.
+   * @param bitmap The `BitmapData` to convert.
+   * @param disposeImage Whether to dispose bitmap's image or not by defaults its `true`.
+   * @return The converted `BitmapData`.
+   */
+  public static function toGPU(bitmap:BitmapData, disposeImage:Bool = true):BitmapData
+  {
+    #if cpp
+    // Can cause issues on web
+    if (disposeImage)
+    {
+      bitmap.disposeImage();
+    }
+    bitmap.getTexture(FlxG.stage.context3D);
+    #end
+
+    return bitmap;
+  }
+
+  /**
    * Resizes the bitmap.
    * @param bitmap The `BitmapData` to resize.
    * @param width The new width.
@@ -176,6 +196,8 @@ class BitmapDataUtil
     texture.__height = height;
 
     context.__bindGLTexture2D(texture.__textureID);
+
+    @:nullSafety(Off)
     context.gl.texImage2D(context.gl.TEXTURE_2D, 0, texture.__internalFormat, width, height, 0, texture.__format, context.gl.UNSIGNED_BYTE, null);
 
     @:nullSafety(Off)

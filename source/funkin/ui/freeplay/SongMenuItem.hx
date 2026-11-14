@@ -27,6 +27,8 @@ import funkin.ui.PixelatedIcon;
 import funkin.util.TouchUtil;
 import funkin.util.SwipeUtil;
 import funkin.Preferences;
+import funkin.assets.Paths;
+import funkin.assets.Assets;
 
 using StringTools;
 
@@ -53,7 +55,7 @@ class SongMenuItem extends FlxSpriteGroup
   public var blurredRanking:FreeplayRank;
   public var fakeRanking:FreeplayRank;
   public var fakeBlurredRanking:FreeplayRank;
-  public var targetPos:FlxPoint = new FlxPoint();
+  public var targetPos:FlxPoint = FlxPoint.get();
   public var doLerp:Bool = false;
   public var doJumpIn:Bool = false;
   public var doJumpOut:Bool = false;
@@ -70,7 +72,7 @@ class SongMenuItem extends FlxSpriteGroup
   var bpmNumbers:Array<CapsuleNumber> = []; // referred to as "smallnumbers" in the .fla file!
   var impactThing:FunkinSprite;
 
-  public var sparkle:FlxSprite;
+  public var sparkle:FlxSprite = new FlxSprite();
 
   var sparkleTimer:FlxTimer;
 
@@ -80,22 +82,83 @@ class SongMenuItem extends FlxSpriteGroup
 
   public var curSelected:Int;
 
+  public static function queryAssets(type:funkin.assets.Assets.AssetType,
+    ?styleData:FreeplayStyle):Array<funkin.assets.Paths.AssetPath>
+  {
+    var results:Array<funkin.assets.Paths.AssetPath> = [];
+
+    switch (type)
+    {
+      case IMAGE:
+        results.appendUnique([
+          Paths.image('ui/freeplay/interface/freeplay-capsule/new'),
+          Paths.image('ui/freeplay/interface/sparkle'),
+          Paths.image('ui/freeplay/interface/favorite'),
+          Paths.image('ui/freeplay/interface/freeplay-capsule/rank-badge'),
+          Paths.image('ui/freeplay/interface/freeplay-capsule/numbers-big'),
+          Paths.image('ui/freeplay/interface/freeplay-capsule/numbers-small'),
+
+          Paths.image('ui/freeplay/interface/freeplay-capsule/bpm'),
+          Paths.image('ui/freeplay/interface/freeplay-capsule/difficulty'),
+        ]);
+
+        if (styleData != null)
+        {
+          results.appendUnique([Paths.image(styleData.getCapsuleAssetKey())]);
+        }
+        else
+        {
+          results.appendUnique([Paths.image('ui/freeplay/interface/freeplay-capsule/capsule/capsule-bf')]);
+        }
+
+        // TODO: Fix this!
+        results.appendUnique([Paths.image('ui/freeplay/interface/freeplay-capsule/capsule/capsule-bf')]);
+      case XML:
+        results.appendUnique([
+          Paths.xml('ui/freeplay/interface/freeplay-capsule/new'),
+          Paths.xml('ui/freeplay/interface/sparkle'),
+          Paths.xml('ui/freeplay/interface/favorite'),
+          Paths.xml('ui/freeplay/interface/freeplay-capsule/rank-badge'),
+          Paths.xml('ui/freeplay/interface/freeplay-capsule/numbers-big'),
+          Paths.xml('ui/freeplay/interface/freeplay-capsule/numbers-small'),
+        ]);
+
+        if (styleData != null)
+        {
+          results.appendUnique([Paths.xml(styleData.getCapsuleAssetKey())]);
+        }
+        else
+        {
+          results.appendUnique([Paths.xml('ui/freeplay/interface/freeplay-capsule/capsule/capsule-bf'),]);
+        }
+
+        // TODO: Fix this!
+        results.appendUnique([Paths.xml('ui/freeplay/interface/freeplay-capsule/capsule/capsule-bf')]);
+      case SHADER:
+        results.push(Paths.frag('ui/shaders/hsv'));
+      default:
+        // Nothing
+    }
+
+    return results;
+  }
+
   public function new(x:Float, y:Float)
   {
     super(x, y);
 
     capsule = new FlxSprite();
-    capsule.frames = Paths.getSparrowAtlas('freeplay/freeplayCapsule/capsule/freeplayCapsule');
+    capsule.frames = Paths.getSparrowAtlas('ui/freeplay/interface/freeplay-capsule/capsule/capsule-bf');
     capsule.animation.addByPrefix('selected', 'mp3 capsule w backing0', 24);
     capsule.animation.addByPrefix('unselected', 'mp3 capsule w backing NOT SELECTED', 24);
     // capsule.animation
     add(capsule);
 
-    bpmText = new FlxSprite(144, 87).loadGraphic(Paths.image('freeplay/freeplayCapsule/bpmtext'));
+    bpmText = new FlxSprite(144, 87).loadGraphic(Paths.image('ui/freeplay/interface/freeplay-capsule/bpm').toFlxGraphicAsset());
     bpmText.setGraphicSize(Std.int(bpmText.width * 0.9));
     add(bpmText);
 
-    difficultyText = new FlxSprite(414, 87).loadGraphic(Paths.image('freeplay/freeplayCapsule/difficultytext'));
+    difficultyText = new FlxSprite(414, 87).loadGraphic(Paths.image('ui/freeplay/interface/freeplay-capsule/difficulty').toFlxGraphicAsset());
     difficultyText.setGraphicSize(Std.int(difficultyText.width * 0.9));
     add(difficultyText);
 
@@ -106,7 +169,7 @@ class SongMenuItem extends FlxSpriteGroup
     add(weekText);
 
     newText = new FlxSprite(454, 9);
-    newText.frames = Paths.getSparrowAtlas('freeplay/freeplayCapsule/new');
+    newText.frames = Paths.getSparrowAtlas('ui/freeplay/interface/freeplay-capsule/new');
     newText.animation.addByPrefix('newAnim', 'NEW notif', 24, true);
     newText.animation.play('newAnim', true);
     newText.setGraphicSize(Std.int(newText.width * 0.9));
@@ -154,8 +217,8 @@ class SongMenuItem extends FlxSpriteGroup
     blurredRanking = new FreeplayRank(ranking.x, ranking.y);
     add(blurredRanking);
 
-    sparkle = new FlxSprite(ranking.x, ranking.y);
-    sparkle.frames = Paths.getSparrowAtlas('freeplay/sparkle');
+    sparkle.setPosition(ranking.x, ranking.y);
+    sparkle.frames = Paths.getSparrowAtlas('ui/freeplay/interface/sparkle');
     sparkle.animation.addByPrefix('sparkle', 'sparkle Export0', 24, false);
     sparkle.animation.play('sparkle', true);
     sparkle.scale.set(0.8, 0.8);
@@ -166,28 +229,7 @@ class SongMenuItem extends FlxSpriteGroup
 
     add(sparkle);
 
-    // ranking.loadGraphic(Paths.image('freeplay/ranks/' + rank));
-    // ranking.scale.x = ranking.scale.y = realScaled;
-    // ranking.alpha = 0.75;
-    // ranking.visible = false;
-    // ranking.origin.set(capsule.origin.x - ranking.x, capsule.origin.y - ranking.y);
-    // add(ranking);
-    // grpHide.add(ranking);
-
-    // switch (rank)
-    // {
-    //   case 'perfect':
-    //     ranking.x -= 10;
-    // }
-
     grayscaleShader = new Grayscale(1);
-
-    // diffRatingSprite = new FlxSprite(145, 90).loadGraphic(Paths.image('freeplay/diffRatings/diff00'));
-    // diffRatingSprite.shader = grayscaleShader;
-    // diffRatingSprite.origin.set(capsule.origin.x - diffRatingSprite.x, capsule.origin.y - diffRatingSprite.y);
-    // TODO: Readd once ratings are fully implemented
-    // add(diffRatingSprite);
-    // grpHide.add(diffRatingSprite);
 
     songText = new CapsuleText(capsule.width * 0.26, 45, 'Random', Std.int(40 * realScaled));
     add(songText);
@@ -201,7 +243,7 @@ class SongMenuItem extends FlxSpriteGroup
     grpHide.add(pixelIcon);
 
     favIconBlurred = new FlxSprite(380, 40);
-    favIconBlurred.frames = Paths.getSparrowAtlas('freeplay/favHeart');
+    favIconBlurred.frames = Paths.getSparrowAtlas('ui/freeplay/interface/favorite');
     favIconBlurred.animation.addByPrefix('fav', 'favorite heart', 24, false);
     favIconBlurred.animation.play('fav');
 
@@ -211,7 +253,7 @@ class SongMenuItem extends FlxSpriteGroup
     add(favIconBlurred);
 
     favIcon = new FlxSprite(favIconBlurred.x, favIconBlurred.y);
-    favIcon.frames = Paths.getSparrowAtlas('freeplay/favHeart');
+    favIcon.frames = Paths.getSparrowAtlas('ui/freeplay/interface/favorite');
     favIcon.animation.addByPrefix('fav', 'favorite heart', 24, false);
     favIcon.animation.play('fav');
     favIcon.setGraphicSize(50, 50);
@@ -290,7 +332,7 @@ class SongMenuItem extends FlxSpriteGroup
   {
     if (FlxG.bitmap.checkCache(text)) return;
 
-    var weekTextBase:FlxText = new FlxText(0, 0, 0, text).setFormat("YoureGone-Regular", 20, 0xFF21242E);
+    var weekTextBase:FlxText = new FlxText(0, 0, 0, text).setFormat(Paths.font('ui/fonts/YoureGone-Regular', 'otf'), 20, 0xFF21242E);
     @:privateAccess weekTextBase.regenGraphic();
 
     FlxG.bitmap.add(weekTextBase.pixels.clone(), false, text);
@@ -373,8 +415,6 @@ class SongMenuItem extends FlxSpriteGroup
       }
       bpmNumbers[i].x += tempShift;
     }
-    // diffRatingSprite.loadGraphic(Paths.image('freeplay/diffRatings/diff${ratingPadded}'));
-    // diffRatingSprite.visible = false;
   }
 
   var evilTrail:FlxTrail;
@@ -414,13 +454,18 @@ class SongMenuItem extends FlxSpriteGroup
     impactThing.alpha = 0;
     impactThing.zIndex = capsule.zIndex - 3;
     add(impactThing);
-    FlxTween.tween(impactThing.scale, {x: 2.5, y: 2.5}, 0.5);
+    FlxTween.tween(impactThing.scale, {
+      x: 2.5,
+      y: 2.5
+    }, 0.5);
     // FlxTween.tween(impactThing, {alpha: 0}, 0.5);
 
     evilTrail = new FlxTrail(impactThing, null, 15, 0.03, 0.01, 0.069);
     evilTrail.blend = BlendMode.ADD;
     evilTrail.zIndex = capsule.zIndex - 5;
-    FlxTween.tween(evilTrail, {alpha: 0}, 0.6, {
+    FlxTween.tween(evilTrail, {
+      alpha: 0
+    }, 0.6, {
       ease: FlxEase.quadOut,
       onComplete: function(_)
       {
@@ -506,8 +551,6 @@ class SongMenuItem extends FlxSpriteGroup
           trace('why the fuck is this being called');
       }
     }
-    // diffRatingSprite.loadGraphic(Paths.image('freeplay/diffRatings/diff${ratingPadded}'));
-    // diffRatingSprite.visible = false;
   }
 
   function updateScoringRank(newRank:Null<ScoringRank>):Void
@@ -569,15 +612,14 @@ class SongMenuItem extends FlxSpriteGroup
     this.y = y;
   }
 
-  public function initData(freeplayData:Null<FreeplaySongData>, ?styleData:FreeplayStyle = null, ?index:Int):Void
+  public function initData(freeplayData:Null<FreeplaySongData>,
+    ?styleData:FreeplayStyle = null,
+    ?index:Int):Void
   {
     this.freeplayData = freeplayData;
 
     if (index != null) this.index = index;
 
-    // im so mad i have to do this but im pretty sure with the capsules recycling i cant call the new function properly :/
-    // if thats possible someone Please change the new function to be something like
-    // capsule.frames = Paths.getSparrowAtlas(styleData == null ? 'freeplay/freeplayCapsule/capsule/freeplayCapsule' : styleData.getCapsuleAssetKey()); thank u luv u
     if (styleData != null)
     {
       capsule.frames = Paths.getSparrowAtlas(styleData.getCapsuleAssetKey());
@@ -708,9 +750,7 @@ class SongMenuItem extends FlxSpriteGroup
 
         capsule.scale.x = xFrames[frameInTypeBeat];
         capsule.scale.y = 1 / xFrames[frameInTypeBeat];
-        targetPos.x = FlxG.width * xPosLerpLol[
-          Std.int(Math.min(frameInTypeBeat, xPosLerpLol.length - 1))
-        ];
+        targetPos.x = FlxG.width * xPosLerpLol[Std.int(Math.min(frameInTypeBeat, xPosLerpLol.length - 1))];
         capsule.scale.x *= realScaled;
         capsule.scale.y *= realScaled;
 
@@ -737,9 +777,7 @@ class SongMenuItem extends FlxSpriteGroup
 
         capsule.scale.x = xFrames[frameOutTypeBeat];
         capsule.scale.y = 1 / xFrames[frameOutTypeBeat];
-        this.x = FlxG.width * xPosOutLerpLol[
-          Std.int(Math.min(frameOutTypeBeat, xPosOutLerpLol.length - 1))
-        ];
+        this.x = FlxG.width * xPosOutLerpLol[Std.int(Math.min(frameOutTypeBeat, xPosOutLerpLol.length - 1))];
 
         capsule.scale.x *= realScaled;
         capsule.scale.y *= realScaled;
@@ -772,7 +810,7 @@ class SongMenuItem extends FlxSpriteGroup
     if (songText != null)
     {
       textAppear();
-      if (!Preferences.isLowQualityMinimal()) songText.flickerText();
+      if (!Preferences.isLowQualityMinimal() && Preferences.flashingLights) songText.flickerText();
     }
     if (pixelIcon != null && pixelIcon.visible)
     {
@@ -816,9 +854,18 @@ class SongMenuItem extends FlxSpriteGroup
 
     grayscaleShader.setAmount(isSelected ? 0 : 0.8);
     songText.alpha = isSelected ? 1 : 0.6;
-    songText.blurredText.visible = !Preferences.isLowQualityMinimal() && isSelected;
+    songText.blurredText.visible = !Preferences.isLowQualityMinimal() && isSelected && songText.clipWidth >= 290;
     capsule.offset.x = isSelected ? 0 : -5;
-    capsule.animation.play(isSelected ? 'selected' : 'unselected');
+    if (!Preferences.flashingLights)
+    {
+      // Show a single static frame instead of the flashing animation.
+      capsule.animation.play(isSelected ? 'selected' : 'unselected', true, false, 0);
+      capsule.animation.stop();
+    }
+    else
+    {
+      capsule.animation.play(isSelected ? 'selected' : 'unselected');
+    }
     ranking.alpha = isSelected ? 1 : 0.7;
     favIcon.alpha = isSelected ? 1 : 0.6;
     favIconBlurred.alpha = isSelected ? 1 : 0;
@@ -839,6 +886,19 @@ class SongMenuItem extends FlxSpriteGroup
     doLerp = false;
     doJumpIn = false;
     doJumpOut = false;
+  }
+
+  override function destroy():Void
+  {
+    if (sparkleTimer != null)
+    {
+      sparkleTimer.cancel();
+      sparkleTimer = null;
+    }
+    targetPos.put();
+    difficultyNumbers = [];
+    bpmNumbers = [];
+    super.destroy();
   }
 }
 
@@ -895,7 +955,7 @@ class FreeplayRank extends FlxSprite
   {
     super(x, y);
 
-    frames = Paths.getSparrowAtlas('freeplay/rankbadges');
+    frames = Paths.getSparrowAtlas('ui/freeplay/interface/freeplay-capsule/rank-badge');
 
     animation.addByPrefix('PERFECT', 'PERFECT rank0', 24, false);
     animation.addByPrefix('EXCELLENT', 'EXCELLENT rank0', 24, false);
@@ -965,11 +1025,11 @@ class CapsuleNumber extends FlxSprite
 
     if (big)
     {
-      frames = Paths.getSparrowAtlas('freeplay/freeplayCapsule/bignumbers');
+      frames = Paths.getSparrowAtlas('ui/freeplay/interface/freeplay-capsule/numbers-big');
     }
     else
     {
-      frames = Paths.getSparrowAtlas('freeplay/freeplayCapsule/smallnumbers');
+      frames = Paths.getSparrowAtlas('ui/freeplay/interface/freeplay-capsule/numbers-small');
     }
 
     for (i in 0...10)

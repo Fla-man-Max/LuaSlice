@@ -11,11 +11,6 @@ using StringTools;
 class WindowUtil
 {
   /**
-   * A regex to match valid URLs.
-   */
-  public static final URL_REGEX:EReg = ~/^https?:\/?\/?(?:www\.)?[-a-zA-Z0-9@:%_\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$/;
-
-  /**
    * Sanitizes a URL via a regex.
    *
    * @param targetUrl The URL to sanitize.
@@ -35,6 +30,7 @@ class WindowUtil
       targetUrl = 'http://' + targetUrl;
     }
 
+    final URL_REGEX:EReg = ~/^https?:\/?\/?(?:www\.)?[-a-zA-Z0-9@:%_\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_\+.~#?&\/=]*)$/;
     if (URL_REGEX.match(targetUrl))
     {
       return URL_REGEX.matched(0);
@@ -108,7 +104,7 @@ class WindowUtil
   public static function initWindowEvents():Void
   {
     // onExit is called when the game window is closed.
-    openfl.Lib.current.stage.application.onExit.add((exitCode:Int) ->
+    openfl.Lib.current.stage.application.onExit.add(function(exitCode:Int):Void
     {
       windowExit.dispatch(exitCode);
     });
@@ -117,7 +113,7 @@ class WindowUtil
     openfl.Lib.current.stage.addEventListener(openfl.events.KeyboardEvent.KEY_DOWN, (e:openfl.events.KeyboardEvent) ->
     {
       #if FEATURE_HAXEUI
-      if (haxe.ui.focus.FocusManager.instance.focus != null)
+      if (funkin.util.HaxeUIFocusUtil.isFocused())
       {
         return;
       }
@@ -221,7 +217,7 @@ class WindowUtil
    */
   public static function showWarning(name:String, desc:String):Void
   {
-    lime.app.Application.current.window.alert(lime.ui.MessageBoxType.WARNING, desc, name);
+    alert(lime.ui.MessageBoxType.WARNING, desc, name);
   }
 
   /**
@@ -231,7 +227,31 @@ class WindowUtil
    */
   public static function showInformation(name:String, desc:String):Void
   {
-    lime.app.Application.current.window.alert(lime.ui.MessageBoxType.INFORMATION, desc, name);
+    alert(lime.ui.MessageBoxType.INFORMATION, desc, name);
+  }
+
+  /**
+   * Displays a native system alert dialog.
+   * @param type The type/severity icon of the message box (e.g. ERROR, WARNING, INFORMATION). Defaults to INFORMATION.
+   * @param message The main body content/description of the alert dialog.
+   * @param title The title text displayed in the window header.
+   * @param buttons Optional list of custom button labels for the dialog.
+   */
+  public static function alert(type:lime.ui.MessageBoxType = INFORMATION, ?message:String, ?title:String, ?buttons:Array<String>) {
+    @:privateAccess
+    FlxG.sound?.onFocusLost();
+
+    if (lime.app.Application.current.window != null)
+    {
+      lime.app.Application.current.window.alert(type, message, title, buttons);
+    }
+    else
+    {
+      lime.app.Application.current.alert(type, message, title, buttons);
+    }
+
+    @:privateAccess
+    FlxG.sound?.onFocus();
   }
 
   /**

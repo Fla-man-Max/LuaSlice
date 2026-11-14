@@ -1,6 +1,6 @@
 package funkin.ui.transition;
 
-import funkin.data.character.CharacterData.CharacterDataParser;
+import funkin.modding.compat.CharacterDataParser;
 import funkin.data.notestyle.NoteStyleRegistry;
 import funkin.data.stage.StageRegistry;
 import funkin.play.PlayState.PlayStateParams;
@@ -33,8 +33,8 @@ class SongResourcePlan
 
     if (!(params.overrideMusic ?? false))
     {
-      addUnique(audioPaths, difficulty.getInstPath(params.targetInstrumental));
-      for (path in difficulty.buildVoiceList()) addUnique(audioPaths, path);
+      addUnique(audioPaths, difficulty.getInstPath(params.targetInstrumental).toString());
+      for (path in difficulty.buildVoiceList()) addUnique(audioPaths, path.toString());
     }
 
     if (difficulty.characters != null)
@@ -117,8 +117,9 @@ class SongResourcePlan
     {
       var data = CharacterDataParser.fetchCharacterData(id);
       if (data == null) continue;
-      cacheCharacterPath(data.assetPath);
-      for (animation in data.animations)
+      var characterAsset = data.assetPath;
+      if (characterAsset != null) cacheCharacterPath(characterAsset);
+      for (animation in data.animations ?? [])
       {
         if (animation.assetPath != null) cacheCharacterPath(animation.assetPath);
       }

@@ -64,9 +64,43 @@ class PsychLuaHost
   {
     refreshRating();
     var entries = discover();
+    var session = game.diagnosticSession;
+    if (session != null)
+    {
+      for (entry in diagnosticCandidates())
+      {
+        session.scripts.discover('Psych Lua', entry.root, entry.path, true);
+        if (session.scripts.isForced('Psych Lua', entry.root, entry.path) && !entries.exists(item -> item.path == entry.path))
+          entries.push(entry);
+      }
+    }
     lastReloadAttempt = [for (entry in entries) entry.path + ':' + signature(entry.path)].join('|');
     for (entry in entries) load(entry.path, entry.root);
-    call('onCreatePost', []);
+  }
+
+  public static function diagnosticCandidates():Array<{path:String, root:String}>
+  {
+    var result:Array<{path:String, root:String}> = [];
+    for (mod in PolymodHandler.loadedModDirs)
+    {
+      try
+      {
+        var root = FileSystem.fullPath(Path.join([PolymodHandler.getModRoot(), mod])).replace('\\', '/');
+        for (category in ['custom_events', 'custom_notetypes'])
+        {
+          var dir = Path.join([root, category]);
+          if (!FileSystem.exists(dir) || !FileSystem.isDirectory(dir)) continue;
+          for (file in FileSystem.readDirectory(dir))
+          {
+            if (!file.toLowerCase().endsWith('.luap') || file.contains('..')) continue;
+            var path = Path.normalize(dir + '/' + file);
+            if (!FileSystem.isDirectory(path)) result.push({path: path, root: root});
+          }
+        }
+      }
+      catch (error:Dynamic) trace('[Mod Debug] Could not inspect active mod $mod: $error');
+    }
+    return result;
   }
 
   function addDirectory(result:Array<{path:String, root:String}>, root:String, relative:String):Void
@@ -141,7 +175,7 @@ class PsychLuaHost
   {
     var current:funkin.play.character.BaseCharacter = cast rootObject(role);
     if (current?.characterId == id || characterCache.exists(role + ':' + id)) return true;
-    var character = funkin.data.character.CharacterData.CharacterDataParser.fetchCharacter(id);
+    var character = funkin.data.character.CharacterRegistry.instance.fetchEntry(id);
     if (character == null) throw 'Character not found: $id';
     characterCache.set(role + ':' + id, character);
     return true;
@@ -198,26 +232,35 @@ class PsychLuaHost
   public function load(path:String, root:String):Bool
   {
     if (disposed || unloading) return false;
+    var policy = game.diagnosticSession?.scripts;
+    if (policy != null && !policy.isEnabled('Psych Lua', root, path))
+    {
+      policy.note('Psych Lua', root, path, 'Disabled');
+      return false;
+    }
     for (script in scripts) if (script.path == path && !script.closed) return false;
     var script:PsychLuaScript = null;
     try
     {
       var source = File.getContent(path);
       script = new PsychLuaScript(this, path, root);
-      if (!script.compile(source)) { script.destroy(); return false; }
+      if (!script.compile(source)) { policy?.note('Psych Lua', root, path, 'Compile failed'); script.destroy(); return false; }
       scripts.push(script);
       if (!script.execute(source, 'load'))
       {
+        policy?.note('Psych Lua', root, path, 'Initialization failed');
         scripts.remove(script);
         script.destroy();
         return false;
       }
       signatures.set(path, signature(path));
+      policy?.note('Psych Lua', root, path, 'Loaded');
       script.call('onCreate', []);
       return true;
     }
     catch (error:haxe.Exception)
     {
+      policy?.note('Psych Lua', root, path, 'Load failed');
       if (script != null) { scripts.remove(script); script.destroy(); }
       report('[$path] ' + error.message);
       return false;
@@ -265,6 +308,7 @@ class PsychLuaHost
     holdSteps.clear();
     signatures.clear();
     start();
+    call('onCreatePost', []);
     call('onReload', []);
     return true;
   }

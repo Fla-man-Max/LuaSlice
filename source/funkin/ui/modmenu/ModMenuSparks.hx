@@ -102,6 +102,8 @@ class ModMenuSparks extends FunkinSprite
   {
     var randomAnimation:String = _randomAnimations[FlxG.random.int(0, _randomAnimations.length - 1)];
 
+    // Retry if the animation is the same as the previous one
+    // or if it doesn't exactly have a number in the name.
     if (randomAnimation == _previousAnimation) return getRandomAnimation();
 
     return randomAnimation;
@@ -128,4 +130,3 @@ class ModMenuSparks extends FunkinSprite
     if (shockSound != null) shockSound.destroy();
   }
 }
-

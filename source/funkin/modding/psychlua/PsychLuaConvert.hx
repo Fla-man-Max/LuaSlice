@@ -5,7 +5,8 @@ import hxluajit.Lua;
 import hxluajit.Types.Lua_State;
 import hxluajit.wrapper.LuaConverter;
 
-class PsychLuaConvert
+@:unreflective
+final class PsychLuaConvert
 {
   public static function toLua(state:cpp.RawPointer<Lua_State>, value:Dynamic, depth:Int = 0):Bool
   {

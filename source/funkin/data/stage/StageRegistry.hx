@@ -1,7 +1,6 @@
 package funkin.data.stage;
 
 import funkin.play.stage.Stage;
-import funkin.play.stage.ScriptedStage;
 import funkin.util.tools.ISingleton;
 import funkin.data.DefaultRegistryImpl;
 
@@ -19,7 +18,22 @@ class StageRegistry extends BaseRegistry<Stage, StageData, StageEntryParams> imp
 
   public function new()
   {
-    super('STAGE', 'stages', STAGE_DATA_VERSION_RULE);
+    super({
+      registryId: 'STAGE',
+      dataFilePath: 'gameplay/stages/',
+      nestedEntries: true,
+      versionRule: STAGE_DATA_VERSION_RULE
+    });
+  }
+
+  @:access(funkin.play.stage.Stage)
+  public function createDiagnosticPreview(id:String):Null<Stage>
+  {
+    if (fetchEntry(id) == null) return null;
+    var scriptClass = getScriptedEntryClassName(id);
+    var stage = scriptClass == null ? createEntry(id) : createScriptedEntry(scriptClass);
+    if (stage != null) stage.diagnosticPreviewOwned = true;
+    return stage;
   }
 }
 
