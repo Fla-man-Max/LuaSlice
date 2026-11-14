@@ -19,8 +19,10 @@ import funkin.ui.options.items.EnumPreferenceItem;
 import funkin.ui.debug.FunkinDebugDisplay.DebugDisplayMode;
 #if FEATURE_TOUCH_CONTROLS
 import funkin.touch.ui.FunkinBackButton;
+#if !android
 import funkin.touch.input.ControlsHandler;
 import funkin.touch.ui.FunkinHitbox.FunkinHitboxControlSchemes;
+#end
 import funkin.util.TouchUtil;
 import funkin.util.SwipeUtil;
 #end
@@ -123,10 +125,11 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     createPrefItemCheckbox('Downscroll', 'When enabled, notes move downwards toward the strumline at the bottom of the screen.', function(value:Bool):Void
     {
       Preferences.downscroll = value;
-    }, Preferences.downscroll,
-      #if FEATURE_TOUCH_CONTROLS ControlsHandler.hasExternalInputDevice
-      || Preferences.controlsScheme != FunkinHitboxControlSchemes.Arrows
-      #end);
+    }, Preferences.downscroll
+      #if (FEATURE_TOUCH_CONTROLS && !android)
+      , ControlsHandler.hasExternalInputDevice || Preferences.controlsScheme != FunkinHitboxControlSchemes.Arrows
+      #end
+    );
     #if !mobile
     createPrefItemCheckbox('Middlescroll', 'When enabled, your notes are centered and the opponent notes are faded to the sides.', function(value:Bool):Void
     {
@@ -142,6 +145,12 @@ class PreferencesMenu extends Page<OptionsState.OptionsMenuPageName>
     {
       Preferences.strumlineBackgroundOpacity = value;
     }, Preferences.strumlineBackgroundOpacity);
+    #if android
+    createPrefItemCheckbox('Touch Cursor', 'Show an indicator where you touch the screen.', function(value:Bool):Void
+    {
+      Preferences.touchCursor = value;
+    }, Preferences.touchCursor);
+    #end
     #if FEATURE_HAPTICS
     createPrefItemEnum('Haptics', 'When enabled, the game plays haptic feedback effects.', [
       "All" => HapticsMode.ALL,

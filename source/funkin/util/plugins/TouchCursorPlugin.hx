@@ -13,6 +13,9 @@ import flixel.tweens.FlxTween;
 import flixel.util.FlxColor;
 import flixel.util.FlxTimer;
 import funkin.graphics.FunkinCamera;
+#if android
+import funkin.Preferences;
+#end
 
 // TODO: Replace all the touchBuddy littered around the game's code with the ACTUAL touchBuddy.
 // Thnk u agua and toffee <3
@@ -102,6 +105,14 @@ class TouchCursorPlugin extends FlxTypedSpriteGroup<TouchCursor>
     syncPointerCameraSize();
     if (!FlxG.cameras.list.contains(pointerCamera)) FlxG.cameras.add(pointerCamera, false);
     else FlxG.cameras.sortCameras();
+  }
+
+  override public function draw():Void
+  {
+    #if android
+    if (!Preferences.touchCursor) return;
+    #end
+    super.draw();
   }
 
   override public function update(elapsed:Float):Void

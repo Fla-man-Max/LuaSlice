@@ -146,6 +146,9 @@ class Save implements ConsoleClass implements ISerializable
         downscroll: false,
         middleScroll: false,
         pauseButton: true,
+        #if android
+        touchCursor: true,
+        #end
         flashingLights: true,
         loadingScreens: true,
         zoomCamera: true,
@@ -1508,6 +1511,10 @@ typedef SaveDataOptions =
   var middleScroll:Bool;
 
   var pauseButton:Bool;
+
+  #if android
+  var touchCursor:Bool;
+  #end
 
   /**
    * If disabled, flashing lights in the main menu and other areas will be less intense.

@@ -492,7 +492,7 @@ class ModListManager
     // The base game mod is always in the enabled list, pinned to the top.
     if (!enabledList.modItems.exists((item) -> item.getModId() == ModMenuState.BASE_GAME_MOD_ID))
     {
-      var baseGameItem = new ModMenuItem(null, ModMenuState.BASE_GAME_MOD_ICON_PATH, ModMenuState.BASE_GAME_MOD_ID, 'Base Game', 'Default game content');
+      var baseGameItem = new ModMenuItem(null, ModMenuState.BASE_GAME_MOD_ICON_PATH, ModMenuState.BASE_GAME_MOD_ID, 'LuaSlice', 'Default engine content');
       baseGameItem.locked = true;
       enabledList.addMod(baseGameItem, 0);
     }

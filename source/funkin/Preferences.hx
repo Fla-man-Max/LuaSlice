@@ -153,6 +153,22 @@ class Preferences
     #end
   }
 
+  #if android
+  public static var touchCursor(get, set):Bool;
+
+  static function get_touchCursor():Bool
+  {
+    return Save?.instance?.options?.touchCursor ?? true;
+  }
+
+  static function set_touchCursor(value:Bool):Bool
+  {
+    Save.instance.options.touchCursor = value;
+    Save.system.flush();
+    return value;
+  }
+  #end
+
   public static var pauseButton(get, set):Bool;
 
   static function get_pauseButton():Bool
