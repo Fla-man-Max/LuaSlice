@@ -2,7 +2,6 @@ package funkin.play;
 
 #if FEATURE_LUA_SCRIPTS
 import luaslice.lua.LuaScriptManager;
-import sys.FileSystem;
 #end
 #if (FEATURE_SSCRIPT_SCRIPTS || FEATURE_NXSCRIPT_SCRIPTS)
 import luaslice.script.ScriptRuntimeManager;
@@ -2446,19 +2445,9 @@ class PlayState extends MusicBeatSubState
 
   function initLuaScripts():Void
   {
-    final candidates = [
-      'mods/global.luag',
-      'mods/global.lua',
-      'mods/scripts/global.luag',
-      'mods/scripts/global.lua',
-      'mods/scripts/${currentSong.id}.luag',
-      'mods/scripts/${currentSong.id}.lua'
-    ];
-
-    for (path in candidates)
+    for (path in LuaScriptManager.findGameplayScripts(currentSong.id))
     {
       if (cleanupPerformed) break;
-      if (!FileSystem.exists(path)) continue;
       luaScriptManager ??= new LuaScriptManager();
       luaScriptManager.loadScript(path);
     }

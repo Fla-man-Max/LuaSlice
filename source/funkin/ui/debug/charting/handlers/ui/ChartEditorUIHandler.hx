@@ -1051,7 +1051,7 @@ class ChartEditorUIHandler
     var count = 0;
     for (child in bar.childComponents)
     {
-      if (!child.includeInLayout) continue;
+      if (child.hidden || !child.includeInLayout) continue;
       #if FEATURE_TOUCH_CONTROLS
       if (child.height < ChartEditorState.MENU_BAR_HEIGHT) child.height = ChartEditorState.MENU_BAR_HEIGHT;
       #end

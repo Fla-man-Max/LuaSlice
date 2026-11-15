@@ -1372,6 +1372,7 @@ class Project extends HXProject
     // These macros allow additions of new functionality to existing Flixel. -->
     addHaxeMacro("addMetadata('@:build(funkin.util.macro.FlxMacro.buildFlxSprite())', 'flixel.FlxSprite')");
     addHaxeMacro("addMetadata('@:build(funkin.util.macro.AssetMacro.buildPolymodAudio())', 'polymod.backends.LimeModLibrary')");
+    addHaxeMacro("addMetadata('@:build(funkin.util.macro.PolymodPrinterMacro.build())', 'polymod.hscript._internal.Printer')");
     if (FEATURE_COMPRESSED_TEXTURES.isEnabled(this))
     {
       addHaxeMacro("addMetadata('@:build(funkin.util.macro.AssetMacro.buildOpenFLAssets())', 'openfl.utils.Assets')");

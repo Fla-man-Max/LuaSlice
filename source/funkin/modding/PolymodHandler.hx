@@ -589,6 +589,21 @@ class PolymodHandler
 
     // 'ControlsHandler' was moved to the 'funkin.touch.input' package.
     Polymod.addImportAlias('funkin.mobile.input.ControlsHandler', funkin.touch.input.ControlsHandler);
+    #if FEATURE_TOUCH_CONTROLS
+    Polymod.addImportAlias('funkin.mobile.ui.FunkinHitbox', funkin.touch.ui.FunkinHitbox);
+    Polymod.addImportAlias('funkin.mobile.ui.FunkinBackButton', funkin.touch.ui.FunkinBackButton);
+    Polymod.addImportAlias('funkin.mobile.ui.mainmenu.FunkinOptionsButton', funkin.touch.ui.FunkinOptionsButton);
+    Polymod.addImportAlias('funkin.mobile.ui.options.objects.HitboxShowcase', funkin.touch.ui.options.objects.HitboxShowcase);
+    Polymod.addImportAlias('funkin.mobile.ui.options.objects.SchemeMenuButton', funkin.touch.ui.options.objects.SchemeMenuButton);
+    Polymod.addImportAlias('funkin.mobile.ui.FunkinHint', funkin.touch.ui.FunkinHitbox.FunkinHint);
+    final abstracts = polymod.hscript._internal.PolymodScriptClass.abstractClassImpls;
+    final controlSchemes = abstracts.get('funkin.touch.ui.FunkinHitboxControlSchemes');
+    if (controlSchemes != null)
+    {
+      abstracts.set('funkin.mobile.ui.FunkinHitboxControlSchemes', controlSchemes);
+      abstracts.set('funkin.mobile.ui.FunkinHitbox.FunkinHitboxControlSchemes', controlSchemes);
+    }
+    #end
   }
 
   /**

@@ -820,11 +820,25 @@ class ChartEditorState extends UIState // UIState derives from MusicBeatState
         && Math.abs(mouseDown.stageX - x) < 4 && Math.abs(mouseDown.stageY - y) < 4) return;
     final uiX = (x - FlxG.scaleMode.offset.x) / (FlxG.scaleMode.scale.x * haxe.ui.Toolkit.scaleX);
     final uiY = (y - FlxG.scaleMode.offset.y) / (FlxG.scaleMode.scale.y * haxe.ui.Toolkit.scaleY);
-    if (!Screen.instance.hasSolidComponentUnderPoint(uiX, uiY)) return;
+    if (!hasChartTouchUITarget(uiX, uiY)) return;
     touchUiFinger = event.touchPointID;
     touchUiX = x;
     touchUiY = y;
     @:privateAccess haxe.ui.backend.flixel.MouseHelper.onMouse(haxe.ui.events.MouseEvent.MOUSE_DOWN, x, y, true);
+  }
+
+  function hasChartTouchUITarget(x:Float, y:Float):Bool
+  {
+    final target:Dynamic = @:privateAccess haxe.ui.backend.flixel.MouseHelper.getTarget(x, y);
+    if (!Std.isOfType(target, haxe.ui.core.Component)) return false;
+    var component:haxe.ui.core.Component = cast target;
+    while (component != null && component != root)
+    {
+      if (component.isComponentSolid || Std.isOfType(component, Menu) || Std.isOfType(component, MenuBar)
+          || Std.isOfType(component, Dialog) || Std.isOfType(component, Button) || Std.isOfType(component, MenuItem)) return true;
+      component = component.parentComponent;
+    }
+    return false;
   }
 
   function moveChartTouchUI(event:openfl.events.TouchEvent):Void

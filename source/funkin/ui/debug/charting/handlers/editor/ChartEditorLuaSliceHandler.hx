@@ -18,7 +18,6 @@ import funkin.ui.debug.charting.commands.selection.DeselectItemsCommand;
 import funkin.ui.debug.charting.commands.selection.SelectAllItemsCommand;
 import funkin.ui.debug.charting.commands.selection.DeselectAllItemsCommand;
 import funkin.ui.debug.charting.handlers.ui.ChartEditorToolboxHandler;
-import haxe.ui.core.Screen;
 import haxe.ui.components.NumberStepper;
 import haxe.ui.containers.menus.MenuCheckBox;
 
@@ -183,7 +182,7 @@ class ChartEditorLuaSliceHandler
       || (state.healthIconBF != null && finger.overlaps(state.healthIconBF)) || (state.healthIconDad != null && finger.overlaps(state.healthIconDad)));
     var x = finger?.viewX ?? FlxG.mouse.viewX;
     var y = finger?.viewY ?? FlxG.mouse.viewY;
-    var overUI = Screen.instance.hasSolidComponentUnderPoint((finger?.gameX ?? FlxG.mouse.gameX) / haxe.ui.Toolkit.scaleX,
+    var overUI = state.touchUiFinger != null || state.hasChartTouchUITarget((finger?.gameX ?? FlxG.mouse.gameX) / haxe.ui.Toolkit.scaleX,
       (finger?.gameY ?? FlxG.mouse.gameY) / haxe.ui.Toolkit.scaleY);
     if (finger != null)
       state.touchPointer.setRawPositionUnsafe(finger.gameX * FlxG.scaleMode.scale.x, finger.gameY * FlxG.scaleMode.scale.y);

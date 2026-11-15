@@ -182,7 +182,10 @@ private final class LuaScriptManagerImpl
     scriptGlobalModes.set(path, isGlobalScript);
     if (envRef != LuaL.NOREF) scriptEnvRefs.set(path, envRef);
     hookPresence.clear();
-    trace('[LuaScriptManager] Loaded ${path} (${isGlobalScript ? 'global' : 'isolated'})');
+    final hooks = isGlobalScript ? globalScriptHookRefs.get(path) : isolatedScriptHookRefs.get(path);
+    final callbackNames = hooks == null ? [] : [for (name in hooks.keys()) name];
+    callbackNames.sort(Reflect.compare);
+    trace('[LuaScriptManager] Loaded ${path} (${isGlobalScript ? 'global' : 'isolated'}); callbacks: ${callbackNames.join(", ")}');
     LuaLogger.scripts(loadedScripts);
     return true;
   }
@@ -826,6 +829,68 @@ private final class LuaScriptManagerImpl
       if (!roots.contains(root) && FileSystem.isDirectory(root)) roots.push(root);
     }
     return roots;
+  }
+
+  public static function findGameplayScripts(songId:String):Array<String>
+  {
+    final paths:Array<String> = [];
+    final seen:Map<String, Bool> = [];
+    final add = function(path:String):Void
+    {
+      final normalized = Path.normalize(path);
+      final key = #if windows normalized.toLowerCase() #else normalized #end;
+      if (seen.exists(key) || !FileSystem.exists(path) || FileSystem.isDirectory(path)) return;
+      seen.set(key, true);
+      paths.push(path);
+    };
+    final addFolder = function(folder:String, ?accept:String->Bool):Void
+    {
+      if (!FileSystem.exists(folder) || !FileSystem.isDirectory(folder)) return;
+      final entries = FileSystem.readDirectory(folder);
+      entries.sort(Reflect.compare);
+      for (entry in entries)
+      {
+        final lower = entry.toLowerCase();
+        if ((StringTools.endsWith(lower, '.lua') || StringTools.endsWith(lower, '.luag')) && (accept == null || accept(lower)))
+          add(Path.join([folder, entry]));
+      }
+    };
+    final registeredSongs:Map<String, Bool> = [];
+    for (id in funkin.data.song.SongRegistry.instance.listEntryIds()) registeredSongs.set(id.toLowerCase(), true);
+    registeredSongs.set(songId.toLowerCase(), true);
+    final roots = scriptRoots();
+    for (root in roots)
+    {
+      final scripts = Path.join([root, 'scripts']);
+      trace('[LuaScriptManager] Searching global gameplay scripts in ${root} and ${scripts}');
+      for (base in [root, scripts])
+      {
+        add(Path.join([base, 'global.luag']));
+        add(Path.join([base, 'global.lua']));
+      }
+      addFolder(scripts, entry ->
+      {
+        final name = entry.substr(0, entry.lastIndexOf('.'));
+        return !registeredSongs.exists(name) && !StringTools.startsWith(name, 'song-') && !StringTools.startsWith(name, 'stage-');
+      });
+      addFolder(Path.join([scripts, 'lua']), entry -> StringTools.endsWith(entry, '.lua'));
+      addFolder(Path.join([scripts, 'luag']), entry -> StringTools.endsWith(entry, '.luag'));
+    }
+    for (root in roots)
+    {
+      final scripts = Path.join([root, 'scripts']);
+      final songFolders = [Path.join([root, 'songs', songId]), Path.join([root, 'data', 'songs', songId]),
+        Path.join([root, 'gameplay', 'songs', songId]), Path.join([scripts, 'songs', songId])];
+      trace('[LuaScriptManager] Searching ${songId} scripts in ${songFolders.join(", ")} and ${scripts}');
+      for (name in [songId, 'song-' + songId])
+      {
+        add(Path.join([scripts, name + '.luag']));
+        add(Path.join([scripts, name + '.lua']));
+      }
+      for (folder in songFolders) addFolder(folder);
+    }
+    trace('[LuaScriptManager] Found ${paths.length} gameplay script(s) for ${songId}');
+    return paths;
   }
 
   static function collectStateScripts(folderName:String, scriptPaths:Array<String>):Void

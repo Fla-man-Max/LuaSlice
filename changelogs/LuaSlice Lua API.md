@@ -211,6 +211,8 @@ On Windows and Linux, `mods/` is next to the game executable. On Android, it's u
 - `mods/<mod name>/data/songs/SongId/script.luag`
 - `mods/<mod name>/stages/StageId.lua`
 
+For gameplay, put a song script in `mods/<mod name>/songs/<songId>/` or `mods/<mod name>/data/songs/<songId>/` and enable the mod. The folder limits when the script runs; the extension controls its Lua environment. A `.luag` inside a song folder still only loads for that song.
+
 ### SScript And NxScript Folders
 
 - `mods/global.ssg` and `mods/global.nxg`
