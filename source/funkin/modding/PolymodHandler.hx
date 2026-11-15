@@ -563,6 +563,8 @@ class PolymodHandler
     Polymod.addImportAlias('funkin.play.cutscene.dialogue.ScriptedDialogueBox', funkin.play.cutscene.dialogue.DialogueBox);
     Polymod.addImportAlias('funkin.play.cutscene.dialogue.ScriptedSpeaker', funkin.play.cutscene.dialogue.Speaker);
     Polymod.addImportAlias('funkin.play.event.ScriptedSongEvent', funkin.play.event.SongEvent);
+    Polymod.addImportAlias('funkin.modding.modules.ScriptedModule', funkin.modding.module.Module);
+    Polymod.addImportAlias('funkin.modding.module.ScriptedModule', funkin.modding.module.Module);
     Polymod.addImportAlias('funkin.play.notes.ScriptedStrumline', funkin.play.notes.Strumline);
     Polymod.addImportAlias('funkin.play.notes.notekind.ScriptedNoteKind', funkin.play.notes.notekind.NoteKind);
     Polymod.addImportAlias('funkin.play.notes.notestyle.ScriptedNoteStyle', funkin.play.notes.notestyle.NoteStyle);
