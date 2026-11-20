@@ -1,13 +1,15 @@
 # LuaSlice
-LuaSlice is a fork of Friday Night Funkin' V-Slice that adds built-in Lua modding support and small tweaks to the engine itself. It is made for people who want to create gameplay scripts, events, menus, options and other mod features without having to write everything in Haxe.
+LuaSlice is a modified **Friday Night Funkin' V-Slice engine** focused on Lua scripting, modding flexibility, and engine improvements.
+It supports `.lua`, `.luag`, and Psych-compatible `.luap` / `.luapg` scripts, alongside existing Haxe modding (`.hx` / `.hxc`).
+Features include script hot reloading, error handling, persistent save data, custom events, and gameplay/UI scripting.
 
-LuaSlice's original API uses `.lua` and `.luag`. Psych scripts use `.luap` and `.luapg` in a separate runtime; the global suffix controls loading scope, not a shared Psych Lua state. LuaSlice also includes F5 hot reloading, Lua error reports, persistent save data, custom Chart Editor events, and Lua hooks for gameplay and menus.
-Existing `.hx` and `.hxc` modding still works, so Lua can be used by itself or alongside Haxe scripts.
+**Development Status:** Currently migrating to the official V-Slice 0.8.7 public playtest (build 70), with Psych Engine 1.0.4 API compatibility in development. See the [source audit](docs/migration/preview4/SOURCE-AUDIT.md) for details.
 
-This branch is migrating the existing V-Slice 0.8.6-based engine to the official public-playtest preview at `5a63f2062bfc95a1fe35f83405acdee1f8c845ec` (upstream metadata: 0.8.7, build 70). It is not ready for release. The migration and Psych Engine 1.0.4 API reimplementation are still being tested; see [the source audit](docs/migration/preview4/SOURCE-AUDIT.md) for the pinned versions and known gaps.
+### Credits & Usage
+You are free to use LuaSlice for mods, ports, videos, and showcases **without crediting me or LuaSlice**.
 
-`Credit is required if you use LuaSlice in a engine edit, project, or anything like that. No [but ...]
-(Videos, Showcases, Original Mods, Ported Mods are allowed!)`
+However, **credit is required** when using or modifying LuaSlice's engine source code in your own engine, fork, or other project.
+Please also respect any applicable third-party licenses.
 
 Join the LuaSlice Discord server:
 - [LuaSlice Engine](https://discord.gg/sCr5rpPwBn)
